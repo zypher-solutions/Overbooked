@@ -1,0 +1,216 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Overbooked design system — dark, ultra-premium, minimal.
+ * Accent: warm gold. Warning: muted rust. Success: emerald.
+ * All colors in oklch. Never hardcode colors in components.
+ */
+
+@theme inline {
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+
+  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-rust: var(--rust);
+  --color-emerald: var(--emerald);
+  --color-indigo: var(--indigo);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --shadow-glow-gold: 0 0 0 1px color-mix(in oklab, var(--gold) 28%, transparent),
+    0 12px 40px -18px color-mix(in oklab, var(--gold) 55%, transparent);
+  --shadow-glow-soft: 0 18px 60px -30px oklch(0 0 0 / 0.9);
+}
+
+:root {
+  --radius: 12px;
+
+  --background: oklch(0.98 0.002 275);
+  --foreground: oklch(0.15 0.01 275);
+
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.96 0.005 275);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.01 275);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.01 275);
+
+  --gold: oklch(0.7 0.14 89);
+  --gold-soft: oklch(0.85 0.08 89);
+  --rust: oklch(0.57 0.135 42);
+  --emerald: oklch(0.56 0.12 158);
+  --indigo: oklch(0.55 0.15 275);
+
+  --primary: oklch(0.7 0.14 89);
+  --primary-foreground: oklch(0.98 0.01 80);
+  --secondary: oklch(0.96 0.005 275);
+  --secondary-foreground: oklch(0.15 0.01 275);
+  --muted: oklch(0.94 0.005 275);
+  --muted-foreground: oklch(0.45 0.01 275);
+  --accent: oklch(0.92 0.008 275);
+  --accent-foreground: oklch(0.15 0.01 275);
+  --destructive: oklch(0.57 0.135 42);
+  --destructive-foreground: oklch(0.98 0.01 85);
+
+  --border: oklch(0 0 0 / 8%);
+  --input: oklch(0 0 0 / 6%);
+  --ring: oklch(0.7 0.14 89 / 45%);
+
+  --sidebar: oklch(0.99 0 0);
+  --sidebar-foreground: oklch(0.2 0.01 275);
+  --sidebar-primary: oklch(0.7 0.14 89);
+  --sidebar-primary-foreground: oklch(0.98 0.01 80);
+  --sidebar-accent: oklch(0.95 0.005 275);
+  --sidebar-accent-foreground: oklch(0.15 0.01 275);
+  --sidebar-border: oklch(0 0 0 / 8%);
+  --sidebar-ring: oklch(0.7 0.14 89 / 40%);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--gold) 35%, transparent);
+  }
+
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+}
+
+@utility glass {
+  background: color-mix(in oklab, var(--surface) 72%, transparent);
+  backdrop-filter: blur(18px) saturate(130%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+@utility glass-strong {
+  background: color-mix(in oklab, var(--surface) 90%, transparent);
+  backdrop-filter: blur(26px) saturate(140%);
+  border: 1px solid var(--color-border);
+}
+
+@utility row-zebra {
+  &:nth-child(even) {
+    background: oklch(0 0 0 / 2%);
+  }
+  &:hover {
+    background: oklch(0 0 0 / 5%);
+  }
+}
+
+@utility overdue-row {
+  &:nth-child(even) {
+    background: oklch(0 0 0 / 2%);
+  }
+  &:hover {
+    background: color-mix(in oklab, var(--rust) 10%, transparent);
+  }
+}
+
+@layer base {
+  button, [role="button"], a {
+    cursor: pointer;
+  }
+  
+  button:disabled, [disabled], .cursor-not-allowed {
+    cursor: not-allowed;
+  }
+}
+
+/*
+ * Touch/phone rules (unlayered on purpose so they beat utility classes such as text-sm).
+ * 16px inputs stop iOS Safari zooming the page on focus; 44px is the minimum comfortable touch target.
+ */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select {
+    min-height: 44px;
+  }
+  button:not([data-compact]),
+  [role="button"]:not([data-compact]) {
+    min-height: 40px;
+  }
+}
