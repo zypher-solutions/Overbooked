@@ -7,6 +7,7 @@ import { createClient } from "../supabase/client";
 import { cancelBookingAction } from "@/app/actions/booking";
 import { toast } from "sonner";
 import { loadRentalDraft, clearRentalDraft, updateDraftCartItems } from "./draftStorage";
+import { useAuth } from "./AuthContext";
 
 export interface ImportRow {
   // Required product-level columns
@@ -76,10 +77,35 @@ interface StoreValue {
   addCategory: (name: string, baseSku?: string) => Promise<Category | null>;
   deleteCategory: (id: string) => Promise<void>;
   fetchInitialData: (options?: { silent?: boolean }) => Promise<void>;
+  /** Finished rentals/bookings are loaded from this date (YYYY-MM-DD); active ones always. */
+  historyFrom: string;
+  /** Widen the loaded history back to `from` ("" = everything). */
+  ensureHistory: (from: string) => Promise<void>;
   loadError: boolean;
 }
 
 export const StoreContext = createContext<StoreValue | null>(null);
+
+// First day of last month (India date): finished rentals and bookings older than this load on demand.
+const defaultHistoryFrom = () => {
+  const [y, m] = todayISO().split("-").map(Number);
+  const prev = m === 1 ? [y - 1, 12] : [y, m - 1];
+  return `${prev[0]}-${String(prev[1]).padStart(2, "0")}-01`;
+};
+
+// The API returns at most 1,000 rows per request; read every page so lists are never silently cut.
+async function fetchAllPages<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+  pageSize = 1000,
+): Promise<{ data: T[] | null; error: any }> {
+  const all: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await page(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    all.push(...(data || []));
+    if (!data || data.length < pageSize) return { data: all, error: null };
+  }
+}
 
 export function OverbookedProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -103,6 +129,8 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
     return [];
   });
   const supabase = useMemo(() => createClient(), []);
+  const { shop } = useAuth();
+  const shopId = shop?.id ?? null;
   const syncVersionRef = useRef(0);
   const variationSyncVersionRef = useRef<Map<string, number>>(new Map());
 
@@ -151,42 +179,32 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
     setCart([]);
   }, []);
 
+  // How far back finished rentals and bookings are loaded. Active rentals and open bookings are always
+  // loaded whatever their date; older history only when a screen asks for it (ensureHistory).
+  const [historyFrom, setHistoryFrom] = useState<string>(defaultHistoryFrom);
+  const historyFromRef = useRef(historyFrom);
+  historyFromRef.current = historyFrom;
+
   const fetchBookings = useCallback(async (retryCount: number = 0): Promise<Booking[]> => {
     try {
-      let { data, error } = await supabase
+      const { data, error } = await fetchAllPages<any>((from, to) => supabase
         .from('bookings')
         .select(`
           id, token, customer_id, branch_id, booking_date, status, notes, created_at, updated_at, total, advance, security_deposit, advance_payment_method, security_deposit_payment_method,
           cancellation_fee, advance_refund, security_deposit_refund, refund_payment_method, cancellation_reason, cancelled_at, cancelled_by,
           customers!bookings_shop_customer_fkey ( full_name, phone ),
           branches!bookings_shop_branch_fkey ( id, name ),
-          booking_items (
+          booking_items!booking_items_shop_booking_fkey (
             id, booking_id, product_id, variation_id, product_name, sku, image_url, qty, daily_rate, pickup_date, return_date, buffer_days, subtotal,
-            booking_item_inventory (
-              inventory_items ( id, item_sku, status )
+            booking_item_inventory!bii_shop_booking_item_fkey (
+              inventory_items!bii_shop_inventory_item_fkey ( id, item_sku, status )
             )
           )
         `)
-        .order('booking_date', { ascending: false });
-
-      if (error && (error.message?.includes('cancellation_fee') || (error as any).code === '42703')) {
-        const fallbackRes = await supabase
-          .from('bookings')
-          .select(`
-            id, token, customer_id, branch_id, booking_date, status, notes, created_at, updated_at, total, advance, security_deposit, advance_payment_method, security_deposit_payment_method,
-            customers!bookings_shop_customer_fkey ( full_name, phone ),
-            branches!bookings_shop_branch_fkey ( id, name ),
-            booking_items (
-              id, booking_id, product_id, variation_id, product_name, sku, image_url, qty, daily_rate, pickup_date, return_date, buffer_days, subtotal,
-              booking_item_inventory (
-                inventory_items ( id, item_sku, status )
-              )
-            )
-          `)
-          .order('booking_date', { ascending: false });
-        data = fallbackRes.data as any;
-        error = fallbackRes.error;
-      }
+        .or(`status.in.(pending,confirmed),booking_date.gte.${historyFromRef.current}`)
+        .order('booking_date', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to));
 
       if (error) {
         if (error.message.includes("JWT issued at future") && retryCount < 3) {
@@ -277,21 +295,22 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
     }
     try {
       await fetchBookings();
-      const [branchesRes, catRes, productsRes, invItemsRes] = await Promise.all([
+      // Stock counts come summed from the database (one row per variation and branch), not one row per unit.
+      const [branchesRes, catRes, productsRes, statsRes] = await Promise.all([
         supabase.from('branches').select('*'),
         supabase.from('categories').select('*'),
-        supabase.from('products').select(`
+        fetchAllPages<any>((from, to) => supabase.from('products').select(`
           *,
           categories!products_shop_category_fkey(name),
           product_variations(
             id, name, sku, daily_rate, is_enabled, attributes,
             product_stock(quantity, branch_id, branches(id, name))
           )
-        `),
-        supabase.from('inventory_items').select('id, variation_id, branch_id, status').limit(10000),
+        `).order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to)),
+        fetchAllPages<any>((from, to) => supabase.rpc('get_all_inventory_stats').range(from, to)),
       ]);
 
-      if (branchesRes.error || catRes.error || productsRes.error || invItemsRes.error) setLoadError(true);
+      if (branchesRes.error || catRes.error || productsRes.error || statsRes.error) setLoadError(true);
 
       const { data: { user } } = await supabase.auth.getUser();
       const { data: profile } = user
@@ -321,23 +340,19 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
           ? activeBranches.filter((b: any) => b.id === profile.branch_id)
           : [];
 
-      // Group authorized inventory_items by variation_id and branch_id
+      // Unit counts by variation_id and branch_id
       const invStatsMap = new Map<string, Map<string, { available: number; rented: number; maintenance: number; lost: number }>>();
-
-      (invItemsRes.data || []).forEach((item: any) => {
-        if (!item.variation_id || !item.branch_id) return;
-        if (!invStatsMap.has(item.variation_id)) {
-          invStatsMap.set(item.variation_id, new Map());
+      (statsRes.data || []).forEach((row: any) => {
+        if (!row.variation_id || !row.branch_id) return;
+        if (!invStatsMap.has(row.variation_id)) {
+          invStatsMap.set(row.variation_id, new Map());
         }
-        const byBranch = invStatsMap.get(item.variation_id)!;
-        if (!byBranch.has(item.branch_id)) {
-          byBranch.set(item.branch_id, { available: 0, rented: 0, maintenance: 0, lost: 0 });
-        }
-        const counts = byBranch.get(item.branch_id)!;
-        if (item.status === 'available') counts.available++;
-        else if (item.status === 'rented') counts.rented++;
-        else if (item.status === 'maintenance') counts.maintenance++;
-        else if (item.status === 'lost') counts.lost++;
+        invStatsMap.get(row.variation_id)!.set(row.branch_id, {
+          available: Number(row.available || 0),
+          rented: Number(row.rented || 0),
+          maintenance: Number(row.maintenance || 0),
+          lost: Number(row.lost || 0),
+        });
       });
 
       if (productsRes.data) {
@@ -352,8 +367,7 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
               }
             });
 
-            // 2. Available, rented, maintenance, and lost: Calculate from corresponding inventory_items
-            // records that the current user is authorized to access.
+            // 2. Available, rented, maintenance and lost, for the branches this user may see
             const stockDetails: Record<string, BranchStock> = {};
             for (const authBranch of authorizedBranches) {
               const counts = invStatsMap.get(v.id)?.get(authBranch.id) || { available: 0, rented: 0, maintenance: 0, lost: 0 };
@@ -402,159 +416,49 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
         }));
       }
 
-      // ── STEP 1: Fetch all rentals (no joins) ─────────────────────────────────
-      const step1 = await supabase
+      // Rentals with their items, units, customer and branch in one paged query:
+      // every active rental, plus finished ones from historyFrom on.
+      const rentalsRes = await fetchAllPages<any>((from, to) => supabase
         .from('rentals')
-        .select('id, token, rent_date, due_date, total, advance, payment_status, status, returned_on, condition, notes, extra_fees, extra_fees_reason, security_deposit, deposit_deducted, deposit_refunded, deposit_refund_method, customer_id, branch_id')
-        .order('created_at', { ascending: false });
+        .select(`
+          id, token, rent_date, due_date, total, advance, payment_status, status, returned_on, condition, notes, extra_fees, extra_fees_reason,
+          security_deposit, deposit_deducted, deposit_refunded, deposit_refund_method, customer_id, branch_id,
+          customers!rentals_shop_customer_fkey ( full_name, phone ),
+          branches!rentals_shop_branch_fkey ( name ),
+          rental_items!rental_items_shop_rental_fkey (
+            id, variation_id, product_name, sku, image_url, qty, daily_rate,
+            product_variations!rental_items_shop_variation_fkey ( name, product_id ),
+            rental_item_inventory!rii_shop_rental_item_fkey (
+              inventory_item_id,
+              inventory_items!rii_shop_inventory_item_fkey ( id, item_sku, status )
+            )
+          )
+        `)
+        .or(`status.eq.out,rent_date.gte.${historyFromRef.current}`)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to));
+      if (seq !== fetchSeqRef.current) return;
 
-      if (!step1.data) {
+      if (!rentalsRes.data) {
         setLoadError(true);
         setIsLoading(false);
         return;
       }
 
-      const rentalIds = step1.data.map(r => r.id);
-
-      // ── STEP 2: Fetch rental_items for all rentals ───────────────────────────
-      const step2 = await supabase
-        .from('rental_items')
-        .select('id, rental_id, variation_id, product_name, sku, image_url, qty, daily_rate, product_variations(name, product_id)')
-        .in('rental_id', rentalIds);
-
-      const rentalItemIds = (step2.data || []).map((ri: any) => ri.id);
-
-      // ── STEP 3: Fetch rental_item_inventory for those rental_item_ids ────────
-      const step3 = await supabase
-        .from('rental_item_inventory')
-        .select('rental_item_id, inventory_item_id, condition, return_notes')
-        .in('rental_item_id', rentalItemIds);
-
-      // ── FALLBACK: derive assignedUnits for rental_items with no RII rows ──────
-      // When rental_item_inventory has no rows for an 'out' rental_item,
-      // look up the 'rented' inventory_items directly by variation+branch.
-      // This requires no INSERT permission and works regardless of RLS on the junction table.
-      const assignedRentalItemIds = new Set((step3.data || []).map((rii: any) => rii.rental_item_id));
-      const outRentalIds = new Set(step1.data.filter(r => r.status === 'out').map(r => r.id));
-      const unlinkedRentalItems = (step2.data || []).filter((ri: any) =>
-        outRentalIds.has(ri.rental_id) && !assignedRentalItemIds.has(ri.id) && ri.variation_id
-      );
-
-      // Build a synthetic RII map from direct inventory_items lookup
-      // key: rental_item_id → [{inventory_item_id, item_sku, status}]
-      const syntheticRiiMap = new Map<string, any[]>();
-
-      if (unlinkedRentalItems.length > 0) {
-        console.log('[FALLBACK] Deriving assignedUnits for', unlinkedRentalItems.length, 'unlinked rental_items via direct inventory_items lookup');
-
-        for (const ri of unlinkedRentalItems) {
-          const rental = step1.data.find(r => r.id === ri.rental_id);
-          if (!rental) continue;
-
-          const { data: rentedItems, error: riErr } = await supabase
-            .from('inventory_items')
-            .select('id, item_sku, status')
-            .eq('variation_id', ri.variation_id)
-            .eq('branch_id', rental.branch_id)
-            .order('status', { ascending: false }) // 'rented' sorts after 'available' alphabetically — use limit to pick first qty
-            .limit(ri.qty);
-
-          if (riErr) {
-            console.error('[FALLBACK] inventory_items query failed for rental_item', ri.id, ':', riErr.message);
-            continue;
-          }
-
-          console.log('[FALLBACK] rental_item', ri.id, '→', rentedItems?.length, 'inventory_items found:', rentedItems?.map((i: any) => i.item_sku + ':' + i.status).join(', '));
-          if (rentedItems && rentedItems.length > 0) {
-            syntheticRiiMap.set(ri.id, rentedItems.map((inv: any) => ({
-              inventory_item_id: inv.id,
-              item_sku: inv.item_sku,
-              status: inv.status,
-            })));
-          }
-        }
-      }
-      // ── END FALLBACK ─────────────────────────────────────────────────────────
-
-      // Collect all inventory_item_ids: from RII table + synthetic fallback
-      const riiInventoryIds = [...new Set((step3.data || []).map((rii: any) => rii.inventory_item_id))];
-      const fallbackInventoryIds = [...syntheticRiiMap.values()].flatMap(rows => rows.map((r: any) => r.inventory_item_id));
-      const inventoryItemIds = [...new Set([...riiInventoryIds, ...fallbackInventoryIds])];
-
-      // ── STEP 4: Fetch inventory_items for those ids ──────────────────────────
-      const step4 = inventoryItemIds.length > 0
-        ? await supabase
-            .from('inventory_items')
-            .select('id, item_sku, status')
-            .in('id', inventoryItemIds)
-        : { data: [], error: null };
-
-      // ── Fetch customers and branches separately for display ──────────────────
-      const customerIds = [...new Set(step1.data.map(r => r.customer_id).filter(Boolean))];
-      const branchIds = [...new Set(step1.data.map(r => r.branch_id).filter(Boolean))];
-
-      const [customersRes, rentalBranchesRes] = await Promise.all([
-        customerIds.length > 0
-          ? supabase.from('customers').select('id, full_name, phone').in('id', customerIds)
-          : { data: [], error: null },
-        branchIds.length > 0
-          ? supabase.from('branches').select('id, name').in('id', branchIds)
-          : { data: [], error: null },
-      ]);
-      if (seq !== fetchSeqRef.current) return;
-
-      // ── Build lookup maps ────────────────────────────────────────────────────
-      const customerMap = new Map((customersRes.data || []).map((c: any) => [c.id, c]));
-      const branchMap = new Map((rentalBranchesRes.data || []).map((b: any) => [b.id, b]));
-      const inventoryMap = new Map((step4.data || []).map((ii: any) => [ii.id, ii]));
-
-      // rental_item_id -> list of inventory rows
-      const riiByRentalItemId = new Map<string, any[]>();
-      for (const rii of (step3.data || [])) {
-        if (!riiByRentalItemId.has(rii.rental_item_id)) {
-          riiByRentalItemId.set(rii.rental_item_id, []);
-        }
-        riiByRentalItemId.get(rii.rental_item_id)!.push(rii);
-      }
-
-      // rental_id -> list of rental_item rows
-      const riByRentalId = new Map<string, any[]>();
-      for (const ri of (step2.data || [])) {
-        if (!riByRentalId.has(ri.rental_id)) {
-          riByRentalId.set(ri.rental_id, []);
-        }
-        riByRentalId.get(ri.rental_id)!.push(ri);
-      }
-
-      // ── Map everything into Rental objects ───────────────────────────────────
-      const mappedRentals = step1.data.map(r => {
-        const rentalItemRows = riByRentalId.get(r.id) || [];
-        const items: RentalItem[] = rentalItemRows.map((item: any) => {
-          // Prefer rows from rental_item_inventory; fall back to synthetic derivation
-          const riiRows = riiByRentalItemId.get(item.id) || [];
-          const syntheticRows = syntheticRiiMap.get(item.id) || [];
-
-          const assignedUnits = riiRows.length > 0
-            ? riiRows.map((rii: any) => {
-                const inv = inventoryMap.get(rii.inventory_item_id);
-                return {
-                  id: rii.inventory_item_id,
-                  itemSku: inv ? inv.item_sku : null,
-                  status: inv ? inv.status : null,
-                };
-              }).filter((u: any) => u.id && u.itemSku)
-            : syntheticRows.map((row: any) => ({
-                id: row.inventory_item_id,
-                itemSku: row.item_sku,
-                status: row.status,
-              })).filter((u: any) => u.id && u.itemSku);
+      const mappedRentals = rentalsRes.data.map((r: any) => {
+        const items: RentalItem[] = (r.rental_items || []).map((item: any) => {
+          const assignedUnits = (item.rental_item_inventory || [])
+            .map((rii: any) => rii.inventory_items)
+            .filter((inv: any) => inv?.id && inv?.item_sku)
+            .map((inv: any) => ({ id: inv.id, itemSku: inv.item_sku, status: inv.status }));
 
           return {
             id: item.id,
-            productId: (item.product_variations as any)?.product_id || "",
+            productId: item.product_variations?.product_id || "",
             productName: item.product_name || "Unknown Item",
             variationId: item.variation_id || undefined,
-            variationName: (item.product_variations as any)?.name || undefined,
+            variationName: item.product_variations?.name || undefined,
             sku: item.sku || "",
             image: item.image_url || "https://placehold.co/800x800/1c1c1c/888888/png?text=No+Image",
             qty: item.qty || 1,
@@ -565,16 +469,13 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
           };
         });
 
-        const customer = customerMap.get(r.customer_id);
-        const branch = branchMap.get(r.branch_id);
-
         return {
           id: r.id,
           token: r.token,
           items,
-          branch: branch?.name || "",
-          customerName: customer?.full_name || "",
-          customerPhone: customer?.phone || "",
+          branch: r.branches?.name || "",
+          customerName: r.customers?.full_name || "",
+          customerPhone: r.customers?.phone || "",
           rentDate: r.rent_date,
           dueDate: r.due_date,
           total: r.total || 0,
@@ -594,7 +495,7 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
       });
 
       setRentals(mappedRentals);
-      
+
     } catch(e) {
       console.error(e);
       setLoadError(true);
@@ -604,6 +505,15 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [supabase, fetchBookings]);
+
+  // Load finished rentals and bookings back to `from` (YYYY-MM-DD; "" = everything). Only ever widens.
+  const ensureHistory = useCallback(async (from: string) => {
+    const target = from || "1900-01-01";
+    if (target >= historyFromRef.current) return;
+    historyFromRef.current = target;
+    setHistoryFrom(target);
+    await fetchInitialData({ silent: true });
+  }, [fetchInitialData]);
 
 
   useEffect(() => {
@@ -628,32 +538,27 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchInitialData]);
 
-  // Real-time sync: re-fetch silently when rentals, items, payments, bookings, or stock changes on ANY device
+  // Real-time sync for this shop only: one silent refresh 2 s after a burst of changes on any device
+  // (a single booking or return writes several rows).
   useEffect(() => {
-    const channel = supabase
-      .channel('overbooked-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rentals' }, () => {
-        fetchInitialData({ silent: true });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rental_items' }, () => {
-        fetchInitialData({ silent: true });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => {
-        fetchInitialData({ silent: true });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
-        fetchInitialData({ silent: true });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'product_stock' }, () => {
-        fetchInitialData({ silent: true });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items' }, () => {
-        fetchInitialData({ silent: true });
-      })
-      .subscribe();
+    if (!shopId) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fetchInitialData({ silent: true }), 2000);
+    };
+    const filter = `shop_id=eq.${shopId}`;
+    let channel = supabase.channel(`overbooked-realtime-${shopId}`);
+    for (const table of ['rentals', 'rental_items', 'payments', 'bookings', 'product_stock', 'inventory_items']) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table, filter }, schedule);
+    }
+    channel.subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [supabase, fetchInitialData]);
+    return () => {
+      clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, fetchInitialData, shopId]);
 
   const branches = useMemo(() => locations.map(l => l.name), [locations]);
 
@@ -1736,8 +1641,8 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
   const value = useMemo(() => ({
     isLoading, products, rentals, bookings, branches, locations, categories, cart,
     createProduct, updateProduct, deleteProduct, setProductActive, createBooking, pickupBooking, fetchBookings, cancelBooking, updateRental, extendRental, recordPayment, returnRental, commitImport, createLocation, addCategory, deleteCategory, addToCart, removeFromCart, updateCartItemQty, clearCart, discardRentalDraft,
-    fetchInitialData, loadError
-  }), [isLoading, products, rentals, bookings, branches, locations, categories, cart, createProduct, updateProduct, deleteProduct, setProductActive, createBooking, pickupBooking, fetchBookings, cancelBooking, updateRental, extendRental, recordPayment, returnRental, commitImport, createLocation, addCategory, deleteCategory, addToCart, removeFromCart, updateCartItemQty, clearCart, discardRentalDraft, fetchInitialData, loadError]);
+    fetchInitialData, loadError, historyFrom, ensureHistory
+  }), [isLoading, products, rentals, bookings, branches, locations, categories, cart, createProduct, updateProduct, deleteProduct, setProductActive, createBooking, pickupBooking, fetchBookings, cancelBooking, updateRental, extendRental, recordPayment, returnRental, commitImport, createLocation, addCategory, deleteCategory, addToCart, removeFromCart, updateCartItemQty, clearCart, discardRentalDraft, fetchInitialData, loadError, historyFrom, ensureHistory]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

@@ -39,7 +39,7 @@ interface Filters {
 type SortKey = "rentDate" | "dueDate" | "customerName" | "token" | "total";
 
 export function Dashboard({ onEdit }: { onEdit: (r: Rental) => void }) {
-  const { rentals, bookings, branches, locations, isLoading, fetchInitialData } = useOverbooked();
+  const { rentals, bookings, branches, locations, isLoading, fetchInitialData, historyFrom, ensureHistory } = useOverbooked();
   const { profile } = useAuth();
   
   const myBranchName = useMemo(() => {
@@ -105,6 +105,11 @@ export function Dashboard({ onEdit }: { onEdit: (r: Rental) => void }) {
       setApplied(prev => ({ ...prev, branch: myBranchName }));
     }
   }, [profile, myBranchName]);
+
+  // A From date older than what is loaded pulls in that history first
+  useEffect(() => {
+    if (applied.from) void ensureHistory(applied.from);
+  }, [applied.from, ensureHistory]);
 
   // If user explicitly filters by returned status, auto-expand completed section
   useEffect(() => {
@@ -418,6 +423,12 @@ export function Dashboard({ onEdit }: { onEdit: (r: Rental) => void }) {
             </>
           )}
         </div>
+      )}
+
+      {!isLoading && activeTab === "ledger" && !applied.from && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Covers records from {fmtDate(historyFrom)} on, plus every active rental and open booking. Set an earlier From date to include older history.
+        </p>
       )}
 
       {!isLoading && activeTab === "rental" && (
