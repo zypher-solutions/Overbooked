@@ -43,7 +43,10 @@ says "Check-in" and asks for guests, a car shop asks for odometer, fuel and lice
 | Today | Handovers and returns due (with missed ones), coming week, search by name, phone, booking no. or unit code, scan a tag |
 | New booking | Period, items with live free counts, guests, driver, whole property, extras, customer, live price, advance and deposit |
 | Bookings | Lists by status (booked, out, overdue, returned, cancelled), search, branch filter |
-| Booking page | Hand over / check in with per-unit checks and photos; return / check out with suggested charges (late, extra km); money; extend; give another unit; cancel / no-show; owner corrections with reasons; WhatsApp messages |
+| Calendar | A timeline per room, vehicle or piece: bookings, out, cleaning/service time; click to open or book |
+| Appointments | Fittings, trials, deliveries, collections (optional feature) |
+| Print pages (src/app/print) | Customer receipt / GST tax invoice, QR sticker tags for units, Zypher receipts to shops |
+| Booking page | Change the booking before pickup; hand over / check in with per-unit checks and photos; return / check out with suggested charges (late, extra km); money; extend; give another unit; cancel / no-show; owner corrections with reasons; WhatsApp messages |
 | Customers | Search, history, what they owe, ID and licence, block |
 | Catalog | Items by category with prices per rate type, units per branch and their status, extras, categories, CSV import |
 | Money and reports | Money in by method, booked value, owed, deposits held, every money record (CSV), stock right now |
@@ -54,8 +57,12 @@ Shared code: `src/lib/shop` (types, formats in the shop's time zone, data helper
 
 ## The Zypher console (src/app/zypher)
 Guarded on the server. Overview (fees, collections, overdue, unused shops), shops and shop page (plan,
-monthly fee, notes, pause, business types, feature switches, people, payments), new-shop wizard, billing,
-business types, audit log.
+monthly fee, notes, pause, business types, feature switches, people, payments), new-shop wizard, billing
+(receipts, WhatsApp reminders), business types, audit log, Zypher team, settings (company and bank
+details, automatic pause of long-overdue shops).
+
+## The mobile app
+Built separately against the same database. Everything it may use is in docs/APP_CONTRACT.md (contract v1).
 
 ## Main flow of a rental
 1. **Book** (`create_rental`): the quote is recalculated in the database, units are reserved for the
