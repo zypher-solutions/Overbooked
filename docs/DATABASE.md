@@ -14,6 +14,8 @@ from zero; `npx supabase test db` then runs the database tests in `supabase/test
 | `20261101000006_engine_workflow.sql` | book, pick up, return, charges, payments, extend, cancel |
 | `20261101000007_engine_admin.sql` | corrections, catalog tools, reports, staff, Zypher console actions |
 | `20261101000008_console.sql` | Zypher console reads: overview numbers and the shop page |
+| `20261101000009_app.sql` | Shop app helpers: free counts for the booking picker, saving a product in one go |
+| `20261101000010_operations.sql` | Changing a booking, sets, reminders log, Zypher company details and receipts, automatic pause, measurement fields |
 
 ## Business types are data
 A **template** (`business_templates`) describes a type of business: its kind (`wearable` by day,
@@ -48,14 +50,14 @@ fee); 0 ≤ paid ≤ total; deposit given back + kept ≤ deposit received; end 
 ## Functions the app calls
 | Area | Functions |
 | --- | --- |
-| Booking | `quote_rental`, `find_available_units`, `create_rental`, `extend_rental`, `cancel_rental`, `swap_unit`, `update_rental_notes` |
+| Booking | `quote_rental`, `branch_availability`, `find_available_units`, `create_rental`, `update_rental`, `extend_rental`, `cancel_rental`, `swap_unit`, `update_rental_notes`, `mark_reminder_sent` |
 | Pickup / return | `start_rental`, `return_suggestions`, `complete_rental` |
 | Money | `record_rental_payment`, `add_rental_charge` |
 | Corrections (owner, with a reason) | `admin_set_discount`, `admin_set_line_amount`, `admin_update_payment`, `admin_delete_payment`, `admin_delete_charge`, `admin_delete_rental` |
-| Catalog | `import_catalog`, `delete_or_deactivate_product`, `set_unit_status` |
+| Catalog | `save_product`, `save_set_items`, `import_catalog`, `delete_or_deactivate_product`, `set_unit_status` |
 | Reports | `inventory_status`, `dashboard_summary` |
 | Staff and shop | `get_staff_emails`, `admin_set_staff_status`, `set_staff_branch`, `update_my_shop` |
-| Zypher only | `create_shop`, `switch_shop`, `update_shop`, `record_shop_payment`, `platform_overview`, `console_summary`, `shop_detail` |
+| Zypher only | `create_shop`, `switch_shop`, `update_shop`, `record_shop_payment`, `platform_overview`, `console_summary`, `shop_detail`, `pause_overdue_shops` (also nightly) |
 
 Each function checks the caller's role, branch and shop itself. Shop functions are owned by `app_rpc`,
 which is bound by the shop rules, so even a mistake inside one cannot reach another shop.

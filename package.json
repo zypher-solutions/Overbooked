@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint src",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "types": "supabase gen types typescript --local > src/lib/database.types.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

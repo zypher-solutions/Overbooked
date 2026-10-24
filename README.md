@@ -39,5 +39,6 @@ Full step-by-step guide: [docs/SETUP.md](docs/SETUP.md).
 | [docs/SETUP.md](docs/SETUP.md) | Install, run, reset, test, common errors |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the pieces fit, main flows, business rules |
 | [docs/DATABASE.md](docs/DATABASE.md) | Tables, database functions, migrations |
+| [docs/APP_CONTRACT.md](docs/APP_CONTRACT.md) | For the mobile app developer: how to connect, read, and call every function (contract v1) |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | From single shop to multi-shop product |
 | [docs/BUSINESS.md](docs/BUSINESS.md) | How low-price SaaS works, pricing notes |

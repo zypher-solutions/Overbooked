@@ -16,6 +16,12 @@
   Branches, Staff, Settings. Wording and fields follow each shop's business types
 - The TRENDZ-era screens, store and PDF ledger are removed
 - Browser tests rewritten for v2 (tests/v2-shop.spec.ts)
+- Receipts and GST tax invoices, changing a booking before pickup, a calendar per unit, printable QR tags,
+  the owner's plan and payment reminders, Zypher receipts, payment kinds, an optional automatic pause of
+  long-overdue shops, Zypher team logins, one-tap customer reminders on Today
+- Optional features: sets, measurements, alterations, appointments
+- Hand-over pack for the mobile app: docs/APP_CONTRACT.md (contract v1) and generated types
+  (src/lib/database.types.ts, regenerated with `npm run types`)
 
 ## 0.2.0 (2026-10-24): many shops
 - One database serves many shops. Isolation is enforced by a restrictive policy, composite foreign keys
