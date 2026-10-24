@@ -21,6 +21,7 @@ interface Summary {
 interface Stock { variation_id: string; branch_id: string; total: number; available_now: number; out_now: number; reserved_ahead: number; maintenance: number; lost: number }
 type LedgerRow = Payment & { rentals: { token: string; branch_id: string; customers: { full_name: string } | null } | null };
 
+const SHOWN = 300;
 const PRESETS = ["today", "week", "month", "last_month", "custom"] as const;
 const PRESET_LABELS: Record<(typeof PRESETS)[number], string> = { today: "Today", week: "Last 7 days", month: "This month", last_month: "Last month", custom: "Pick dates" };
 
@@ -34,6 +35,7 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [stock, setStock] = useState<Stock[]>([]);
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
+  const [ledgerCount, setLedgerCount] = useState(0);
   const { products } = useCatalog({ includeInactive: true });
 
   useEffect(() => {
@@ -61,21 +63,31 @@ export default function Dashboard() {
     } catch (e) {
       toast.error(errorText(e));
     }
-    // every money record in the period, paged
+    // the latest 300 money records on screen; the CSV export fetches them all
+    const { rows, count } = await fetchLedger(SHOWN);
+    setLedger(rows);
+    setLedgerCount(count);
+  }, [canManage, from, to, branch, tz]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // money records of the period (all of them, page by page, when limit is undefined)
+  async function fetchLedger(limit?: number) {
     const supabase = createClient();
     const rows: LedgerRow[] = [];
+    let count = 0;
     for (let i = 0; ; i += 1000) {
+      const size = limit ? Math.min(limit, 1000) : 1000;
       let q = supabase.from("payments")
-        .select("*, rentals!payments_shop_rental_fkey(token, branch_id, customers!rentals_shop_customer_fkey(full_name))")
-        .gte("paid_at", dayRange(from, tz).from).lt("paid_at", dayRange(to, tz).to).order("paid_at", { ascending: false }).range(i, i + 999);
+        .select("*, rentals!payments_shop_rental_fkey!inner(token, branch_id, customers!rentals_shop_customer_fkey(full_name))", i === 0 ? { count: "exact" } : undefined)
+        .gte("paid_at", dayRange(from, tz).from).lt("paid_at", dayRange(to, tz).to).order("paid_at", { ascending: false }).range(i, i + size - 1);
       if (branch) q = q.eq("rentals.branch_id", branch);
-      const { data, error } = await q;
+      const { data, error, count: c } = await q;
       if (error) { toast.error(errorText(error)); break; }
-      rows.push(...((data as unknown as LedgerRow[]) ?? []).filter((r) => r.rentals));
-      if (!data || data.length < 1000) break;
+      if (i === 0) count = c ?? 0;
+      rows.push(...((data as unknown as LedgerRow[]) ?? []));
+      if (limit || !data || data.length < size) break;
     }
-    setLedger(rows);
-  }, [canManage, from, to, branch, tz]);
+    return { rows, count };
+  }
   useEffect(() => { void load(); }, [load]);
 
   const names = useMemo(() => {
@@ -86,8 +98,9 @@ export default function Dashboard() {
 
   if (!canManage) return <Panel><p className="text-sm text-muted-foreground">Money and reports are for owners and managers.</p></Panel>;
 
-  const exportCsv = () => {
-    const csv = Papa.unparse((ledger ?? []).map((r) => ({
+  const exportCsv = async () => {
+    const { rows: all } = await fetchLedger();
+    const csv = Papa.unparse(all.map((r) => ({
       date: fmtDateTime(r.paid_at, tz), booking: r.rentals?.token, customer: r.rentals?.customers?.full_name, type: PAYMENT_LABELS[r.kind],
       method: r.method ? METHOD_LABELS[r.method] : "", amount: (r.kind === "refund" || r.kind === "deposit_refund" ? -1 : 1) * Number(r.amount),
       branch: branches.find((b) => b.id === r.rentals?.branch_id)?.name, note: r.note ?? "",
@@ -144,8 +157,8 @@ export default function Dashboard() {
       </div>
 
       <div className="mb-2 mt-6 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Money records ({ledger?.length ?? 0})</h2>
-        <button className={ghostButtonClass} disabled={!ledger?.length} onClick={exportCsv}><Download className="h-4 w-4" /> Export CSV</button>
+        <h2 className="text-sm font-semibold">Money records ({ledgerCount})</h2>
+        <button className={ghostButtonClass} disabled={!ledger?.length} onClick={() => void exportCsv()}><Download className="h-4 w-4" /> Export CSV</button>
       </div>
       <div className={tableWrap}>
         <table className="w-full min-w-[720px] text-left text-sm">
@@ -153,7 +166,7 @@ export default function Dashboard() {
           <tbody className="divide-y divide-border">
             {ledger === null ? <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Loading...</td></tr>
               : ledger.length === 0 ? <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">No money moved in this period.</td></tr>
-              : ledger.slice(0, 300).map((r) => {
+              : ledger.map((r) => {
                 const out = r.kind === "refund" || r.kind === "deposit_refund";
                 return (
                   <tr key={r.id}>
@@ -168,7 +181,7 @@ export default function Dashboard() {
           </tbody>
         </table>
       </div>
-      {ledger && ledger.length > 300 ? <p className="mt-2 text-xs text-muted-foreground">Showing the latest 300; the CSV has all {ledger.length}.</p> : null}
+      {ledgerCount > SHOWN ? <p className="mt-2 text-xs text-muted-foreground">Showing the latest {SHOWN}; the CSV has all {ledgerCount}.</p> : null}
 
       <h2 className="mb-2 mt-6 text-sm font-semibold">Stock right now</h2>
       <div className={tableWrap}>

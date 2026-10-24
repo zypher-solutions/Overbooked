@@ -68,6 +68,18 @@ npx playwright test     # browser: menus per role, Zypher console, a full bridal
 ```
 The browser tests sign in with the local demo password from `supabase/seed.sql` (or `DEMO_PASSWORD` if set).
 
+## Load test (local only)
+Measures database size per busy shop-year and how fast the main screens load, signed in as a shop owner with
+the security rules on. It refuses to run against anything but the local database.
+```bash
+npx supabase db reset
+docker exec -i supabase_db_overbooked psql -U postgres -q < scripts/load-data.sql   # a busy year for Kalyani Bridal (~3 min)
+node scripts/load-test.mjs .
+npx supabase db reset                                                               # back to the demo data
+```
+Result on 25 Oct 2026 (v2): 35 MB per busy shop-year (6,000 bookings), 216 screens per second with five people
+working at once, 62 KB per screen on average.
+
 ## Shops and logins (local)
 - The seed creates one shop per business type, plus one Zypher admin. Logins are at the top of `supabase/seed.sql`.
 

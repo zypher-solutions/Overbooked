@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
-import { RENTAL_LIST_COLUMNS } from "@/lib/shop/api";
+import { RENTAL_BASE_COLUMNS, attachListDetails } from "@/lib/shop/api";
 import { errorText } from "@/lib/shop/format";
 import { RentalList, type ListRental } from "@/components/shop/RentalList";
 import { PageHeader, Panel, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
@@ -35,7 +35,7 @@ export default function Rentals() {
   const fetchPage = useCallback(async (from: number) => {
     const supabase = createClient();
     const now = new Date().toISOString();
-    let q = supabase.from("rentals").select(RENTAL_LIST_COLUMNS);
+    let q = supabase.from("rentals").select(RENTAL_BASE_COLUMNS);
     if (tab === "upcoming") q = q.eq("status", "reserved").order("start_at");
     if (tab === "out") q = q.eq("status", "active").order("end_at");
     if (tab === "overdue") q = q.or(`and(status.eq.active,end_at.lt.${now}),and(status.eq.reserved,start_at.lt.${now})`).order("end_at");
@@ -54,7 +54,7 @@ export default function Rentals() {
       toast.error("Could not load bookings: " + errorText(error));
       return [];
     }
-    return (data as unknown as ListRental[]) ?? [];
+    return (await attachListDetails((data as unknown as (ListRental & { customer_id: string })[]) ?? [])) as ListRental[];
   }, [tab, branch, term]);
 
   useEffect(() => {

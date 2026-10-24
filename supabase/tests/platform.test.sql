@@ -84,7 +84,7 @@ SELECT is((public.dashboard_summary(CURRENT_DATE, CURRENT_DATE + 60) ->> 'revenu
           (SELECT sum(total) FROM rentals), 'dashboard revenue = sum of rental totals');
 SELECT is((public.dashboard_summary(CURRENT_DATE, CURRENT_DATE + 60) ->> 'balance_due')::numeric,
           (SELECT sum(total - paid) FROM rentals), 'dashboard balance due = sum of balances');
-SELECT is((public.dashboard_summary(CURRENT_DATE, CURRENT_DATE) ->> 'collected')::numeric,
+SELECT is((public.dashboard_summary((now() AT TIME ZONE 'Asia/Kolkata')::date, (now() AT TIME ZONE 'Asia/Kolkata')::date) ->> 'collected')::numeric,
           (SELECT sum(amount) FROM payments WHERE kind = 'payment'), 'dashboard collected = payments recorded today');
 SELECT is((SELECT sum(total) FROM inventory_status() WHERE variation_id = 'e0000000-0000-0000-0000-000000000011'), 2::numeric,
           'inventory: 2 lehenga pieces across branches');

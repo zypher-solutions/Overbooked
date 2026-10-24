@@ -72,3 +72,24 @@ export const money = (r: Pick<Rental, "total" | "paid" | "deposit_received" | "d
   balance: Math.round((Number(r.total) - Number(r.paid)) * 100) / 100,
   depositHeld: Math.round((Number(r.deposit_received) - Number(r.deposit_refunded) - Number(r.deposit_applied)) * 100) / 100,
 });
+
+// Long lists (all returned bookings, years of them) load in two light steps: the page of bookings first,
+// then the customers and items of just those rows. Joining them in one request makes the database attach
+// them to every matching booking before it can sort and keep one page.
+export const RENTAL_BASE_COLUMNS =
+  "id, token, status, start_at, end_at, actual_start_at, actual_end_at, total, paid, branch_id, created_at, customer_id";
+
+export async function attachListDetails<T extends { id: string; customer_id: string }>(rows: T[]) {
+  if (rows.length === 0) return rows;
+  const supabase = createClient();
+  const [c, l] = await Promise.all([
+    supabase.from("customers").select("id, full_name, phone").in("id", Array.from(new Set(rows.map((r) => r.customer_id)))),
+    supabase.from("rental_lines").select("rental_id, description, qty, kind").in("rental_id", rows.map((r) => r.id)),
+  ]);
+  const customers = new Map((c.data ?? []).map((x) => [x.id, x]));
+  return rows.map((r) => ({
+    ...r,
+    customers: customers.get(r.customer_id) ?? null,
+    rental_lines: (l.data ?? []).filter((x) => x.rental_id === r.id),
+  }));
+}
