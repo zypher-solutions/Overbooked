@@ -1,25 +1,39 @@
-# TRENDZ Rental Management System
-Client project, handover Fri 16 Oct 2026. Goal: find and fix bugs. No refactors.
+# Overbooked: Rental Management SaaS
+
+Product built from the TRENDZ admin panel (forked 22 Oct 2026 from TRENDZ `main` @ 54a190e).
+Goal: turn it into a sellable product for many rental shops. See docs/ROADMAP.md.
+
+## Hard rules
+- This repo has NOTHING to do with the TRENDZ production or test Supabase projects. Never connect to,
+  dump from, or copy keys of any TRENDZ project. Local development uses local Supabase (Docker) only.
+- Never read or print .env files or keys. Only .env.example (names, no values) is committed.
+- Plan first for non-trivial changes and wait for approval before editing.
+- No new dependencies without asking.
+- If a business rule is unclear, write the assumption down and ask.
 
 ## Stack
-Python backend, TypeScript frontend, Supabase (BaaS). Windows 11.
-Branches: main (production), development. Work only on qa/testing.
+Next.js 16 (App Router) + React 19 + TypeScript + Tailwind 4 + shadcn/radix UI.
+Supabase: Postgres, Auth, Row Level Security, RPCs (plpgsql), Storage, Realtime. No separate backend
+server; business rules live in database functions (supabase/migrations). Windows 11, Docker Desktop.
+There is no Python in this project.
 
-## Business model (Indian rental business, negotiated deals)
-- Multiple products, each with its own price. Products can be added anytime.
-- Price, security deposit and late fee are NOT fixed. They are negotiated
-  per rental. So there are no fixed expected values: test CONSISTENCY, not constants.
-- Invariants to verify: total = items - discounts; balance due = total - payments
-  and never negative; refund <= deposit paid; no overlapping bookings for the same
-  item; return date >= start date; no negative amounts; dashboard figures equal
-  the underlying records.
+## Layout
+- src/app: routes (login, main shell), server actions (src/app/actions)
+- src/components/overbooked/pages: the app screens
+- src/lib/overbooked/store.tsx: all data loading and mutations (calls Supabase tables and RPCs)
+- supabase/migrations: database schema, in order. 20260901000000_baseline.sql recreates the base tables
+- supabase/seed.sql: local demo data and logins
+- docs/: setup, architecture, database, roadmap, business
 
-## Rules
-- Plan mode first. Propose changes, wait for my approval before editing any file.
-- Never read or print .env files or keys.
-- No new dependencies, no architecture changes before handover.
-- If a business rule is unclear, list your assumption in QA_REPORT.md and ask me.
+## Business model (negotiated deals)
+- Products have variations (color/size), each with its own daily rate; each physical unit is tracked.
+- Price, security deposit and late fees are negotiated per rental, so test CONSISTENCY, not constants.
+- Invariants: total = items - discount (+ fees on return); balance due = total - payments, never negative;
+  deposit refund <= deposit held; no overlapping bookings of the same unit; return date >= start date;
+  no negative amounts; dashboard/ledger figures equal the underlying records.
 
-## Output
-QA_REPORT.md: findings ranked critical/high/medium/low, each with file, line,
-how to reproduce, and suggested fix.
+## Commands
+- `npx supabase start` / `npx supabase stop`: local backend
+- `npx supabase db reset`: rebuild local DB from migrations and seed
+- `npm run dev`: app on http://localhost:3000
+- `npm run build`, `npm run lint`, `npx playwright test`
