@@ -1,51 +1,66 @@
 # Database
 
 All schema lives in `supabase/migrations/`, applied in filename order. `npx supabase db reset` rebuilds
-from zero, which is the test that the chain is complete.
+from zero; `npx supabase test db` then runs the database tests in `supabase/tests/`.
 
-## Where the schema came from
-TRENDZ created its base tables in the Supabase dashboard, so its repo only had *changes* to them.
-For Overbooked, `20260901000000_baseline.sql` **rebuilds those base tables** from what the app code and
-the later migrations use. It was not copied from any TRENDZ database. Everything after it is the
-TRENDZ migration history, unchanged.
-
-Things the baseline had to guess (no source available), worth revisiting:
-- `deduct_stock_on_rental`, `restore_stock_on_return`, `guard_inventory_direct_update` existed in TRENDZ
-  but their bodies were never in the repo. Here they are inert placeholders and are not attached to any table.
-- `check_availability` / `get_eligible_physical_units` are SQL versions of the logic in
-  `src/lib/overbooked/availability.ts`. The app currently uses the TypeScript version.
-- Unique keys: branch name/slug, category name (case-insensitive), product/variation/unit SKU.
-
-## Tables
-| Table | Purpose |
+| Migration | What it holds |
 | --- | --- |
-| branches | shop locations (`is_active` locks out its staff when false) |
-| profiles | one per login: role, branch, active flag (created by trigger on sign-up, inactive) |
-| customers | name + phone; same phone with a different name = a separate customer |
-| categories | product groups, `base_sku` prefix (2–6 capitals) |
-| products | catalog item, SKU `AB-001`, purchase price, active flag |
-| product_variations | color/size combos, own SKU and daily rate |
-| product_stock | total units per variation per branch |
-| inventory_items | each physical unit: `item_sku`, status available/rented/maintenance/lost |
-| bookings / booking_items / booking_item_inventory | future reservations of exact units |
-| rentals / rental_items / rental_item_inventory | items out with a customer, return condition per unit |
-| payments | money received against a rental (immutable except by super_admin) |
-| ledger_entries | append-only money log (in, out, deposits, refunds, adjustments) |
-| audit_log | every delete and admin correction, with reason |
+| `20261101000000_platform.sql` | business templates, shops, branches, profiles, invites, Zypher billing, counters, audit log, plan limits |
+| `20261101000001_catalog.sql` | categories, products, variations, rates, units, sets, add-ons |
+| `20261101000002_rentals.sql` | customers, rentals, lines, reservations, add-ons, charges, checks, payments, appointments, money triggers |
+| `20261101000003_security.sql` | row-level security, storage buckets, realtime |
+| `20261101000004_templates.sql` | the five business types: bridal, groom, resort, car, bike |
+| `20261101000005_engine_pricing.sql` | quotes and availability |
+| `20261101000006_engine_workflow.sql` | book, pick up, return, charges, payments, extend, cancel |
+| `20261101000007_engine_admin.sql` | corrections, catalog tools, reports, staff, Zypher console |
 
-Views: `v_collected_monthly`, `v_earned_monthly`.
+## Business types are data
+A **template** (`business_templates`) describes a type of business: its kind (`wearable` by day,
+`vehicle` by hour/day with km, `room` by night with guests), labels, fields, pickup/return checks, rate
+types, turnaround time, default features and add-ons. A shop has one or more types; each category
+belongs to one. A new business type later is a new row, plus engine code only if its time or price
+logic is new.
 
-## Functions the app calls (RPC)
-`create_booking_atomic`, `cancel_booking_atomic`, `pickup_booking_atomic`, `extend_rental_atomic`,
-`record_rental_payment`, `mark_returned_atomic`, `import_products_atomic`, `delete_or_deactivate_product`,
-`get_my_role`, `get_staff_emails`, `get_booking_token`, `admin_set_staff_status`,
-`admin_update_payment`, `admin_delete_payment`, `admin_update_rental`, `admin_delete_rental`,
-`admin_delete_booking`.
+Optional features (sets, measurements, alterations, appointments, guests, meal plans, whole property,
+with driver) are switched per shop in `shops.settings.features`, defaulting to the template.
 
-All are `SECURITY DEFINER`: they run with owner rights, so each one checks `auth.uid()`, role, active
-flag and branch itself.
+## Catalog
+`category → product → variation → unit`. A variation (a size, a room type, a car variant) has its rates
+in `variation_rates` (hour, day, night, extra_km, extra_hour, extra_person, driver_day, late_penalty).
+A unit is one physical thing: a dress piece, room 104, a car by registration number.
+
+## One rental, from booking to return
+`rentals.status`: `reserved → active → completed`, or `cancelled` / `no_show`. One token per rental,
+`<PREFIX>-YYYY-NNNN`, numbered per shop.
+
+- `rental_lines`: what is rented, with the rate used; `is_override` marks a negotiated price.
+- `unit_reservations`: which unit, for which time range (rental time + turnaround). An exclusion
+  constraint makes overlapping use of a unit impossible.
+- `rental_add_ons`, `rental_charges` (late, extra km, fuel, damage, toll, challan, ...), `rental_checks`
+  (condition, odometer, fuel, photos at pickup and return).
+- `payments`: every rupee in or out, typed (payment, refund, deposit, deposit_refund, deposit_applied).
+  The rental's money columns are kept from it by triggers; `total` is computed.
+
+Checks in the database: total = lines + add-ons + charges − discount (a cancelled rental's total is its
+fee); 0 ≤ paid ≤ total; deposit given back + kept ≤ deposit received; end after start; no negative amounts.
+
+## Functions the app calls
+| Area | Functions |
+| --- | --- |
+| Booking | `quote_rental`, `find_available_units`, `create_rental`, `extend_rental`, `cancel_rental`, `swap_unit`, `update_rental_notes` |
+| Pickup / return | `start_rental`, `return_suggestions`, `complete_rental` |
+| Money | `record_rental_payment`, `add_rental_charge` |
+| Corrections (owner, with a reason) | `admin_set_discount`, `admin_set_line_amount`, `admin_update_payment`, `admin_delete_payment`, `admin_delete_charge`, `admin_delete_rental` |
+| Catalog | `import_catalog`, `delete_or_deactivate_product`, `set_unit_status` |
+| Reports | `inventory_status`, `dashboard_summary` |
+| Staff and shop | `get_staff_emails`, `admin_set_staff_status`, `set_staff_branch`, `update_my_shop` |
+| Zypher only | `create_shop`, `switch_shop`, `update_shop`, `record_shop_payment`, `platform_overview` |
+
+Each function checks the caller's role, branch and shop itself. Shop functions are owned by `app_rpc`,
+which is bound by the shop rules, so even a mistake inside one cannot reach another shop.
 
 ## Rules of thumb
-- New change = new migration file. Never edit an old migration once it has been deployed anywhere.
-- Money: `numeric(14,2)`, never floats; checks enforce whole paise and non-negative values.
-- Direct table UPDATE/DELETE of money, status and records is blocked by triggers. Go through the RPCs.
+- Nothing is deployed yet, so migrations can still be edited. After the first deploy: new change = new
+  migration file, never edit an old one.
+- Money is `numeric(14,2)`, never floats.
+- Change rentals and money only through the functions above.

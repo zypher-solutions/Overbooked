@@ -612,6 +612,9 @@ BEGIN
   IF v_r.status <> 'reserved' THEN
     RAISE EXCEPTION 'Only a rental that has not been picked up can be cancelled (this one is %)', v_r.status;
   END IF;
+  IF p_no_show AND now() < v_r.start_at THEN
+    RAISE EXCEPTION 'A no-show can only be marked after the planned start';
+  END IF;
   IF v_fee < 0 THEN
     RAISE EXCEPTION 'The cancellation fee cannot be negative';
   END IF;

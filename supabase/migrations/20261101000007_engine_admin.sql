@@ -480,7 +480,8 @@ BEGIN
     name = COALESCE(NULLIF(btrim(p ->> 'name'), ''), name),
     plan = v_plan,
     status = COALESCE(p ->> 'status', status),
-    business_types = COALESCE(ARRAY(SELECT jsonb_array_elements_text(p -> 'business_types')), business_types),
+    business_types = CASE WHEN p ? 'business_types' THEN ARRAY(SELECT jsonb_array_elements_text(p -> 'business_types'))
+                          ELSE business_types END,
     settings = settings || COALESCE(p -> 'settings', '{}'),
     notes = COALESCE(p ->> 'notes', notes)
   WHERE id = p_shop_id;

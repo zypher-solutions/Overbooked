@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 (unreleased): v2 rental engine
+- New database designed from scratch for bridal, groom, resort, car and bike rentals; the inherited TRENDZ
+  migrations and QA history are removed
+- One rental record from booking to return, time ranges, double booking blocked by the database, business
+  templates, rates, add-ons, charges, pickup/return checks, payments as the single money record
+- Demo data: one shop per business type plus a Zypher admin; 114 database tests
+- The app screens still use the old schema until they are rebuilt on v2
+
 ## 0.2.0 (2026-10-24): many shops
 - One database serves many shops. Isolation is enforced by a restrictive policy, composite foreign keys
   and `app_rpc`-owned functions; 31 database tests cover it (`supabase/tests`)

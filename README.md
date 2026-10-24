@@ -41,4 +41,3 @@ Full step-by-step guide: [docs/SETUP.md](docs/SETUP.md).
 | [docs/DATABASE.md](docs/DATABASE.md) | Tables, database functions, migrations |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | From single shop to multi-shop product |
 | [docs/BUSINESS.md](docs/BUSINESS.md) | How low-price SaaS works, pricing notes |
-| [docs/trendz-history/](docs/trendz-history/) | QA reports from the TRENDZ project (reference only) |

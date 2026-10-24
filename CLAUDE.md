@@ -21,14 +21,14 @@ There is no Python in this project.
 - src/app: routes (login, main shell), server actions (src/app/actions)
 - src/components/overbooked/pages: the app screens
 - src/lib/overbooked/store.tsx: all data loading and mutations (calls Supabase tables and RPCs)
-- supabase/migrations: database schema, in order. 20260901000000_baseline.sql recreates the base tables
+- supabase/migrations: database schema v2, in order (see docs/DATABASE.md); supabase/tests: database tests
 - supabase/seed.sql: local demo data and logins
 - docs/: setup, architecture, database, roadmap, business
 
 ## Business model (negotiated deals)
-- Products have variations (color/size), each with its own daily rate; each physical unit is tracked.
+- Business types (bridal, groom, resort, car, bike) are templates; products have variations with their own rates; each physical unit is tracked.
 - Price, security deposit and late fees are negotiated per rental, so test CONSISTENCY, not constants.
-- Invariants: total = items - discount (+ fees on return); balance due = total - payments, never negative;
+- Invariants: total = lines + add-ons + charges - discount; balance due = total - payments, never negative;
   deposit refund <= deposit held; no overlapping bookings of the same unit; return date >= start date;
   no negative amounts; dashboard/ledger figures equal the underlying records.
 
