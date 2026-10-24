@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Building2, CalendarDays, CalendarPlus, ClipboardList, Home, KeyRound, LayoutGrid, LineChart, LogOut, Menu, Settings, Store, Users, UserSquare, X,
+  Building2, CalendarClock, CalendarDays, CalendarPlus, ClipboardList, Home, KeyRound, LayoutGrid, LineChart, LogOut, Menu, Settings, Store, Users, UserSquare, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -18,7 +18,7 @@ import { SubscriptionBanner } from "./Subscription";
 export function ShopShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
-  const { shop, role, isOwner, canManage, branches, myBranchId, word } = useShop();
+  const { shop, role, isOwner, canManage, branches, myBranchId, word, feature } = useShop();
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
@@ -27,6 +27,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
     { href: "/book", label: "New booking", icon: CalendarPlus, show: true },
     { href: "/rentals", label: "Bookings", icon: ClipboardList, show: true },
     { href: "/calendar", label: "Calendar", icon: CalendarDays, show: true },
+    { href: "/appointments", label: "Appointments", icon: CalendarClock, show: feature("appointments") },
     { href: "/customers", label: "Customers", icon: UserSquare, show: true },
     { href: "/catalog", label: word("items", "Catalog"), icon: LayoutGrid, show: true },
     { href: "/dashboard", label: "Money and reports", icon: LineChart, show: canManage },

@@ -313,3 +313,46 @@ export function WhatsAppDialog({ rental, open, onClose, initial }: { rental: Ren
 }
 
 export { METHOD_LABELS };
+
+// ==========================================================================
+// Alteration (optional feature): a piece goes to the tailor, with an optional charge.
+// While "in alteration" it cannot be handed over; mark it done on the booking when it is back.
+export function AlterationDialog({ rental, open, onClose, onDone }: DialogProps) {
+  const pieces = rental.unit_reservations.filter((u) => (u.state === "held" || u.state === "out")
+    && rental.rental_lines.find((l) => l.id === u.line_id)?.kind === "wearable");
+  const [unitId, setUnitId] = useState("");
+  const [what, setWhat] = useState("");
+  const [amount, setAmount] = useState("");
+  const [toTailor, setToTailor] = useState(true);
+  const { busy, run } = useBusy();
+  useEffect(() => { if (open) { setUnitId(pieces[0]?.unit_id ?? ""); setWhat(""); setAmount(""); setToTailor(true); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const save = () => run(async () => {
+    if (!what.trim()) throw new Error("Write what is being altered.");
+    const code = pieces.find((p) => p.unit_id === unitId)?.units?.code ?? "";
+    if (num(amount) > 0) {
+      await call("add_rental_charge", { p_rental_id: rental.id, p_type: "alteration", p_amount: num(amount), p_note: `${code}: ${what.trim()}` });
+    }
+    if (toTailor && unitId) {
+      await call("set_unit_status", { p_unit_id: unitId, p_status: "alteration", p_reason: what.trim() });
+    }
+    toast.success("Alteration recorded");
+    onDone();
+    onClose();
+  });
+
+  return (
+    <Modal open={open} onClose={onClose} title="Alteration"
+      description="The piece is marked as with the tailor and cannot be handed over until it is marked back."
+      footer={<><button className={ghostButtonClass} onClick={onClose}>Cancel</button><button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save"}</button></>}>
+      <Field label="Piece">
+        <select className={inputClass} value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+          {pieces.map((p) => <option key={p.unit_id} value={p.unit_id}>{p.units?.code} · {rental.rental_lines.find((l) => l.id === p.line_id)?.description}</option>)}
+        </select>
+      </Field>
+      <Field label="What to alter"><input className={inputClass} placeholder="Take in waist 1 inch, shorten sleeves" value={what} onChange={(e) => setWhat(e.target.value)} /></Field>
+      <Field label="Charge to the customer (optional)"><input className={monoInputClass} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={toTailor} onChange={(e) => setToTailor(e.target.checked)} /> The piece is going to the tailor now</label>
+    </Modal>
+  );
+}

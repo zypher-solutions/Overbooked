@@ -12,6 +12,7 @@ import { errorText, rupees } from "@/lib/shop/format";
 import type { Customer } from "@/lib/shop/types";
 import { CustomerForm, customerPayload, type CustomerDraft } from "@/components/shop/CustomerForm";
 import { RentalList, type ListRental } from "@/components/shop/RentalList";
+import { MeasurementsPanel } from "@/components/shop/MeasurementsPanel";
 import {
   Field, Modal, PageHeader, Panel, StatusBadge, SummaryCard, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass,
 } from "@/components/shop/ui";
@@ -87,9 +88,12 @@ export default function CustomerPage() {
         <Panel title="Details" actions={<button className={goldButtonClass} disabled={!dirty || busy} onClick={() => save()}>{busy ? "Saving..." : "Save"}</button>}>
           <CustomerForm value={draft} onChange={setDraft} />
         </Panel>
-        <Panel title="Bookings">
-          <RentalList rentals={rentals} empty="No bookings yet." />
-        </Panel>
+        <div className="space-y-4">
+          <Panel title="Bookings">
+            <RentalList rentals={rentals} empty="No bookings yet." />
+          </Panel>
+          <MeasurementsPanel customerId={c.id} />
+        </div>
       </div>
 
       <Modal open={blocking} onClose={() => setBlocking(false)} title={`Block ${c.full_name}?`}

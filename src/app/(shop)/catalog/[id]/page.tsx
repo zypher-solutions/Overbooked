@@ -38,7 +38,7 @@ export default function ProductPage() {
       <Link href="/catalog" className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ChevronLeft className="h-3.5 w-3.5" /> Catalog</Link>
       <div className="space-y-4">
         <ProductEditor product={p} onSaved={load} />
-        {template ? <UnitsPanel product={p} template={template} /> : null}
+        {template && !p.is_set ? <UnitsPanel product={p} template={template} /> : null}
       </div>
     </>
   );

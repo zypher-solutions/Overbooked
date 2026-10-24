@@ -17,7 +17,7 @@ import {
 type Tab = "items" | "extras" | "categories";
 
 export default function Catalog() {
-  const { canManage, word } = useShop();
+  const { canManage, word, feature, templates } = useShop();
   const [tab, setTab] = useState<Tab>("items");
   return (
     <>
@@ -25,6 +25,9 @@ export default function Catalog() {
         actions={canManage ? <>
           <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link>
           <Link href="/catalog/import" className={ghostButtonClass}><Upload className="h-4 w-4" /> Import</Link>
+          {feature("sets") && templates.some((t) => t.kind === "wearable") ? (
+            <Link href="/catalog/new?set=1" className={ghostButtonClass}><Plus className="h-4 w-4" /> New set</Link>
+          ) : null}
           <Link href="/catalog/new" className={goldButtonClass}><Plus className="h-4 w-4" /> Add {word("item").toLowerCase()}</Link>
         </> : null} />
       <div className="mb-4 flex gap-1.5" role="tablist">
@@ -122,7 +125,8 @@ function Items() {
                     <td className="px-4 py-2.5 text-muted-foreground">{categories.find((x) => x.id === p.category_id)?.name ?? templateOf(p.category_id)?.name}</td>
                     <td className="px-4 py-2.5">{price ? `${rupees(price.amount)} / ${price.unit}` : <span className="text-rust">No price</span>}</td>
                     <td className="px-4 py-2.5 text-right font-mono">
-                      {c ? c.total : 0}{c?.out ? <span className="ml-1 text-xs text-rust">({c.out} not available)</span> : null}
+                      {p.is_set ? <StatusBadge tone="indigo">Set</StatusBadge> : null}
+                      {p.is_set ? null : c ? c.total : 0}{c?.out ? <span className="ml-1 text-xs text-rust">({c.out} not available)</span> : null}
                     </td>
                   </tr>
                 );

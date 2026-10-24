@@ -10,7 +10,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
 import { RATE_LABELS, errorText, fmtInterval, intervalHours, num } from "@/lib/shop/format";
-import type { FieldDef, Product, Template } from "@/lib/shop/types";
+import type { FieldDef, Product, SetItem, Template } from "@/lib/shop/types";
+import { useCatalog, variationLabel } from "@/lib/shop/useCatalog";
 import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "./ui";
 
 interface VarDraft {
@@ -58,7 +59,16 @@ export function toDraft(p: Product): ProductDraft {
 
 const skuPart = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 16);
 
-export function ProductEditor({ product, onSaved }: { product?: Product; onSaved?: () => void }) {
+// asSet: a set (optional feature): one price, booked as its pieces
+export function ProductEditor({ product, onSaved, asSet = false }: { product?: Product; onSaved?: () => void; asSet?: boolean }) {
+  const isSet = asSet || !!product?.is_set;
+  const [setItems, setSetItems] = useState<SetItem[]>([]);
+  const { products: catalog } = useCatalog();
+  useEffect(() => {
+    if (!product?.is_set) return;
+    void createClient().from("set_items").select("variation_id, qty").eq("set_product_id", product.id)
+      .then(({ data }) => setSetItems((data as SetItem[]) ?? []));
+  }, [product]);
   const router = useRouter();
   const { shop, categories, templateOf, isOwner, canManage, word } = useShop();
   const [d, setD] = useState<ProductDraft>(() => product ? toDraft(product) : {
@@ -98,6 +108,7 @@ export function ProductEditor({ product, onSaved }: { product?: Product; onSaved
   const save = async () => {
     if (!template) return toast.error("Choose a category.");
     if (!d.name.trim()) return toast.error("Name the item.");
+    if (isSet && setItems.filter((x) => x.variation_id).length === 0) return toast.error("Add the pieces of the set.");
     setBusy(true);
     try {
       const id = await call<string>("save_product", {
@@ -115,6 +126,7 @@ export function ProductEditor({ product, onSaved }: { product?: Product; onSaved
           })),
         },
       });
+      if (isSet) await call("save_set_items", { p_product_id: id, p_items: setItems.filter((x) => x.variation_id) });
       toast.success("Saved");
       if (!d.id) router.replace(`/catalog/${id}`);
       else onSaved?.();
@@ -139,7 +151,7 @@ export function ProductEditor({ product, onSaved }: { product?: Product; onSaved
   const readOnly = !canManage;
   return (
     <>
-      <PageHeader title={d.id ? d.name || "Item" : `New ${word("item").toLowerCase()}`}
+      <PageHeader title={d.id ? d.name || "Item" : isSet ? "New set" : `New ${word("item").toLowerCase()}`}
         actions={readOnly ? null : <>
           {d.id && isOwner ? <button className={dangerButtonClass} onClick={remove}><Trash2 className="h-4 w-4" /> Remove</button> : null}
           <button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save"}</button>
@@ -179,6 +191,26 @@ export function ProductEditor({ product, onSaved }: { product?: Product; onSaved
           </div>
         </Panel>
 
+        {isSet ? (
+          <Panel title="Pieces in this set" actions={<button type="button" className={ghostButtonClass} onClick={() => setSetItems([...setItems, { variation_id: "", qty: 1 }])}><Plus className="h-4 w-4" /> Add piece</button>}>
+            <p className="mb-3 text-xs text-muted-foreground">Booking the set reserves one of each piece; it is free only when every piece is free.</p>
+            <ul className="space-y-2">
+              {setItems.map((it, i) => (
+                <li key={i} className="flex gap-2">
+                  <select className={inputClass} aria-label="Piece" value={it.variation_id}
+                    onChange={(e) => setSetItems(setItems.map((x, j) => j === i ? { ...x, variation_id: e.target.value } : x))}>
+                    <option value="">Choose a piece</option>
+                    {(catalog ?? []).filter((p) => !p.is_set && p.id !== d.id && templateOf(p.category_id)?.kind === "wearable")
+                      .flatMap((p) => (p.product_variations ?? []).map((v) => <option key={v.id} value={v.id}>{variationLabel(p, v)} ({v.sku})</option>))}
+                  </select>
+                  <input className={cn(monoInputClass, "w-20")} type="number" min={1} aria-label="How many" value={it.qty}
+                    onChange={(e) => setSetItems(setItems.map((x, j) => j === i ? { ...x, qty: Math.max(1, Math.floor(num(e.target.value))) } : x))} />
+                  <button type="button" aria-label="Remove piece" className="rounded p-2 hover:bg-black/5" onClick={() => setSetItems(setItems.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4" /></button>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        ) : null}
         {template ? d.variations.map((v, i) => (
           <VariationCard key={v.id ?? `new-${i}`} template={template} v={v} sku={varSku(v, i)} index={i} count={d.variations.length}
             onChange={(patch) => setVar(i, patch)} onRemove={() => set({ variations: d.variations.filter((_, j) => j !== i) })} />

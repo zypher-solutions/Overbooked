@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeftRight, CalendarClock, ChevronLeft, LogIn, LogOut, MessageCircle, MoreHorizontal, Pencil, Plus, Printer, Receipt, Wallet, XCircle,
+  ArrowLeftRight, CalendarClock, ChevronLeft, LogIn, LogOut, MessageCircle, MoreHorizontal, Pencil, Plus, Printer, Receipt, Scissors, Wallet, XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useShop } from "@/lib/shop/ShopContext";
@@ -14,14 +14,18 @@ import {
 } from "@/lib/shop/format";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { FUEL_LABELS, PickupDialog, ReturnDialog } from "@/components/shop/HandoverDialogs";
+import { APPOINTMENT_COLUMNS, AppointmentDialog, AppointmentList } from "@/components/shop/Appointments";
+import { MeasurementsPanel } from "@/components/shop/MeasurementsPanel";
+import { createClient } from "@/lib/supabase/client";
+import type { Appointment } from "@/lib/shop/types";
 import {
-  CancelDialog, ChargeDialog, CorrectionDialog, ExtendDialog, PaymentDialog, SwapDialog, WhatsAppDialog, type Fix,
+  AlterationDialog, CancelDialog, ChargeDialog, CorrectionDialog, ExtendDialog, PaymentDialog, SwapDialog, WhatsAppDialog, type Fix,
 } from "@/components/shop/RentalDialogs";
 import {
   BalanceBadge, Field, Modal, MoneyRows, PageHeader, Panel, RentalStatusBadge, StatusBadge, ghostButtonClass, goldButtonClass, inputClass, isOverdue,
 } from "@/components/shop/ui";
 
-type DialogName = "pickup" | "return" | "pay" | "charge" | "extend" | "cancel" | "swap" | "whatsapp" | "notes" | null;
+type DialogName = "pickup" | "return" | "pay" | "charge" | "extend" | "cancel" | "swap" | "whatsapp" | "notes" | "alteration" | "appointment" | null;
 
 export default function RentalPage() {
   return <Suspense fallback={null}><RentalView /></Suspense>;
@@ -31,7 +35,9 @@ function RentalView() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const params = useSearchParams();
-  const { tz, branches, activeBranches, role, isOwner, canManage, word } = useShop();
+  const { tz, branches, activeBranches, role, isOwner, canManage, word, feature } = useShop();
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [editAppt, setEditAppt] = useState<Appointment | null>(null);
   const [r, setR] = useState<RentalDetail | null | undefined>(undefined);
   const [dialog, setDialog] = useState<DialogName>(params.get("new") ? "whatsapp" : null);
   const [fix, setFix] = useState<Fix | null>(null);
@@ -42,10 +48,14 @@ function RentalView() {
       const rental = await loadRental(id);
       setR(rental);
       if (rental) setPhotos(await photoUrls(rental.rental_checks.flatMap((c) => c.photo_paths)));
+      if (rental && feature("appointments")) {
+        const { data } = await createClient().from("appointments").select(APPOINTMENT_COLUMNS).eq("rental_id", rental.id).order("scheduled_at");
+        setAppointments((data as unknown as Appointment[]) ?? []);
+      }
     } catch (e) {
       toast.error(errorText(e));
     }
-  }, [id]);
+  }, [id, feature]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (params.get("new")) router.replace(`/rentals/${id}`); }, [params, router, id]);
 
@@ -68,6 +78,12 @@ function RentalView() {
   const close = () => setDialog(null);
   const unitsByLine = (lineId: string) => r.unit_reservations.filter((u) => u.line_id === lineId && u.state !== "released");
   const seeMoney = role !== "staff";
+  const hasWear = r.rental_lines.some((l) => l.kind === "wearable");
+  const inAlteration = r.unit_reservations.filter((u) => (u.state === "held" || u.state === "out") && u.units?.status === "maintenance");
+  const backFromTailor = async (unitId: string) => {
+    try { await call("set_unit_status", { p_unit_id: unitId, p_status: "available" }); toast.success("Marked back"); await load(); }
+    catch (e) { toast.error(errorText(e)); }
+  };
 
   return (
     <>
@@ -103,6 +119,12 @@ function RentalView() {
                 <DropdownMenuItem onClick={() => setDialog("charge")}><Plus className="mr-2 h-4 w-4" /> Add a charge</DropdownMenuItem>
               ) : null}
               <DropdownMenuItem onClick={() => setDialog("notes")}><Pencil className="mr-2 h-4 w-4" /> Notes</DropdownMenuItem>
+              {open && hasWear && canManage && feature("alterations") ? (
+                <DropdownMenuItem onClick={() => setDialog("alteration")}><Scissors className="mr-2 h-4 w-4" /> Alteration</DropdownMenuItem>
+              ) : null}
+              {feature("appointments") ? (
+                <DropdownMenuItem onClick={() => { setEditAppt(null); setDialog("appointment"); }}><CalendarClock className="mr-2 h-4 w-4" /> Add appointment</DropdownMenuItem>
+              ) : null}
               {r.status === "reserved" ? (
                 <DropdownMenuItem onClick={() => setDialog("cancel")} className="text-rust"><XCircle className="mr-2 h-4 w-4" /> Cancel booking</DropdownMenuItem>
               ) : null}
@@ -118,6 +140,16 @@ function RentalView() {
         </>}
       />
 
+      {inAlteration.length ? (
+        <div role="status" className="mb-4 rounded-lg border border-gold/50 bg-gold/10 p-3 text-sm">
+          {inAlteration.map((u) => (
+            <p key={u.unit_id} className="flex flex-wrap items-center justify-between gap-2">
+              <span><span className="font-mono">{u.units?.code}</span> is not ready ({u.units?.status_reason ?? "in service"}) and cannot be handed over yet.</span>
+              {canManage ? <button className={ghostButtonClass} onClick={() => backFromTailor(u.unit_id)}>Ready again</button> : null}
+            </p>
+          ))}
+        </div>
+      ) : null}
       {isOverdue(r) ? (
         <div role="alert" className="mb-4 rounded-lg border border-rust/40 bg-rust/10 p-3 text-sm text-rust">
           {r.status === "active" ? `Overdue: was due back ${fmtDateTime(r.end_at, tz)}.` : `Not picked up yet: was due ${fmtDateTime(r.start_at, tz)}.`}
@@ -266,6 +298,12 @@ function RentalView() {
             </Panel>
           ) : null}
 
+          {feature("appointments") ? (
+            <Panel title="Appointments" actions={<button className="text-xs text-gold hover:underline" onClick={() => { setEditAppt(null); setDialog("appointment"); }}>Add</button>}>
+              <AppointmentList items={appointments} onChanged={load} onEdit={(a) => { setEditAppt(a); setDialog("appointment"); }} showBooking={false} />
+            </Panel>
+          ) : null}
+          {hasWear ? <MeasurementsPanel customerId={r.customer_id} compact /> : null}
           <Panel title="Customer">
             <p className="text-sm font-medium">{r.customers.full_name}</p>
             <p className="text-xs text-muted-foreground">{r.customers.phone}{r.customers.email ? ` · ${r.customers.email}` : ""}</p>
@@ -284,6 +322,8 @@ function RentalView() {
       <SwapDialog rental={r} open={dialog === "swap"} onClose={close} onDone={load} />
       <WhatsAppDialog rental={r} open={dialog === "whatsapp"} onClose={close} />
       <NotesDialog rental={r} open={dialog === "notes"} onClose={close} onDone={load} />
+      <AlterationDialog rental={r} open={dialog === "alteration"} onClose={close} onDone={load} />
+      <AppointmentDialog open={dialog === "appointment"} appointment={editAppt} rental={r} onClose={close} onSaved={load} />
       <CorrectionDialog rental={r} fix={fix} onClose={() => setFix(null)}
         onDone={(deleted) => { if (deleted) router.push("/rentals"); else void load(); }} />
     </>

@@ -25,6 +25,7 @@ export interface Template {
   turnaround: string;
   features: Record<string, boolean>;
   default_add_ons: { name: string; basis: AddOnBasis; amount: number }[];
+  measurement_fields: string[];
   sort: number;
 }
 
@@ -142,7 +143,7 @@ export interface Reservation {
   unit_id: string;
   period: string;
   state: "held" | "out" | "returned" | "released";
-  units?: Pick<Unit, "id" | "code" | "odometer" | "status" | "variation_id">;
+  units?: Pick<Unit, "id" | "code" | "odometer" | "status" | "status_reason" | "variation_id">;
 }
 export interface RentalAddOn { id: string; add_on_id: string; name: string; basis: AddOnBasis; quantity: number; unit_amount: number; amount: number }
 export interface Charge { id: string; type: ChargeType; amount: number; note: string | null; created_at: string }
@@ -192,3 +193,28 @@ export interface Quote {
   nights: number;
   hours: number;
 }
+
+export type AppointmentType = "fitting" | "trial" | "delivery" | "collection" | "inspection" | "other";
+export interface Appointment {
+  id: string;
+  branch_id: string;
+  customer_id: string;
+  rental_id: string | null;
+  type: AppointmentType;
+  scheduled_at: string;
+  status: "scheduled" | "done" | "missed" | "cancelled";
+  notes: string | null;
+  customers?: { id: string; full_name: string; phone: string } | null;
+  rentals?: { token: string } | null;
+}
+
+export interface Measurement {
+  id: string;
+  customer_id: string;
+  label: string;
+  measurements: Record<string, string>;
+  notes: string | null;
+  taken_at: string;
+}
+
+export interface SetItem { variation_id: string; qty: number }

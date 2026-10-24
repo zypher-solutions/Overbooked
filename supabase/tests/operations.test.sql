@@ -3,7 +3,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(22);
+SELECT plan(25);
 
 \set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
@@ -109,6 +109,22 @@ SELECT matches((SELECT receipt_no FROM shop_payments WHERE shop_id = '5a000000-0
 SELECT is(public.pause_overdue_shops(), 0, 'nothing is paused while the rule is off');
 UPDATE platform_settings SET auto_pause_after_days = 2;
 SELECT is(public.pause_overdue_shops(), 1, 'Munnar (3 days overdue) is paused with a 2-day rule');
+
+-- ===========================================================================
+-- Appointments and measurements (direct writes, guarded by the rules)
+-- ===========================================================================
+SELECT pg_temp.act_as(:bridal_staff);
+SELECT lives_ok($$ INSERT INTO appointments (shop_id, branch_id, customer_id, type, scheduled_at)
+    VALUES ('5a000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001',
+            (SELECT id FROM customers WHERE full_name = 'Anjali Menon'), 'fitting', now() + interval '2 days') $$,
+  'staff book a fitting in their branch');
+SELECT throws_ok($$ INSERT INTO appointments (shop_id, branch_id, customer_id, type, scheduled_at)
+    VALUES ('5a000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000002',
+            (SELECT id FROM customers WHERE full_name = 'Anjali Menon'), 'fitting', now() + interval '2 days') $$,
+  '42501', NULL, 'staff cannot book appointments in another branch');
+SELECT lives_ok($$ INSERT INTO customer_measurements (shop_id, customer_id, measurements)
+    VALUES ('5a000000-0000-0000-0000-000000000001', (SELECT id FROM customers WHERE full_name = 'Anjali Menon'), '{"Bust": "34"}') $$,
+  'staff save measurements');
 
 SELECT * FROM finish();
 ROLLBACK;

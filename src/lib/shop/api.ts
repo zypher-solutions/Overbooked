@@ -31,7 +31,7 @@ export async function loadRental(id: string): Promise<RentalDetail | null> {
   const [r, p] = await Promise.all([
     supabase.from("rentals").select(
       "*, customers!rentals_shop_customer_fkey(*), rental_lines(*), rental_add_ons(*), rental_charges(*), rental_checks(*), " +
-      "unit_reservations(*, units!unit_reservations_shop_unit_fkey(id, code, odometer, status, variation_id))",
+      "unit_reservations(*, units!unit_reservations_shop_unit_fkey(id, code, odometer, status, status_reason, variation_id))",
     ).eq("id", id).maybeSingle(),
     // staff cannot read money records; they get an empty list
     supabase.from("payments").select("*").eq("rental_id", id).order("paid_at"),

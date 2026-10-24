@@ -11,12 +11,16 @@ import { addDays, dayRange, errorText, fmtDate, todayLocal } from "@/lib/shop/fo
 import { CameraScanner } from "@/components/overbooked/CameraScanner";
 import { RentalList, type ListRental } from "@/components/shop/RentalList";
 import { RemindersPanel } from "@/components/shop/RemindersPanel";
+import { APPOINTMENT_COLUMNS, AppointmentDialog, AppointmentList } from "@/components/shop/Appointments";
+import type { Appointment } from "@/lib/shop/types";
 import { PageHeader, Panel, StatusBadge, SummaryCard, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
 
 interface Board { pickups: ListRental[]; returns: ListRental[]; upcoming: ListRental[]; outNow: number }
 
 export default function Today() {
-  const { tz, word } = useShop();
+  const { tz, word, feature } = useShop();
+  const [appts, setAppts] = useState<Appointment[]>([]);
+  const [editAppt, setEditAppt] = useState<Appointment | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ListRental[] | null>(null);
@@ -37,13 +41,18 @@ export default function Today() {
     ]);
     const err = p.error ?? r.error ?? u.error;
     if (err) toast.error("Could not load today's bookings: " + errorText(err));
+    if (feature("appointments")) {
+      const { data } = await supabase.from("appointments").select(APPOINTMENT_COLUMNS).eq("status", "scheduled")
+        .gte("scheduled_at", dayRange(today, tz).from).lt("scheduled_at", endOfToday).order("scheduled_at");
+      setAppts((data as unknown as Appointment[]) ?? []);
+    }
     setBoard({
       pickups: (p.data as unknown as ListRental[]) ?? [],
       returns: (r.data as unknown as ListRental[]) ?? [],
       upcoming: (u.data as unknown as ListRental[]) ?? [],
       outNow: o.count ?? 0,
     });
-  }, [today, tz]);
+  }, [today, tz, feature]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -144,11 +153,17 @@ export default function Today() {
         <Panel title={`Due back (${word("end").toLowerCase()})`}>
           {board ? <RentalList rentals={board.returns} when="end" empty="Nothing due back today." /> : <p className="text-sm text-muted-foreground">Loading...</p>}
         </Panel>
+        {appts.length ? (
+          <Panel title={`Appointments today (${appts.length})`} className="lg:col-span-2">
+            <AppointmentList items={appts} onChanged={load} onEdit={setEditAppt} />
+          </Panel>
+        ) : null}
         <Panel title="Coming up this week" className="lg:col-span-2">
           {board ? <RentalList rentals={board.upcoming} when="start" empty="No bookings in the next 7 days." /> : <p className="text-sm text-muted-foreground">Loading...</p>}
         </Panel>
       </div>
 
+      <AppointmentDialog open={editAppt !== null} appointment={editAppt} onClose={() => setEditAppt(null)} onSaved={load} />
       {scanning ? (
         <CameraScanner onClose={() => setScanning(false)} onScan={(text) => { setScanning(false); setQuery(text); void search(text); }} />
       ) : null}
