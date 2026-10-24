@@ -12,7 +12,7 @@ for (const role of roles) {
 
     const failed: string[] = [];
     page.on("response", (r) => {
-      if (r.url().includes("supabase.co") && r.status() >= 400 && !r.url().includes("/auth/")) {
+      if (r.url().startsWith(process.env.NEXT_PUBLIC_SUPABASE_URL!) && r.status() >= 400 && !r.url().includes("/auth/")) {
         failed.push(`${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}`);
       }
     });

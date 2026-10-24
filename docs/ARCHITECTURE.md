@@ -22,19 +22,44 @@ There is **no separate backend server**. The browser talks to Supabase directly.
 enforced **inside the database**: RLS policies plus `SECURITY DEFINER` functions that check the caller's
 role and branch. Anything the browser does (store.tsx) is convenience. The database has the final say.
 
-Next.js hosting (Vercel or similar) only serves the UI. One server action exists:
-`src/app/actions/booking.ts` (cancel booking).
+Next.js hosting (Vercel or similar) only serves the UI. Server actions: `src/app/actions/booking.ts`
+(cancel booking) and `src/app/actions/staff.ts` (invites and new shops). The staff actions use the
+service-role client (`src/lib/supabase/admin.ts`) only after checking the caller.
+
+## Many shops in one database
+Every business row has a `shop_id`, and a shop never sees another shop's data:
+1. **Restrictive `shop_isolation` policy** on every table: `shop_id = current_shop_id()`. It is ANDed
+   with the role and branch policies.
+2. **Composite foreign keys** `(shop_id, x_id) → x(shop_id, id)`, so a row can only point at rows of
+   the same shop.
+3. **Workflow functions are owned by the role `app_rpc`.** It has no right to skip the rules, so the shop
+   policy binds even the `SECURITY DEFINER` functions.
+
+`current_shop_id()` is the user's own shop while that shop is active; for Zypher staff it is the shop
+they opened with `switch_shop`. Policy helpers are written as `(SELECT fn())`, so they run once per
+query rather than once per row (`20261025000002_rls_performance.sql`).
+
+Per shop: numbering (`BK-0001`, `<PREFIX>-YYYY-NNNN` via `shop_counters`), SKUs, branch names, the
+plan (Starter: 1 branch and 3 logins, Pro: 3 branches, Business: unlimited, enforced by triggers),
+`paid_until`, and the bank payments Zypher records (`shop_payments`). Photos live under
+`product_images/<shop_id>/`.
 
 ## Roles
 | Role | Scope | Can |
 | --- | --- | --- |
-| super_admin | all branches | everything, incl. staff management, record corrections (audit-logged) |
-| owner | all branches | operations, catalog, ledger; no staff/record admin |
+| super_admin | Zypher staff, any shop they open | Zypher console, record corrections (audit-logged), everything |
+| owner | own shop, all branches | operations, catalog, ledger, branches, staff invites |
 | manager | own branch | operations, catalog edits, stock for own branch |
 | staff | own branch | bookings, pickups, returns, payments; no ledger, no catalog edits |
 
-`get_my_role()` / `get_my_branch()` return NULL for inactive users and for staff of an inactive branch,
-so every policy locks them out automatically.
+`get_my_role()` / `get_my_branch()` return NULL for inactive users, for staff of an inactive branch, and
+for everyone in a paused shop, so every policy locks them out automatically.
+
+## Data loading
+The app loads every active rental and open booking, plus finished ones from the first day of last month.
+Older history loads when the dashboard's From date asks for it. Every list is read in 1,000-row pages,
+and stock counts come summed from `get_all_inventory_stats()`. Live updates subscribe to the user's own
+shop and trigger one refresh 2 seconds after a burst of changes.
 
 ## Core data model
 ```
