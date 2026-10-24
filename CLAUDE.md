@@ -18,9 +18,10 @@ server; business rules live in database functions (supabase/migrations). Windows
 There is no Python in this project.
 
 ## Layout
-- src/app: routes (login, main shell), server actions (src/app/actions)
-- src/components/overbooked/pages: the app screens
-- src/lib/overbooked/store.tsx: all data loading and mutations (calls Supabase tables and RPCs)
+- src/app/(shop): the shop app (Today, booking, bookings, customers, catalog, money, branches, staff, settings)
+- src/app/zypher: the Zypher console (server-guarded); src/app/actions: server actions (invites, new shops)
+- src/components/shop, src/components/zypher: their components; src/lib/shop: types, formats, data helpers
+- src/lib/overbooked/AuthContext.tsx: sign-in, profile, current shop
 - supabase/migrations: database schema v2, in order (see docs/DATABASE.md); supabase/tests: database tests
 - supabase/seed.sql: local demo data and logins
 - docs/: setup, architecture, database, roadmap, business
@@ -36,4 +37,4 @@ There is no Python in this project.
 - `npx supabase start` / `npx supabase stop`: local backend
 - `npx supabase db reset`: rebuild local DB from migrations and seed
 - `npm run dev`: app on http://localhost:3000
-- `npm run build`, `npm run lint`, `npx playwright test`
+- `npm run build`, `npm run lint`, `npx supabase test db`, `npx playwright test` (reset first; see docs/SETUP.md)

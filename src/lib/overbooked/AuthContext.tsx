@@ -4,7 +4,6 @@ import { createContext, useContext, useEffect, useRef, useState, ReactNode } fro
 import { User, Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { clearRentalDraft } from "./draftStorage";
 import { setShopBrand } from "./brand";
 import {
   AlertDialog,
@@ -36,7 +35,13 @@ export interface Shop {
   paid_until: string | null;
   logo_url: string | null;
   phone: string | null;
+  email: string | null;
   address: string | null;
+  gstin: string | null;
+  timezone: string;
+  business_types: string[];
+  /** policies and feature switches: grace_minutes, check_in_time, check_out_time, require_licence, features */
+  settings: Record<string, any>;
 }
 
 interface AuthContextValue {
@@ -52,6 +57,13 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+// the booking form keeps a draft per shop in this tab (see app/(shop)/book)
+function clearBookingDrafts() {
+  try {
+    Object.keys(sessionStorage).filter((k) => k.startsWith("ob_booking_")).forEach((k) => sessionStorage.removeItem(k));
+  } catch { /* storage unavailable */ }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -169,10 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast.error("Could not sign out. Check your connection and try again.");
       return;
     }
-    localStorage.removeItem("overbooked_last_page");
-    const uid = user?.id || profile?.id;
-    if (uid) localStorage.removeItem(`overbooked_draft_product_${uid}`);
-    clearRentalDraft(uid);
+    clearBookingDrafts();
     window.location.href = "/login";
   };
 
@@ -182,10 +191,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast.error(error.message || "Could not switch shop.");
       return;
     }
-    // the cart, drafts and every list belong to the shop being left
-    const uid = user?.id || profile?.id;
-    clearRentalDraft(uid);
-    localStorage.removeItem("overbooked_last_page");
+    // half-filled bookings belong to the shop being left
+    clearBookingDrafts();
     window.location.href = "/";
   };
 

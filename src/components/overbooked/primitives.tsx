@@ -1,20 +1,5 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import type { PaymentStatus, RentalStatus } from "@/lib/overbooked/types";
-import { paymentLabel } from "@/lib/overbooked/utils";
-
-export function TokenBadge({ token, className }: { token: string; className?: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md border border-gold/35 bg-gold/10 px-2 py-1 font-mono text-[11px] font-medium tracking-tight text-gold",
-        className,
-      )}
-    >
-      {token}
-    </span>
-  );
-}
 
 type Tone = "gold" | "emerald" | "rust" | "muted" | "indigo";
 
@@ -44,51 +29,6 @@ export function StatusBadge({
       )}
     >
       {children}
-    </span>
-  );
-}
-
-export function PaymentBadge({ status }: { status: PaymentStatus }) {
-  const tone: Tone = status === "paid" ? "emerald" : status === "partial" ? "gold" : "rust";
-  return <StatusBadge tone={tone}>{paymentLabel(status)}</StatusBadge>;
-}
-
-export function RentalStatusBadge({ status }: { status: RentalStatus | string }) {
-  if (status === "confirmed") return <StatusBadge tone="indigo">Booked</StatusBadge>;
-  if (status === "pending") return <StatusBadge tone="gold">Pending</StatusBadge>;
-  if (status === "completed") return <StatusBadge tone="emerald">Completed</StatusBadge>;
-  if (status === "cancelled") return <StatusBadge tone="rust">Cancelled</StatusBadge>;
-  return (
-    <StatusBadge tone={status === "returned" ? "emerald" : "rust"}>
-      {status === "returned" ? "Returned" : "Out"}
-    </StatusBadge>
-  );
-}
-
-export function BookingStatusBadge({ status }: { status: string }) {
-  const tone: Tone = status === "confirmed" ? "emerald" : status === "pending" ? "gold" : status === "completed" ? "indigo" : "rust";
-  return <StatusBadge tone={tone}>{status.toUpperCase()}</StatusBadge>;
-}
-
-export function StockBadge({ qty }: { qty: number }) {
-  return (
-    <StatusBadge tone={qty > 0 ? "emerald" : "rust"} className="font-mono">
-      {qty}
-    </StatusBadge>
-  );
-}
-
-export function BranchPill({ branch, qty }: { branch: string; qty: number }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]",
-        qty > 0
-          ? "border-emerald/35 bg-emerald/10 text-emerald"
-          : "border-rust/35 bg-rust/10 text-rust",
-      )}
-    >
-      {branch}: <span className="font-mono">{qty}</span>
     </span>
   );
 }

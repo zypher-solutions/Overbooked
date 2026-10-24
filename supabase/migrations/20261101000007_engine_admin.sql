@@ -396,11 +396,14 @@ DECLARE
 BEGIN
   PERFORM public._require_role(ARRAY['super_admin', 'owner']);
   v_shop := public.current_shop_id();
+  -- policies only: optional features are switched by Zypher (update_shop)
   UPDATE public.shops SET
-    phone = COALESCE(p ->> 'phone', phone), email = COALESCE(p ->> 'email', email),
-    address = COALESCE(p ->> 'address', address), gstin = COALESCE(p ->> 'gstin', gstin),
-    logo_url = COALESCE(p ->> 'logo_url', logo_url),
-    settings = settings || COALESCE(p -> 'settings', '{}') - 'plan'
+    phone = CASE WHEN p ? 'phone' THEN NULLIF(btrim(p ->> 'phone'), '') ELSE phone END,
+    email = CASE WHEN p ? 'email' THEN NULLIF(btrim(p ->> 'email'), '') ELSE email END,
+    address = CASE WHEN p ? 'address' THEN NULLIF(btrim(p ->> 'address'), '') ELSE address END,
+    gstin = CASE WHEN p ? 'gstin' THEN NULLIF(upper(btrim(p ->> 'gstin')), '') ELSE gstin END,
+    logo_url = CASE WHEN p ? 'logo_url' THEN NULLIF(p ->> 'logo_url', '') ELSE logo_url END,
+    settings = settings || (COALESCE(p -> 'settings', '{}') - 'plan' - 'features')
   WHERE id = v_shop;
 END $$;
 

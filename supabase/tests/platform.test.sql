@@ -3,7 +3,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(44);
+SELECT plan(46);
 
 \set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
@@ -112,7 +112,14 @@ SELECT is(public.delete_or_deactivate_product('d0000000-0000-0000-0000-000000000
 -- ===========================================================================
 SELECT throws_like($$ SELECT public.set_unit_status((SELECT id FROM units WHERE code = 'BR-LEH-001-M-2'), 'alteration', 'Hem') $$,
   'Alterations are not switched on%', 'alterations are off by default');
-SELECT lives_ok($$ SELECT public.update_my_shop('{"settings": {"features": {"alterations": true}}}') $$, 'owner switches alterations on');
+SELECT lives_ok($$ SELECT public.update_my_shop('{"settings": {"features": {"alterations": true}, "grace_minutes": 30}}') $$,
+  'owner saves shop rules');
+SELECT is((SELECT array[settings -> 'features' ->> 'alterations', settings ->> 'grace_minutes'] FROM shops WHERE id = '5a000000-0000-0000-0000-000000000001'),
+          array[NULL, '30'], 'owners change rules but not feature switches');
+SELECT pg_temp.act_as(:zypher);
+SELECT lives_ok($$ SELECT public.update_shop('5a000000-0000-0000-0000-000000000001', '{"settings": {"features": {"alterations": true}}}') $$,
+  'Zypher switches alterations on');
+SELECT pg_temp.act_as(:bridal_owner);
 SELECT is(public.set_unit_status((SELECT id FROM units WHERE code = 'BR-LEH-001-M-2'), 'alteration', 'Hem') ->> 'status', 'alteration',
           'a piece can now go for alteration');
 

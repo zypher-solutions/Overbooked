@@ -45,7 +45,7 @@ Open http://localhost:3000 and sign in with a demo login from the top of `supaba
 | `npx supabase db reset` | Wipe the local DB, re-run all migrations and the seed |
 | `npm run dev` | Run the app with hot reload |
 | `npm run build` | Production build (catches type errors) |
-| `npx playwright test` | Browser tests (needs `.env.test`, see below) |
+| `npx playwright test` | Browser tests (uses the demo logins from the seed) |
 
 **Supabase Studio** (http://127.0.0.1:54323) is a local admin UI. You can browse tables, run SQL and see
 auth users there.
@@ -59,23 +59,29 @@ npx supabase db reset                      # proves the whole chain still builds
 ```
 
 ## Tests
-Copy `.env.test.example` to `.env.test` and fill in the demo logins from `supabase/seed.sql`.
-Keep a `.env.test` in this folder. Otherwise `playwright.config.ts` also looks one folder up.
-Run them in this order. The database tests expect a freshly reset database, because they check that
-numbering starts at BK-0001:
+Run them in this order. The database tests expect freshly reset demo data (they count bookings and
+check booking numbers), and the browser tests add bookings of their own:
 ```bash
-npx supabase db reset   # fresh two-shop demo data
-npx supabase test db    # shop isolation, plan limits, numbering, money rules (supabase/tests)
-npx playwright test     # browser: roles, both shops, Zypher console, invite link, full money flow
+npx supabase db reset   # fresh demo data: one shop per business type + Zypher
+npx supabase test db    # engine, isolation, roles, money rules, console (supabase/tests)
+npx playwright test     # browser: menus per role, Zypher console, a full bridal booking (tests/)
 ```
+The browser tests sign in with the local demo password from `supabase/seed.sql` (or `DEMO_PASSWORD` if set).
 
 ## Shops and logins (local)
-- The seed creates two shops, **Demo Rentals** (Pro) and **Second Shop** (Starter), plus one Zypher admin.
-  Logins are at the top of `supabase/seed.sql`.
-- **Zypher admin:** opens the **Zypher Console**, where they create shops, record bank payments, change
-  plans, pause a shop, and "open" any shop to work inside it.
-- **Owners:** invite staff from **Staff Management**. They get a one-hour link to send on WhatsApp; the
-  person opens it and chooses a password. The same button makes a new link for a forgotten password.
+- The seed creates one shop per business type, plus one Zypher admin. Logins are at the top of `supabase/seed.sql`.
+
+  | Shop | Business type | Plan |
+  | --- | --- | --- |
+  | Kalyani Bridal | Bridal wear (2 branches) | Pro |
+  | Raja Groom Wear | Groom wear | Starter |
+  | Green Valley Resort | Resort | Starter |
+  | Kochi Drive Cars | Car rental | Starter |
+  | Munnar Bike Rentals | Bike rental (payment overdue) | Starter |
+- **Zypher admin:** signs in to the console at `/zypher`: shops, plans and fees, feature switches, bank
+  payments, pausing a shop, new shops from business types, and "Open shop" to work inside any shop.
+- **Owners:** invite staff from **Staff**. They get a one-hour link to send on WhatsApp; the person opens
+  it and chooses a password. The same screen makes a new link for a forgotten password.
 - `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` is needed for invites (server only; value from `npx supabase status`).
 
 ## Common problems
@@ -83,7 +89,7 @@ npx playwright test     # browser: roles, both shops, Zypher console, invite lin
 | --- | --- |
 | `failed to connect to the docker API` | Docker Desktop is not running. Start it and wait for "Engine running" |
 | Port 54321/54322 already in use | Another Supabase project is running: `npx supabase stop --project-id <name>` |
-| Login works but the app is empty / "deactivated" | The profile is inactive. New sign-ups start inactive; a super admin activates them in Staff Management |
+| Login works but says "deactivated" | The profile is inactive or has no shop. People join a shop through an invite link |
 | Changed a migration and nothing happened | Run `npx supabase db reset` |
 | "Could not embed because more than one relationship was found" after a reset | The API kept an old table map: `docker restart supabase_rest_overbooked` |
 

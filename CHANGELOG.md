@@ -10,7 +10,12 @@
   shops, shops not using it), shops list with billing filters, shop page (plan, monthly fee, notes, pause/resume,
   business types, feature switches, branches, people, invites, payments), new-shop wizard from business types,
   billing, business types and audit log. Shops have an agreed monthly fee. Zypher staff sign in to the console
-- The shop app screens still use the old schema until they are rebuilt on v2
+- Shop app rebuilt on v2 as separate pages: Today, New booking (live price and free counts), Bookings,
+  booking page (handover and return with checks, photos, suggested charges, extend, swap, cancel, corrections,
+  WhatsApp), Customers, Catalog (items, prices, units, extras, categories, CSV import), Money and reports,
+  Branches, Staff, Settings. Wording and fields follow each shop's business types
+- The TRENDZ-era screens, store and PDF ledger are removed
+- Browser tests rewritten for v2 (tests/v2-shop.spec.ts)
 
 ## 0.2.0 (2026-10-24): many shops
 - One database serves many shops. Isolation is enforced by a restrictive policy, composite foreign keys
