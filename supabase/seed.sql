@@ -18,14 +18,14 @@
 -- Id scheme: shops 5a..0N, branches b0..0N, categories c0..0N, products d0.., variations e0.., users aa..
 
 -- ---- shops ----
-INSERT INTO public.shops (id, name, slug, token_prefix, business_types, plan, phone, address, paid_until, settings) VALUES
-  ('5a000000-0000-0000-0000-000000000001', 'Kalyani Bridal', 'kalyani-bridal', 'KAL', ARRAY['bridal'], 'pro', '9000000001', 'MG Road, Kochi', CURRENT_DATE + 30, '{}'),
-  ('5a000000-0000-0000-0000-000000000002', 'Raja Groom Wear', 'raja-groom', 'RAJ', ARRAY['groom'], 'starter', '9000000002', 'Broadway, Kochi', CURRENT_DATE + 30, '{}'),
-  ('5a000000-0000-0000-0000-000000000003', 'Green Valley Resort', 'green-valley', 'GVR', ARRAY['resort'], 'starter', '9000000003', 'Vythiri, Wayanad', CURRENT_DATE + 30,
+INSERT INTO public.shops (id, name, slug, token_prefix, business_types, plan, monthly_fee, phone, address, paid_until, settings) VALUES
+  ('5a000000-0000-0000-0000-000000000001', 'Kalyani Bridal', 'kalyani-bridal', 'KAL', ARRAY['bridal'], 'pro', 899, '9000000001', 'MG Road, Kochi', CURRENT_DATE + 30, '{}'),
+  ('5a000000-0000-0000-0000-000000000002', 'Raja Groom Wear', 'raja-groom', 'RAJ', ARRAY['groom'], 'starter', 599, '9000000002', 'Broadway, Kochi', CURRENT_DATE + 30, '{}'),
+  ('5a000000-0000-0000-0000-000000000003', 'Green Valley Resort', 'green-valley', 'GVR', ARRAY['resort'], 'starter', 599, '9000000003', 'Vythiri, Wayanad', CURRENT_DATE + 30,
    '{"check_in_time": "14:00", "check_out_time": "11:00"}'),
-  ('5a000000-0000-0000-0000-000000000004', 'Kochi Drive Cars', 'kochi-drive', 'KDC', ARRAY['car'], 'starter', '9000000004', 'Edappally, Kochi', CURRENT_DATE + 30,
+  ('5a000000-0000-0000-0000-000000000004', 'Kochi Drive Cars', 'kochi-drive', 'KDC', ARRAY['car'], 'starter', 599, '9000000004', 'Edappally, Kochi', CURRENT_DATE + 30,
    '{"grace_minutes": 60, "require_licence": true}'),
-  ('5a000000-0000-0000-0000-000000000005', 'Munnar Bike Rentals', 'munnar-bikes', 'MBR', ARRAY['bike'], 'starter', '9000000005', 'Old Munnar', CURRENT_DATE - 3,
+  ('5a000000-0000-0000-0000-000000000005', 'Munnar Bike Rentals', 'munnar-bikes', 'MBR', ARRAY['bike'], 'starter', 599, '9000000005', 'Old Munnar', CURRENT_DATE - 3,
    '{"grace_minutes": 30}');
 
 INSERT INTO public.branches (id, shop_id, name, slug, address, phone) VALUES

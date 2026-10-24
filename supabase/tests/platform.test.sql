@@ -3,7 +3,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(36);
+SELECT plan(44);
 
 \set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
@@ -140,6 +140,21 @@ SELECT is((SELECT count(*) FROM add_ons a JOIN shops s ON s.id = a.shop_id WHERE
 SELECT pg_temp.act_as(:zypher);
 SELECT throws_like($$ SELECT public.update_shop('5a000000-0000-0000-0000-000000000001', '{"plan": "starter"}') $$,
   'The shop has 2 active branches%', 'cannot downgrade below what the shop uses');
+SELECT lives_ok($$ SELECT public.update_shop('5a000000-0000-0000-0000-000000000002', '{"monthly_fee": 749, "settings": {"features": {"sets": true}}}') $$,
+  'Zypher changes the fee and switches a feature on');
+SELECT is((public.shop_detail('5a000000-0000-0000-0000-000000000002') -> 'shop' ->> 'monthly_fee')::numeric, 749.00, 'the new fee is saved');
+SELECT is((public.shop_detail('5a000000-0000-0000-0000-000000000002') -> 'features' ->> 'sets')::boolean, true,
+          'shop detail shows the switched feature');
+SELECT is(jsonb_array_length(public.shop_detail('5a000000-0000-0000-0000-000000000001') -> 'people'), 3,
+          'shop detail lists the shop''s logins, with emails');
+SELECT is((public.console_summary() ->> 'monthly_due')::numeric, (SELECT sum(monthly_fee) FROM shops WHERE status = 'active'),
+          'console monthly fees = sum of active shops'' fees');
+SELECT is((public.console_summary() ->> 'overdue')::integer, 2,
+          'overdue = the unpaid seeded shop + the new shop that has never paid');
+SELECT pg_temp.act_as(:bridal_owner);
+SELECT throws_like($$ SELECT public.shop_detail('5a000000-0000-0000-0000-000000000001') $$, 'Only Zypher can do this',
+  'owners cannot read the console''s shop detail');
+SELECT throws_like($$ SELECT public.console_summary() $$, 'Only Zypher can do this', 'owners cannot read the console summary');
 
 SELECT * FROM finish();
 ROLLBACK;

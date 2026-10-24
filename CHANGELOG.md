@@ -6,7 +6,11 @@
 - One rental record from booking to return, time ranges, double booking blocked by the database, business
   templates, rates, add-ons, charges, pickup/return checks, payments as the single money record
 - Demo data: one shop per business type plus a Zypher admin; 114 database tests
-- The app screens still use the old schema until they are rebuilt on v2
+- Zypher console moved to its own area, `/zypher`, checked on the server: overview (fees, collections, overdue
+  shops, shops not using it), shops list with billing filters, shop page (plan, monthly fee, notes, pause/resume,
+  business types, feature switches, branches, people, invites, payments), new-shop wizard from business types,
+  billing, business types and audit log. Shops have an agreed monthly fee. Zypher staff sign in to the console
+- The shop app screens still use the old schema until they are rebuilt on v2
 
 ## 0.2.0 (2026-10-24): many shops
 - One database serves many shops. Isolation is enforced by a restrictive policy, composite foreign keys

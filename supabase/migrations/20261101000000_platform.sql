@@ -44,6 +44,7 @@ CREATE TABLE public.shops (
   plan            text NOT NULL DEFAULT 'starter' CHECK (plan IN ('starter', 'pro', 'business')),
   status          text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
   paid_until      date,
+  monthly_fee     numeric(14,2) NOT NULL DEFAULT 0 CHECK (monthly_fee >= 0),  -- agreed subscription per month
   -- shop-level switches and policies, e.g. {"features": {"sets": true}, "grace_minutes": 60,
   -- "check_in_time": "14:00", "check_out_time": "11:00", "require_licence": true}
   settings        jsonb NOT NULL DEFAULT '{}',

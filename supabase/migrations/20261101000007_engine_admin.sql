@@ -416,7 +416,7 @@ BEGIN
 END $$;
 
 -- a new shop from one or more templates: first branch, a category per template, default add-ons
--- p = {name, slug, token_prefix, plan, business_types: [...], branch_name, phone, email, address}
+-- p = {name, slug, token_prefix, plan, monthly_fee, business_types: [...], branch_name, phone, email, address}
 CREATE OR REPLACE FUNCTION public.create_shop(p jsonb)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog AS $$
 DECLARE
@@ -429,9 +429,10 @@ BEGIN
     RAISE EXCEPTION 'The first branch needs a name';
   END IF;
 
-  INSERT INTO public.shops (name, slug, token_prefix, business_types, plan, phone, email, address)
+  INSERT INTO public.shops (name, slug, token_prefix, business_types, plan, monthly_fee, phone, email, address)
   VALUES (btrim(p ->> 'name'), lower(btrim(p ->> 'slug')), upper(btrim(p ->> 'token_prefix')), v_types,
-          COALESCE(p ->> 'plan', 'starter'), p ->> 'phone', p ->> 'email', p ->> 'address')
+          COALESCE(p ->> 'plan', 'starter'), round(COALESCE((p ->> 'monthly_fee')::numeric, 0), 2),
+          NULLIF(btrim(p ->> 'phone'), ''), NULLIF(btrim(p ->> 'email'), ''), NULLIF(btrim(p ->> 'address'), ''))
   RETURNING id INTO v_shop;
 
   INSERT INTO public.branches (shop_id, name, slug, phone, address)
@@ -458,7 +459,7 @@ BEGIN
   UPDATE public.profiles SET active_shop_id = p_shop_id WHERE id = auth.uid();
 END $$;
 
--- plan, status, business types, settings, notes
+-- plan, fee, status, contact details, business types, settings (merged), notes
 CREATE OR REPLACE FUNCTION public.update_shop(p_shop_id uuid, p jsonb)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog AS $$
 DECLARE
@@ -479,7 +480,11 @@ BEGIN
   UPDATE public.shops SET
     name = COALESCE(NULLIF(btrim(p ->> 'name'), ''), name),
     plan = v_plan,
+    monthly_fee = COALESCE(round((p ->> 'monthly_fee')::numeric, 2), monthly_fee),
     status = COALESCE(p ->> 'status', status),
+    phone = CASE WHEN p ? 'phone' THEN NULLIF(btrim(p ->> 'phone'), '') ELSE phone END,
+    email = CASE WHEN p ? 'email' THEN NULLIF(btrim(p ->> 'email'), '') ELSE email END,
+    address = CASE WHEN p ? 'address' THEN NULLIF(btrim(p ->> 'address'), '') ELSE address END,
     business_types = CASE WHEN p ? 'business_types' THEN ARRAY(SELECT jsonb_array_elements_text(p -> 'business_types'))
                           ELSE business_types END,
     settings = settings || COALESCE(p -> 'settings', '{}'),
@@ -506,13 +511,13 @@ END $$;
 -- one row per shop for the console
 CREATE OR REPLACE FUNCTION public.platform_overview()
 RETURNS TABLE (shop_id uuid, name text, slug text, token_prefix text, business_types text[], plan text, status text,
-               paid_until date, last_payment_on date, last_payment_amount numeric, branches bigint, active_logins bigint,
+               monthly_fee numeric, paid_until date, last_payment_on date, last_payment_amount numeric, branches bigint, active_logins bigint,
                units bigint, rentals_30d bigint, created_at timestamptz)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_catalog AS $$
 BEGIN
   PERFORM public._require_zypher();
   RETURN QUERY
-  SELECT s.id, s.name, s.slug, s.token_prefix, s.business_types, s.plan, s.status, s.paid_until,
+  SELECT s.id, s.name, s.slug, s.token_prefix, s.business_types, s.plan, s.status, s.monthly_fee, s.paid_until,
          lp.paid_on, lp.amount,
          (SELECT count(*) FROM public.branches b WHERE b.shop_id = s.id AND b.is_active),
          (SELECT count(*) FROM public.profiles pr WHERE pr.shop_id = s.id AND pr.is_active),

@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export type PageKey = "scan" | "products" | "dashboard" | "rentals" | "bookings" | "stock" | "categories" | "import" | "add-product" | "branches" | "staff" | "zypher";
+export type PageKey = "scan" | "products" | "dashboard" | "rentals" | "bookings" | "stock" | "categories" | "import" | "add-product" | "branches" | "staff";
 
 export function Sidebar({
   active,
@@ -120,25 +120,13 @@ export function Sidebar({
         {/* Top-level standalone items */}
         <div className="flex flex-col gap-1 mb-2">
           {isZypher && (
-            <button
-              onClick={() => onChange("zypher")}
-              aria-current={active === "zypher" ? "page" : undefined}
-              className={cn(
-                "group relative flex items-center gap-3 rounded-md px-3 py-3 lg:py-2.5 text-sm transition-all duration-200",
-                active === "zypher"
-                  ? "bg-white/[0.06] text-foreground"
-                  : "text-muted-foreground hover:bg-white/[0.03] hover:text-foreground",
-              )}
+            <a
+              href="/zypher"
+              className="group relative flex items-center gap-3 rounded-md px-3 py-3 lg:py-2.5 text-sm text-muted-foreground transition-all duration-200 hover:bg-white/[0.03] hover:text-foreground"
             >
-              <span
-                className={cn(
-                  "absolute top-1.5 bottom-1.5 left-0 w-[2px] rounded-full transition-all duration-200",
-                  active === "zypher" ? "bg-gold" : "bg-transparent",
-                )}
-              />
-              <Store className={cn("h-4 w-4", active === "zypher" && "text-gold")} />
-              Zypher Console
-            </button>
+              <Store className="h-4 w-4" />
+              Back to Zypher console
+            </a>
           )}
           {shop && (
           <button

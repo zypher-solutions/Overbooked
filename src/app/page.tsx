@@ -18,7 +18,6 @@ import { BranchManagement } from "@/components/overbooked/pages/BranchManagement
 import { StaffManagement } from "@/components/overbooked/pages/StaffManagement";
 import { AddProduct } from "@/components/overbooked/pages/AddProduct";
 import { Bookings } from "@/components/overbooked/pages/Bookings";
-import { ZypherConsole } from "@/components/overbooked/pages/ZypherConsole";
 import { useAuth } from "@/lib/overbooked/AuthContext";
 import { OfflineBanner } from "@/components/overbooked/OfflineBanner";
 import { Menu, ShoppingCart } from "lucide-react";
@@ -29,8 +28,11 @@ import { saveRentalDraft } from "@/lib/overbooked/draftStorage";
 function OverbookedApp() {
   const [page, setPage] = useState<PageKey>("scan");
   const { profile, shop } = useAuth();
-  // Zypher staff outside any shop only have the console
+  // Zypher staff outside any shop belong in their console
   const noShop = profile?.role === "super_admin" && !shop;
+  useEffect(() => {
+    if (noShop) window.location.replace("/zypher");
+  }, [noShop]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const { products, cart, addToCart, clearCart, discardRentalDraft, fetchInitialData, loadError } = useOverbooked();
@@ -56,8 +58,7 @@ function OverbookedApp() {
     const saved = localStorage.getItem("overbooked_last_page") as PageKey;
     const role = profile.role;
     const allowed =
-      saved === "zypher" ? role === "super_admin"
-      : ["branches", "staff", "stock"].includes(saved) ? role === "super_admin" || role === "owner"
+      ["branches", "staff", "stock"].includes(saved) ? role === "super_admin" || role === "owner"
       : ["add-product", "categories", "import"].includes(saved) ? role !== "staff"
       : true;
     if (saved && allowed) setPage(saved);
@@ -152,7 +153,6 @@ function OverbookedApp() {
             </button>
           </div>
         )}
-        {page === "zypher" || noShop ? <ZypherConsole /> : null}
         {noShop ? null : <>
         {page === "dashboard" ? <Dashboard onEdit={setEditing} /> : null}
         {page === "scan" ? <ScanLookup /> : null}

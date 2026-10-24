@@ -33,7 +33,9 @@ export default function LoginPage() {
       }
 
       toast.success("Login successful", { description: "Welcome back to Overbooked!" });
-      router.push("/");
+      // Zypher staff start in their console
+      const { data: isZypher } = await supabase.rpc("is_platform_admin");
+      router.push(isZypher ? "/zypher" : "/");
       router.refresh(); // Force a refresh to update server components / middleware
     } catch (err: any) {
       console.error(err);
