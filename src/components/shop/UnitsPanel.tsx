@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarPlus, Plus } from "lucide-react";
+import { CalendarPlus, Plus, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
@@ -92,12 +92,13 @@ export function UnitsPanel({ product, template }: { product: Product; template: 
   const statusOptions: (UnitStatus | "alteration")[] = ["available", "maintenance", ...(feature("alterations") ? ["alteration" as const] : []), "lost", "retired"];
 
   return (
-    <Panel title={template.labels.units ?? "Units"} actions={
-      activeBranches.some((b) => canEdit(b.id)) && variations.length ? (
+    <Panel title={template.labels.units ?? "Units"} actions={<div className="flex gap-2">
+      {units?.length ? <Link href={`/print/tags?product=${product.id}`} className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link> : null}
+      {activeBranches.some((b) => canEdit(b.id)) && variations.length ? (
         <button className={ghostButtonClass} onClick={() => setAdding({ variation_id: variations[0].id, branch_id: myBranchId ?? activeBranches[0].id, codes: "", count: "1", attributes: {} })}>
           <Plus className="h-4 w-4" /> Add
         </button>
-      ) : null}>
+      ) : null}</div>}>
       {units === null ? <p className="text-sm text-muted-foreground">Loading...</p> : units.length === 0 ? (
         <Empty>No {template.labels.units?.toLowerCase() ?? "units"} yet. Add them so they can be booked.</Empty>
       ) : (

@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeftRight, CalendarClock, ChevronLeft, LogIn, LogOut, MessageCircle, MoreHorizontal, Pencil, Plus, Receipt, Wallet, XCircle,
+  ArrowLeftRight, CalendarClock, ChevronLeft, LogIn, LogOut, MessageCircle, MoreHorizontal, Pencil, Plus, Printer, Receipt, Wallet, XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useShop } from "@/lib/shop/ShopContext";
@@ -88,9 +88,13 @@ function RentalView() {
           {r.status === "active" ? <button className={goldButtonClass} onClick={() => setDialog("return")}><LogOut className="h-4 w-4" /> {isRoom ? "Check out" : "Mark returned"}</button> : null}
           <button className={ghostButtonClass} onClick={() => setDialog("pay")}><Wallet className="h-4 w-4" /> Money</button>
           <button className={ghostButtonClass} onClick={() => setDialog("whatsapp")}><MessageCircle className="h-4 w-4" /> WhatsApp</button>
+          <Link href={`/print/rental/${r.id}`} className={ghostButtonClass}><Printer className="h-4 w-4" /> Print</Link>
           <DropdownMenu>
             <DropdownMenuTrigger className={ghostButtonClass} aria-label="More actions"><MoreHorizontal className="h-4 w-4" /></DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {r.status === "reserved" ? (
+                <DropdownMenuItem onClick={() => router.push(`/book?edit=${r.id}`)}><Pencil className="mr-2 h-4 w-4" /> Change booking</DropdownMenuItem>
+              ) : null}
               {open ? <DropdownMenuItem onClick={() => setDialog("extend")}><CalendarClock className="mr-2 h-4 w-4" /> Extend</DropdownMenuItem> : null}
               {r.status === "reserved" && r.unit_reservations.some((u) => u.state === "held") ? (
                 <DropdownMenuItem onClick={() => setDialog("swap")}><ArrowLeftRight className="mr-2 h-4 w-4" /> Give another unit</DropdownMenuItem>

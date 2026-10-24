@@ -3,15 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { SummaryCard, ghostButtonClass, inputClass } from "@/components/overbooked/primitives";
 import {
-  BillingBadge, METHOD_LABELS, PageHeader, PaymentDialog, billingState, fmtDay, rupees, tableWrap, theadClass, todayIST,
+  BillingBadge, METHOD_LABELS, PageHeader, PaymentDialog, billingState, fmtDay, reminderLink, rupees, tableWrap, theadClass, todayIST,
   type OverviewRow, type PayTarget,
 } from "@/components/zypher/kit";
 
 interface PaymentRow {
-  id: string; shop_id: string; amount: number; paid_on: string; period_to: string; method: string; note: string | null;
+  id: string; shop_id: string; receipt_no: string; kind: string; amount: number; paid_on: string; period_to: string | null; method: string; note: string | null;
 }
 
 export default function Billing() {
@@ -19,14 +20,17 @@ export default function Billing() {
   const [payments, setPayments] = useState<PaymentRow[] | null>(null);
   const [month, setMonth] = useState(todayIST().slice(0, 7));
   const [payFor, setPayFor] = useState<PayTarget | null>(null);
+  const [bank, setBank] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const [o, p] = await Promise.all([
+    const [o, p, z] = await Promise.all([
       supabase.rpc("platform_overview"),
-      supabase.from("shop_payments").select("id, shop_id, amount, paid_on, period_to, method, note")
+      supabase.from("shop_payments").select("id, shop_id, receipt_no, kind, amount, paid_on, period_to, method, note")
         .order("paid_on", { ascending: false }).order("created_at", { ascending: false }),
+      supabase.from("platform_settings").select("bank_details").maybeSingle(),
     ]);
+    setBank((z.data as { bank_details: string | null } | null)?.bank_details ?? null);
     if (o.error || p.error) toast.error("Could not load billing: " + (o.error ?? p.error)?.message);
     setShops((o.data as OverviewRow[]) ?? []);
     setPayments((p.data as PaymentRow[]) ?? []);
@@ -70,6 +74,9 @@ export default function Billing() {
                 <td className="px-4 py-2.5">{s.paid_until ? fmtDay(s.paid_until) : "Never paid"}</td>
                 <td className="px-4 py-2.5 text-right font-mono">{rupees(s.monthly_fee)}</td>
                 <td className="px-4 py-2.5 text-right">
+                  {reminderLink(s, bank) ? (
+                    <a className={ghostButtonClass + " mr-2"} href={reminderLink(s, bank)!} target="_blank" rel="noreferrer">WhatsApp reminder</a>
+                  ) : null}
                   <button className={ghostButtonClass}
                     onClick={() => setPayFor({ id: s.shop_id, name: s.name, monthly_fee: Number(s.monthly_fee), paid_until: s.paid_until })}>
                     Record payment
@@ -84,13 +91,13 @@ export default function Billing() {
 
       <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-foreground">Payments received</h2>
-        <input type="month" className={inputClass + " w-auto"} aria-label="Month" value={month} onChange={(e) => setMonth(e.target.value)} />
+        <input type="month" className={cn(inputClass, "w-auto")} aria-label="Month" value={month} onChange={(e) => setMonth(e.target.value)} />
       </div>
       <div className={tableWrap}>
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className={theadClass}>
             <tr><th className="px-4 py-3">Received</th><th className="px-4 py-3">Shop</th><th className="px-4 py-3 text-right">Amount</th>
-              <th className="px-4 py-3">Method</th><th className="px-4 py-3">Covers until</th><th className="px-4 py-3">Note</th></tr>
+              <th className="px-4 py-3">Method</th><th className="px-4 py-3">For</th><th className="px-4 py-3">Receipt</th></tr>
           </thead>
           <tbody className="divide-y divide-border">
             {payments === null ? (
@@ -101,8 +108,8 @@ export default function Billing() {
                 <td className="px-4 py-2.5"><Link href={`/zypher/shops/${p.shop_id}`} className="hover:text-gold">{name(p.shop_id)}</Link></td>
                 <td className="px-4 py-2.5 text-right font-mono">{rupees(p.amount)}</td>
                 <td className="px-4 py-2.5">{METHOD_LABELS[p.method] ?? p.method}</td>
-                <td className="px-4 py-2.5">{fmtDay(p.period_to)}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">{p.note ?? ""}</td>
+                <td className="px-4 py-2.5">{p.kind === "subscription" ? `Subscription to ${fmtDay(p.period_to)}` : p.kind === "installation" ? "Installation" : "Other"}</td>
+                <td className="px-4 py-2.5"><a href={`/print/zypher-receipt/${p.id}`} className="font-mono text-xs text-gold hover:underline">{p.receipt_no}</a></td>
               </tr>
             ))}
             {payments !== null && inMonth.length === 0 ? (

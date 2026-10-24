@@ -119,13 +119,16 @@ CREATE UNIQUE INDEX staff_invites_one_open_per_email ON public.staff_invites (em
 CREATE TABLE public.shop_payments (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   shop_id      uuid NOT NULL REFERENCES public.shops(id),
+  receipt_no   text NOT NULL UNIQUE,   -- Zypher receipt number, e.g. ZYP-2026-27-0001 (Indian financial year)
+  kind         text NOT NULL DEFAULT 'subscription' CHECK (kind IN ('subscription', 'installation', 'other')),
   amount       numeric(14,2) NOT NULL CHECK (amount > 0),
   paid_on      date NOT NULL,
   method       text NOT NULL DEFAULT 'bank_transfer' CHECK (method IN ('bank_transfer', 'upi', 'cash', 'cheque')),
-  period_to    date NOT NULL,
+  period_to    date,                   -- subscription paid up to this date
   note         text,
   recorded_by  uuid REFERENCES public.profiles(id),
-  created_at   timestamptz NOT NULL DEFAULT now()
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT shop_payments_period_check CHECK (kind <> 'subscription' OR period_to IS NOT NULL)
 );
 CREATE INDEX idx_shop_payments_shop_id ON public.shop_payments (shop_id);
 

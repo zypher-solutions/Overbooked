@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { StatusBadge, ghostButtonClass, inputClass } from "@/components/overbooked/primitives";
 import { PageHeader, fmtWhen, tableWrap, theadClass } from "@/components/zypher/kit";
@@ -74,7 +75,7 @@ export default function AuditLog() {
     <>
       <PageHeader title="Audit log" subtitle="Every deletion and every correction, newest first."
         actions={
-          <select className={inputClass + " w-auto"} aria-label="Shop" value={shopId} onChange={(e) => setShopId(e.target.value)}>
+          <select className={cn(inputClass, "w-auto")} aria-label="Shop" value={shopId} onChange={(e) => setShopId(e.target.value)}>
             <option value="">All shops</option>
             {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>

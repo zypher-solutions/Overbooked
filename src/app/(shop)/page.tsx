@@ -10,7 +10,8 @@ import { RENTAL_LIST_COLUMNS } from "@/lib/shop/api";
 import { addDays, dayRange, errorText, fmtDate, todayLocal } from "@/lib/shop/format";
 import { CameraScanner } from "@/components/overbooked/CameraScanner";
 import { RentalList, type ListRental } from "@/components/shop/RentalList";
-import { PageHeader, Panel, SummaryCard, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
+import { RemindersPanel } from "@/components/shop/RemindersPanel";
+import { PageHeader, Panel, StatusBadge, SummaryCard, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
 
 interface Board { pickups: ListRental[]; returns: ListRental[]; upcoming: ListRental[]; outNow: number }
 
@@ -19,6 +20,7 @@ export default function Today() {
   const [board, setBoard] = useState<Board | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ListRental[] | null>(null);
+  const [unitHits, setUnitHits] = useState<{ id: string; code: string; status: string; status_reason: string | null; product_id: string; products: { name: string } | null }[]>([]);
   const [scanning, setScanning] = useState(false);
   const today = todayLocal(tz);
 
@@ -60,13 +62,13 @@ export default function Today() {
 
   const search = async (text: string) => {
     const q = text.trim();
-    if (!q) return setResults(null);
+    if (!q) { setUnitHits([]); return setResults(null); }
     const supabase = createClient();
     const like = `%${q.replace(/[%_,()*]/g, "")}%`;
     const [byToken, customers, units] = await Promise.all([
       supabase.from("rentals").select(RENTAL_LIST_COLUMNS).ilike("token", like).order("created_at", { ascending: false }).limit(20),
       supabase.from("customers").select("id").or(`full_name.ilike.${like},phone.ilike.${like}`).limit(20),
-      supabase.from("units").select("id").ilike("code", like).limit(20),
+      supabase.from("units").select("id, code, status, status_reason, product_id, products!units_shop_product_fkey(name)").ilike("code", like).limit(20),
     ]);
     const ids = new Set<string>();
     const found: ListRental[] = [];
@@ -87,6 +89,7 @@ export default function Today() {
         add(data as unknown as ListRental[]);
       }
     }
+    setUnitHits((units.data as never) ?? []);
     setResults(found);
   };
 
@@ -106,11 +109,26 @@ export default function Today() {
       </form>
 
       {results !== null ? (
-        <Panel className="mb-5" title={`Search results (${results.length})`}
+        <Panel className="mb-5" title={`Search results (${results.length + unitHits.length})`}
           actions={<button className="text-xs text-gold hover:underline" onClick={() => { setResults(null); setQuery(""); }}>Clear</button>}>
-          <RentalList rentals={results} empty="Nothing found. Try part of a name, phone number or booking number." />
+          {unitHits.length ? (
+            <ul className="mb-2 flex flex-wrap gap-2">
+              {unitHits.map((u) => (
+                <li key={u.id}>
+                  <Link href={`/catalog/${u.product_id}`} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm hover:border-gold/40">
+                    <span className="font-mono font-semibold">{u.code}</span>
+                    <span className="text-muted-foreground">{u.products?.name}</span>
+                    <StatusBadge tone={u.status === "available" ? "emerald" : "rust"}>{u.status === "available" ? "Available" : u.status_reason || u.status}</StatusBadge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <RentalList rentals={results} empty={unitHits.length ? "No current booking for this piece." : "Nothing found. Try part of a name, phone number or booking number."} />
         </Panel>
       ) : null}
+
+      <RemindersPanel />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <SummaryCard label="To hand over" value={board?.pickups.length ?? "—"} hint="Today and missed" tone={board?.pickups.length ? "gold" : "default"} />

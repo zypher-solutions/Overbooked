@@ -29,7 +29,7 @@ interface Detail {
   people: { id: string; full_name: string; role: string; branch: string | null; is_active: boolean; email: string; last_sign_in_at: string | null }[];
   invites: { email: string; role: string; branch: string | null; created_at: string }[];
   usage: { products: number; units: number; customers: number; rentals: number; rentals_30d: number; open_rentals: number; last_rental_at: string | null };
-  payments: { id: string; amount: number; paid_on: string; period_to: string; method: string; note: string | null }[];
+  payments: { id: string; receipt_no: string; kind: string; amount: number; paid_on: string; period_to: string | null; method: string; note: string | null }[];
   features: Record<string, boolean>;
 }
 
@@ -238,7 +238,7 @@ export default function ShopDetail() {
           <table className="w-full min-w-[620px] text-left text-sm">
             <thead className={theadClass}>
               <tr><th className="px-4 py-3">Received</th><th className="px-4 py-3 text-right">Amount</th><th className="px-4 py-3">Method</th>
-                <th className="px-4 py-3">Covers until</th><th className="px-4 py-3">Note</th></tr>
+                <th className="px-4 py-3">For</th><th className="px-4 py-3">Receipt</th></tr>
             </thead>
             <tbody className="divide-y divide-border">
               {d.payments.map((p) => (
@@ -246,8 +246,8 @@ export default function ShopDetail() {
                   <td className="px-4 py-2.5">{fmtDay(p.paid_on)}</td>
                   <td className="px-4 py-2.5 text-right font-mono">{rupees(p.amount)}</td>
                   <td className="px-4 py-2.5">{METHOD_LABELS[p.method] ?? p.method}</td>
-                  <td className="px-4 py-2.5">{fmtDay(p.period_to)}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{p.note ?? ""}</td>
+                  <td className="px-4 py-2.5">{p.kind === "subscription" ? `Subscription to ${fmtDay(p.period_to)}` : p.kind === "installation" ? "Installation" : "Other"}{p.note ? <span className="block text-xs text-muted-foreground">{p.note}</span> : null}</td>
+                  <td className="px-4 py-2.5"><a href={`/print/zypher-receipt/${p.id}`} className="font-mono text-xs text-gold hover:underline">{p.receipt_no}</a></td>
                 </tr>
               ))}
               {d.payments.length === 0 ? <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">No payments yet.</td></tr> : null}

@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Store, PlusCircle, Wallet, Layers, ScrollText, LogOut, LogIn, Menu, X } from "lucide-react";
+import { LayoutDashboard, Store, PlusCircle, Wallet, Layers, ScrollText, LogOut, LogIn, Menu, Settings, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/overbooked/AuthContext";
 
@@ -14,6 +14,8 @@ const NAV = [
   { href: "/zypher/billing", label: "Billing", icon: Wallet },
   { href: "/zypher/templates", label: "Business types", icon: Layers },
   { href: "/zypher/audit", label: "Audit log", icon: ScrollText },
+  { href: "/zypher/team", label: "Zypher team", icon: Users },
+  { href: "/zypher/settings", label: "Settings", icon: Settings },
 ];
 
 export function ZypherShell({ children }: { children: ReactNode }) {

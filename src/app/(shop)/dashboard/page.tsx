@@ -114,11 +114,11 @@ export default function Dashboard() {
           ))}
         </div>
         {preset === "custom" ? <>
-          <input type="date" className={inputClass + " w-auto"} aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <input type="date" className={inputClass + " w-auto"} aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+          <input type="date" className={cn(inputClass, "w-auto")} aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <input type="date" className={cn(inputClass, "w-auto")} aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
         </> : null}
         {!myBranchId && activeBranches.length > 1 ? (
-          <select className={inputClass + " w-auto"} aria-label="Branch" value={branch} onChange={(e) => setBranch(e.target.value)}>
+          <select className={cn(inputClass, "w-auto")} aria-label="Branch" value={branch} onChange={(e) => setBranch(e.target.value)}>
             <option value="">All branches</option>
             {activeBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>

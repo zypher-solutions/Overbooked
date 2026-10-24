@@ -67,3 +67,24 @@ export function buildMessage(kind: MessageKind, r: RentalDetail, ctx: {
       ].filter(Boolean).join("\n");
   }
 }
+
+// short reminders built from a list row (no need to load the whole booking)
+export type QuickKind = "pickup_reminder" | "return_reminder" | "overdue";
+
+export function quickMessage(kind: QuickKind, r: {
+  token: string; start_at: string; end_at: string; customers?: { full_name: string } | null;
+  rental_lines?: { description: string; qty: number; kind?: string }[];
+}, ctx: { shopName: string; tz: string; phone?: string | null }) {
+  const name = (r.customers?.full_name ?? "").split(" ")[0];
+  const items = (r.rental_lines ?? []).map((l) => `• ${l.qty > 1 ? `${l.qty} × ` : ""}${l.description}`).join("\n");
+  const at = (iso: string) => fmtDateTime(iso, ctx.tz);
+  const room = (r.rental_lines ?? []).length > 0 && (r.rental_lines ?? []).every((l) => l.kind === "room");
+  const contact = ctx.phone ? `\nQuestions? Call ${ctx.phone}.` : "";
+  if (kind === "pickup_reminder") {
+    return `Hi ${name}, a reminder from *${ctx.shopName}*: your booking *${r.token}* ${room ? "check-in is" : "starts"} ${at(r.start_at)}.\n${items}\nPlease bring your ID.${contact}`;
+  }
+  if (kind === "return_reminder") {
+    return `Hi ${name}, a reminder from *${ctx.shopName}*: booking *${r.token}* is ${room ? "due to check out" : "due back"} ${at(r.end_at)}.\n${items}\nLate returns may be charged. Thank you!${contact}`;
+  }
+  return `Hi ${name}, booking *${r.token}* with *${ctx.shopName}* was due ${at(r.end_at)} and has not come back yet. Please return it as soon as possible; late charges apply.${contact}`;
+}

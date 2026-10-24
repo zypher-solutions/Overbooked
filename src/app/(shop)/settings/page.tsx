@@ -6,6 +6,7 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
 import { FEATURE_LABELS, errorText } from "@/lib/shop/format";
 import { Field, PageHeader, Panel, StatusBadge, goldButtonClass, inputClass, monoInputClass } from "@/components/shop/ui";
+import { SubscriptionPanel } from "@/components/shop/Subscription";
 
 export default function Settings() {
   const { shop, templates, isOwner, feature, setting } = useShop();
@@ -16,6 +17,8 @@ export default function Settings() {
     grace_minutes: String(setting("grace_minutes", 60)),
     check_in_time: setting("check_in_time", "14:00"), check_out_time: setting("check_out_time", "11:00"),
     require_licence: setting("require_licence", true),
+    gst_percent: String(setting("gst_percent", 0)),
+    receipt_note: setting("receipt_note", ""),
   });
   const [busy, setBusy] = useState(false);
   const features = Array.from(new Set(templates.flatMap((t) => Object.keys(t.features))));
@@ -25,12 +28,15 @@ export default function Settings() {
   const save = async () => {
     const grace = Number(f.grace_minutes);
     if (!Number.isInteger(grace) || grace < 0 || grace > 1440) return toast.error("Grace time is whole minutes, 0 to 1440.");
+    const gst = Number(f.gst_percent || 0);
+    if (!(gst >= 0 && gst <= 28)) return toast.error("GST is a percentage from 0 to 28.");
     setBusy(true);
     try {
       await call("update_my_shop", {
         p: {
           phone: f.phone.trim(), email: f.email.trim(), address: f.address.trim(), gstin: f.gstin.trim().toUpperCase(),
-          settings: { grace_minutes: grace, check_in_time: f.check_in_time, check_out_time: f.check_out_time, require_licence: f.require_licence },
+          settings: { grace_minutes: grace, check_in_time: f.check_in_time, check_out_time: f.check_out_time, require_licence: f.require_licence,
+            gst_percent: gst, receipt_note: f.receipt_note.trim() },
         },
       });
       toast.success("Saved");
@@ -45,6 +51,7 @@ export default function Settings() {
     <>
       <PageHeader title="Shop settings" actions={<button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save"}</button>} />
       <div className="grid gap-4 lg:grid-cols-2">
+        <SubscriptionPanel />
         <Panel title="Shop details" className="lg:row-span-2">
           <div className="grid gap-3">
             <Field label="Shop name" hint="Ask Zypher to change it"><input className={inputClass} value={shop.name} readOnly /></Field>
@@ -69,6 +76,16 @@ export default function Settings() {
                 A driving licence must be on record and checked before a vehicle goes out
               </label>
             ) : null}
+          </div>
+        </Panel>
+        <Panel title="Receipts">
+          <div className="grid gap-3">
+            <Field label="GST included in prices (%)" hint="With a GSTIN and a rate above 0, receipts print as tax invoices with CGST and SGST. Use 0 for plain receipts.">
+              <input className={monoInputClass} inputMode="decimal" value={f.gst_percent} onChange={(e) => setF({ ...f, gst_percent: e.target.value })} />
+            </Field>
+            <Field label="Note printed on every receipt" hint="Terms: deposit, late returns, damage">
+              <textarea className={inputClass} rows={3} value={f.receipt_note} onChange={(e) => setF({ ...f, receipt_note: e.target.value })} />
+            </Field>
           </div>
         </Panel>
         <Panel title="Optional features">

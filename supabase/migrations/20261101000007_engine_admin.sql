@@ -501,26 +501,49 @@ BEGIN
   ON CONFLICT DO NOTHING;
 END $$;
 
+-- a payment from a shop to Zypher, with its receipt number; a subscription payment moves paid-until
 CREATE OR REPLACE FUNCTION public.record_shop_payment(p_shop_id uuid, p_amount numeric, p_paid_on date, p_period_to date,
-                                                      p_method text DEFAULT 'bank_transfer', p_note text DEFAULT NULL)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog AS $$
+                                                      p_method text DEFAULT 'bank_transfer', p_note text DEFAULT NULL,
+                                                      p_kind text DEFAULT 'subscription')
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_catalog AS $$
+DECLARE
+  v_fy text;
+  v_next integer;
+  v_id uuid;
 BEGIN
   PERFORM public._require_zypher();
-  INSERT INTO public.shop_payments (shop_id, amount, paid_on, method, period_to, note, recorded_by)
-  VALUES (p_shop_id, p_amount, p_paid_on, p_method, p_period_to, p_note, auth.uid());
-  UPDATE public.shops SET paid_until = GREATEST(COALESCE(paid_until, p_period_to), p_period_to) WHERE id = p_shop_id;
+  IF NOT EXISTS (SELECT 1 FROM public.shops WHERE id = p_shop_id) THEN
+    RAISE EXCEPTION 'Shop not found';
+  END IF;
+  IF p_kind = 'subscription' AND p_period_to IS NULL THEN
+    RAISE EXCEPTION 'Enter the date this subscription payment covers until';
+  END IF;
+  -- Indian financial year (April to March), numbered without gaps
+  v_fy := CASE WHEN extract(month FROM p_paid_on) >= 4
+               THEN extract(year FROM p_paid_on)::text || '-' || right((extract(year FROM p_paid_on) + 1)::text, 2)
+               ELSE (extract(year FROM p_paid_on) - 1)::text || '-' || right(extract(year FROM p_paid_on)::text, 2) END;
+  LOCK TABLE public.shop_payments IN SHARE ROW EXCLUSIVE MODE;
+  SELECT COALESCE(max(right(receipt_no, 4)::integer), 0) + 1 INTO v_next FROM public.shop_payments WHERE receipt_no LIKE 'ZYP-' || v_fy || '-%';
+  INSERT INTO public.shop_payments (shop_id, receipt_no, kind, amount, paid_on, method, period_to, note, recorded_by)
+  VALUES (p_shop_id, 'ZYP-' || v_fy || '-' || lpad(v_next::text, 4, '0'), p_kind, p_amount, p_paid_on, p_method,
+          CASE WHEN p_kind = 'subscription' THEN p_period_to END, NULLIF(btrim(p_note), ''), auth.uid())
+  RETURNING id INTO v_id;
+  IF p_kind = 'subscription' THEN
+    UPDATE public.shops SET paid_until = GREATEST(COALESCE(paid_until, p_period_to), p_period_to) WHERE id = p_shop_id;
+  END IF;
+  RETURN v_id;
 END $$;
 
 -- one row per shop for the console
 CREATE OR REPLACE FUNCTION public.platform_overview()
 RETURNS TABLE (shop_id uuid, name text, slug text, token_prefix text, business_types text[], plan text, status text,
-               monthly_fee numeric, paid_until date, last_payment_on date, last_payment_amount numeric, branches bigint, active_logins bigint,
+               phone text, monthly_fee numeric, paid_until date, last_payment_on date, last_payment_amount numeric, branches bigint, active_logins bigint,
                units bigint, rentals_30d bigint, created_at timestamptz)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_catalog AS $$
 BEGIN
   PERFORM public._require_zypher();
   RETURN QUERY
-  SELECT s.id, s.name, s.slug, s.token_prefix, s.business_types, s.plan, s.status, s.monthly_fee, s.paid_until,
+  SELECT s.id, s.name, s.slug, s.token_prefix, s.business_types, s.plan, s.status, s.phone, s.monthly_fee, s.paid_until,
          lp.paid_on, lp.amount,
          (SELECT count(*) FROM public.branches b WHERE b.shop_id = s.id AND b.is_active),
          (SELECT count(*) FROM public.profiles pr WHERE pr.shop_id = s.id AND pr.is_active),
@@ -581,7 +604,7 @@ BEGIN
     'swap_unit(uuid, uuid, uuid)', 'import_catalog(jsonb)', 'inventory_status()', 'dashboard_summary(date, date, uuid)',
     'get_staff_emails()', 'admin_set_staff_status(uuid, boolean, text)', 'set_staff_branch(uuid, uuid)',
     'update_my_shop(jsonb)', 'create_shop(jsonb)', 'switch_shop(uuid)', 'update_shop(uuid, jsonb)',
-    'record_shop_payment(uuid, numeric, date, date, text, text)', 'platform_overview()']
+    'record_shop_payment(uuid, numeric, date, date, text, text, text)', 'platform_overview()']
   LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM PUBLIC, anon', f);
     EXECUTE format('GRANT EXECUTE ON FUNCTION public.%s TO authenticated', f);

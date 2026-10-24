@@ -36,10 +36,12 @@ INSERT INTO public.branches (id, shop_id, name, slug, address, phone) VALUES
   ('b0000000-0000-0000-0000-000000000005', '5a000000-0000-0000-0000-000000000004', 'Edappally', 'edappally', 'Edappally, Kochi', '9000000041'),
   ('b0000000-0000-0000-0000-000000000006', '5a000000-0000-0000-0000-000000000005', 'Old Munnar', 'old-munnar', 'Old Munnar', '9000000051');
 
--- Zypher's record of the shops' subscription payments (bank transfer)
-INSERT INTO public.shop_payments (shop_id, amount, paid_on, method, period_to, note) VALUES
-  ('5a000000-0000-0000-0000-000000000001', 15000, CURRENT_DATE - 30, 'bank_transfer', CURRENT_DATE + 30, 'Installation and first month'),
-  ('5a000000-0000-0000-0000-000000000005', 12599, CURRENT_DATE - 33, 'upi', CURRENT_DATE - 3, 'Installation and first month');
+-- Zypher's record of the shops' payments (receipt numbers by Indian financial year)
+INSERT INTO public.shop_payments (shop_id, receipt_no, kind, amount, paid_on, method, period_to, note) VALUES
+  ('5a000000-0000-0000-0000-000000000001', 'ZYP-DEMO-0001', 'installation', 15000, CURRENT_DATE - 60, 'bank_transfer', NULL, 'One-time installation'),
+  ('5a000000-0000-0000-0000-000000000001', 'ZYP-DEMO-0002', 'subscription', 1798, CURRENT_DATE - 30, 'bank_transfer', CURRENT_DATE + 30, 'Two months'),
+  ('5a000000-0000-0000-0000-000000000005', 'ZYP-DEMO-0003', 'installation', 12000, CURRENT_DATE - 33, 'upi', NULL, 'One-time installation'),
+  ('5a000000-0000-0000-0000-000000000005', 'ZYP-DEMO-0004', 'subscription', 599, CURRENT_DATE - 33, 'upi', CURRENT_DATE - 3, 'First month');
 
 -- ---- users (handle_new_user creates an inactive profile with no shop for each) ----
 INSERT INTO auth.users (

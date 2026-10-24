@@ -33,6 +33,7 @@ export interface Shop {
   plan: "starter" | "pro" | "business";
   status: "active" | "suspended";
   paid_until: string | null;
+  monthly_fee: number;
   logo_url: string | null;
   phone: string | null;
   email: string | null;

@@ -144,7 +144,7 @@ export interface Reservation {
   state: "held" | "out" | "returned" | "released";
   units?: Pick<Unit, "id" | "code" | "odometer" | "status" | "variation_id">;
 }
-export interface RentalAddOn { id: string; name: string; basis: AddOnBasis; quantity: number; unit_amount: number; amount: number }
+export interface RentalAddOn { id: string; add_on_id: string; name: string; basis: AddOnBasis; quantity: number; unit_amount: number; amount: number }
 export interface Charge { id: string; type: ChargeType; amount: number; note: string | null; created_at: string }
 export interface Check {
   id: string;

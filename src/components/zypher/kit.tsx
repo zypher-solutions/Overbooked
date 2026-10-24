@@ -28,6 +28,7 @@ export interface OverviewRow {
   business_types: string[];
   plan: Plan;
   status: "active" | "suspended";
+  phone: string | null;
   monthly_fee: number;
   paid_until: string | null;
   last_payment_on: string | null;
@@ -208,14 +209,14 @@ export interface PayTarget { id: string; name: string; monthly_fee: number; paid
 export function PaymentDialog({ shop, onClose, onSaved }: { shop: PayTarget | null; onClose: () => void; onSaved: () => void }) {
   const today = todayIST();
   const from = shop?.paid_until && shop.paid_until > today ? shop.paid_until : today;
-  const [form, setForm] = useState({ amount: "", method: "bank_transfer", paidOn: today, periodTo: "", note: "" });
+  const [form, setForm] = useState({ kind: "subscription", amount: "", method: "bank_transfer", paidOn: today, periodTo: "", note: "" });
   const [busy, setBusy] = useState(false);
   const [openFor, setOpenFor] = useState<string | null>(null);
 
   // reset the form each time it opens for a shop
   if (shop && openFor !== shop.id) {
     setOpenFor(shop.id);
-    setForm({ amount: shop.monthly_fee ? String(shop.monthly_fee) : "", method: "bank_transfer", paidOn: today,
+    setForm({ kind: "subscription", amount: shop.monthly_fee ? String(shop.monthly_fee) : "", method: "bank_transfer", paidOn: today,
               periodTo: addMonths(from, 1), note: "" });
   }
   if (!shop && openFor !== null) setOpenFor(null);
@@ -224,11 +225,11 @@ export function PaymentDialog({ shop, onClose, onSaved }: { shop: PayTarget | nu
     if (!shop) return;
     const amount = Number(form.amount);
     if (!(amount > 0)) return toast.error("Enter the amount received.");
-    if (!form.periodTo) return toast.error("Enter the date this payment covers until.");
+    if (form.kind === "subscription" && !form.periodTo) return toast.error("Enter the date this payment covers until.");
     setBusy(true);
     const { error } = await createClient().rpc("record_shop_payment", {
-      p_shop_id: shop.id, p_amount: amount, p_paid_on: form.paidOn, p_period_to: form.periodTo,
-      p_method: form.method, p_note: form.note.trim() || null,
+      p_shop_id: shop.id, p_amount: amount, p_paid_on: form.paidOn, p_period_to: form.kind === "subscription" ? form.periodTo : null,
+      p_method: form.method, p_note: form.note.trim() || null, p_kind: form.kind,
     });
     setBusy(false);
     if (error) return toast.error(error.message);
@@ -255,7 +256,13 @@ export function PaymentDialog({ shop, onClose, onSaved }: { shop: PayTarget | nu
             {shop?.paid_until ? <> (now {fmtDay(shop.paid_until)})</> : null}.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="flex flex-wrap gap-1.5">{[1, 3, 6, 12].map(monthsChip)}</div>
+        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="What the payment is for">
+          {([["subscription", "Subscription"], ["installation", "Installation"], ["other", "Other"]] as const).map(([k, l]) => (
+            <button key={k} type="button" role="radio" aria-checked={form.kind === k} onClick={() => setForm({ ...form, kind: k })}
+              className={"rounded-full border px-3 py-1 text-xs " + (form.kind === k ? "border-gold/60 bg-gold/10 font-medium" : "border-border text-muted-foreground")}>{l}</button>
+          ))}
+        </div>
+        {form.kind === "subscription" ? <div className="flex flex-wrap gap-1.5">{[1, 3, 6, 12].map(monthsChip)}</div> : null}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Amount (₹)">
             <input className={inputClass} inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
@@ -268,9 +275,11 @@ export function PaymentDialog({ shop, onClose, onSaved }: { shop: PayTarget | nu
           <Field label="Received on">
             <input type="date" className={inputClass} value={form.paidOn} onChange={(e) => setForm({ ...form, paidOn: e.target.value })} />
           </Field>
-          <Field label="Covers until">
-            <input type="date" className={inputClass} value={form.periodTo} onChange={(e) => setForm({ ...form, periodTo: e.target.value })} />
-          </Field>
+          {form.kind === "subscription" ? (
+            <Field label="Covers until">
+              <input type="date" className={inputClass} value={form.periodTo} onChange={(e) => setForm({ ...form, periodTo: e.target.value })} />
+            </Field>
+          ) : <span />}
           <Field label="Note (reference no., installation ...)" className="col-span-2">
             <input className={inputClass} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
           </Field>
@@ -331,4 +340,18 @@ export function InviteOwnerDialog({ shop, onClose, onLink }: {
       </AlertDialogContent>
     </AlertDialog>
   );
+}
+
+// a WhatsApp reminder to a shop about its subscription, sent from Zypher's phone
+export function reminderLink(shop: { name: string; phone: string | null; paid_until: string | null; monthly_fee: number }, bank: string | null) {
+  if (!shop.phone) return null;
+  const digits = shop.phone.replace(/\D/g, "");
+  const text = [
+    `Hello ${shop.name}, this is a reminder from Zypher about your Overbooked subscription.`,
+    shop.paid_until ? `It was paid until ${fmtDay(shop.paid_until)}.` : "We have not received the first payment yet.",
+    shop.monthly_fee ? `Monthly fee: ${rupees(shop.monthly_fee)}.` : "",
+    bank ? `Pay to:\n${bank}` : "",
+    "Please share the payment reference once paid. Thank you!",
+  ].filter(Boolean).join("\n");
+  return `https://api.whatsapp.com/send/?phone=${digits.length > 10 ? digits : "91" + digits}&text=${encodeURIComponent(text)}`;
 }

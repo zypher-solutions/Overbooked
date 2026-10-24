@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Upload } from "lucide-react";
+import { Plus, QrCode, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -23,6 +23,7 @@ export default function Catalog() {
     <>
       <PageHeader title={word("items", "Catalog")}
         actions={canManage ? <>
+          <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link>
           <Link href="/catalog/import" className={ghostButtonClass}><Upload className="h-4 w-4" /> Import</Link>
           <Link href="/catalog/new" className={goldButtonClass}><Plus className="h-4 w-4" /> Add {word("item").toLowerCase()}</Link>
         </> : null} />
@@ -85,7 +86,7 @@ function Items() {
           <input className={inputClass + " pl-9"} placeholder="Name or SKU" aria-label="Search the catalog" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         {categories.length > 1 ? (
-          <select className={inputClass + " w-auto"} aria-label="Category" value={cat} onChange={(e) => setCat(e.target.value)}>
+          <select className={cn(inputClass, "w-auto")} aria-label="Category" value={cat} onChange={(e) => setCat(e.target.value)}>
             <option value="">All categories</option>
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>

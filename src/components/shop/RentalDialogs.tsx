@@ -295,7 +295,8 @@ export function WhatsAppDialog({ rental, open, onClose, initial }: { rental: Ren
   return (
     <Modal open={open} onClose={onClose} title={`WhatsApp ${rental.customers.full_name}`} description={rental.customers.phone}
       footer={<><button className={ghostButtonClass} onClick={onClose}>Close</button>
-        <a className={goldButtonClass} href={waLink(rental.customers.phone, text)} target="_blank" rel="noreferrer" onClick={onClose}>
+        <a className={goldButtonClass} href={waLink(rental.customers.phone, text)} target="_blank" rel="noreferrer"
+          onClick={() => { void call("mark_reminder_sent", { p_rental_id: rental.id, p_kind: kind }).catch(() => undefined); onClose(); }}>
           <MessageCircle className="h-4 w-4" /> Open WhatsApp
         </a></>}>
       <div className="flex flex-wrap gap-1.5">

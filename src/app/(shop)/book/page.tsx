@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
-import { call } from "@/lib/shop/api";
+import { call, loadRental, money, type RentalDetail } from "@/lib/shop/api";
 import { headlinePrice, useCatalog, variationLabel } from "@/lib/shop/useCatalog";
 import {
   BASIS_LABELS, addDays, errorText, isoToZoned, lineMath, num, plural, rupees, todayLocal, zonedToIso,
@@ -63,6 +63,9 @@ function NewBooking() {
   const { shop, tz, myBranchId, activeBranches, categories, templates, addOns, templateOf, feature, setting, word } = useShop();
   const { products } = useCatalog();
   const storageKey = `ob_booking_${shop.id}`;
+  // ?edit=<rental id>: change a booking that has not been picked up
+  const editId = params.get("edit");
+  const [editing, setEditing] = useState<RentalDetail | null>(null);
 
   const initial = (): Draft => {
     const p = defaultPeriod(templates[0]?.kind, tz, setting("check_in_time", "14:00"), setting("check_out_time", "11:00"));
@@ -78,7 +81,7 @@ function NewBooking() {
 
   // keep a half-filled booking if the page is left by accident (this tab only)
   useEffect(() => {
-    if (restored.current) return;
+    if (restored.current || editId) return;
     restored.current = true;
     try {
       const saved = sessionStorage.getItem(storageKey);
@@ -96,8 +99,37 @@ function NewBooking() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
+    if (editId) return;
     try { sessionStorage.setItem(storageKey, JSON.stringify({ ...d, customerId: customer?.id ?? null })); } catch { /* ignore */ }
-  }, [d, customer, storageKey]);
+  }, [d, customer, storageKey, editId]);
+
+  // the booking being changed, as a draft of this form
+  useEffect(() => {
+    if (!editId) return;
+    void loadRental(editId).then((r) => {
+      if (!r || r.status !== "reserved") {
+        toast.error(r ? "Only a booking that has not been picked up can be changed." : "Booking not found.");
+        router.replace(r ? `/rentals/${r.id}` : "/rentals");
+        return;
+      }
+      const days = Math.max(1, Math.ceil((Date.parse(r.end_at) - Date.parse(r.start_at)) / 86_400_000));
+      setEditing(r);
+      setCustomer(r.customers);
+      setD({
+        ...initial(), branchId: r.branch_id, start: isoToZoned(r.start_at, tz), end: isoToZoned(r.end_at, tz),
+        lines: r.rental_lines.filter((l) => l.rate_type !== "driver_day" && l.rate_type !== "extra_person").map((l) => ({
+          variation_id: l.variation_id, qty: l.qty, amount_override: l.is_override ? String(l.amount) : "", unit_ids: [],
+        })),
+        adults: r.adults, children: r.children, withDriver: r.with_driver, wholeProperty: r.whole_property,
+        // the form asks "how many" for once-off and per-day extras; the booking stores the worked-out quantity
+        addOns: Object.fromEntries(r.rental_add_ons.map((a) => [a.add_on_id,
+          a.basis === "per_rental" ? Number(a.quantity) : a.basis === "per_day" ? Math.max(1, Math.round(Number(a.quantity) / days)) : 1])),
+        customerId: r.customer_id, discount: Number(r.discount) ? String(r.discount) : "",
+        depositAgreed: Number(r.deposit_agreed) ? String(r.deposit_agreed) : "", notes: r.notes ?? "",
+      });
+    }).catch((e) => toast.error(errorText(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
 
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
 
@@ -153,13 +185,18 @@ function NewBooking() {
       try {
         const rows = await call<{ variation_id: string; free: number; total: number }[]>("branch_availability",
           { p_branch_id: d.branchId, p_start: startIso, p_end: endIso });
-        setAvail(Object.fromEntries(rows.map((r) => [r.variation_id, { free: r.free, total: r.total }])));
+        // when changing a booking, the units it already holds count as free for it
+        const own = new Map<string, number>();
+        for (const u of editing?.unit_reservations ?? []) {
+          if (u.state === "held" && u.units) own.set(u.units.variation_id, (own.get(u.units.variation_id) ?? 0) + 1);
+        }
+        setAvail(Object.fromEntries(rows.map((r) => [r.variation_id, { free: Math.min(r.total, r.free + (own.get(r.variation_id) ?? 0)), total: r.total }])));
       } catch (e) {
         toast.error(errorText(e));
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [d.branchId, startIso, endIso, periodOk]);
+  }, [d.branchId, startIso, endIso, periodOk, editing]);
 
   // ---- live quote ----
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -214,6 +251,17 @@ function NewBooking() {
     if (num(d.deposit) > 0 && !d.depositMethod) return toast.error("Choose how the deposit was paid.");
     setBusy(true);
     try {
+      if (editing) {
+        const { branch_id: _branch, ...change } = quoteInput;
+        void _branch;
+        await call("update_rental", {
+          p_rental_id: editing.id,
+          p: { ...change, discount: num(d.discount), deposit_agreed: num(d.depositAgreed), notes: d.notes },
+        });
+        toast.success(`${editing.token} changed`);
+        router.push(`/rentals/${editing.id}`);
+        return;
+      }
       const supabase = createClient();
       // a returning customer's licence, filled in here
       if (customer && hasVehicle && d.customer.licence_number.trim()) {
@@ -255,7 +303,11 @@ function NewBooking() {
 
   return (
     <>
-      <PageHeader title="New booking" actions={<button className={ghostButtonClass} onClick={reset}>Start over</button>} />
+      <PageHeader title={editing ? `Change booking ${editing.token}` : "New booking"}
+        subtitle={editing ? "Change dates, items, guests or extras. The pieces it already has are kept where possible." : undefined}
+        actions={editing
+          ? <button className={ghostButtonClass} onClick={() => router.push(`/rentals/${editing.id}`)}>Cancel</button>
+          : <button className={ghostButtonClass} onClick={reset}>Start over</button>} />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
@@ -263,7 +315,7 @@ function NewBooking() {
             <div className="grid gap-3 sm:grid-cols-3">
               {activeBranches.length > 1 ? (
                 <Field label="Branch">
-                  <select className={inputClass} value={d.branchId} disabled={!!myBranchId}
+                  <select className={inputClass} value={d.branchId} disabled={!!myBranchId || !!editing}
                     onChange={(e) => set({ branchId: e.target.value, lines: d.lines.map((l) => ({ ...l, unit_ids: [] })) })}>
                     {activeBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
@@ -300,12 +352,16 @@ function NewBooking() {
           ) : null}
 
           <Panel title="Customer">
-            <CustomerPicker selected={customer} onSelect={(c) => { setCustomer(c); set({ customerId: c?.id ?? null }); }}
-              draft={d.customer} onDraft={(c) => set({ customer: c })} needsLicence={hasVehicle} />
+            {editing ? (
+              <p className="text-sm"><span className="font-medium">{editing.customers.full_name}</span> · {editing.customers.phone}</p>
+            ) : (
+              <CustomerPicker selected={customer} onSelect={(c) => { setCustomer(c); set({ customerId: c?.id ?? null }); }}
+                draft={d.customer} onDraft={(c) => set({ customer: c })} needsLicence={hasVehicle} />
+            )}
           </Panel>
         </div>
 
-        <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+        <div id="booking-summary" className="space-y-4 lg:sticky lg:top-6 lg:self-start">
           <Panel title="Booking">
             {d.lines.length === 0 && !d.wholeProperty ? (
               <p className="text-sm text-muted-foreground">Add {word("items").toLowerCase()} from the list.</p>
@@ -402,6 +458,24 @@ function NewBooking() {
             </div>
           </Panel>
 
+          {editing ? (
+            <Panel title="Save the change">
+              <div className="space-y-3">
+                <Field label="Notes"><textarea className={inputClass} rows={2} value={d.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
+                <MoneyRows rows={[
+                  ["New total", rupees(total)],
+                  ["Paid so far", rupees(money(editing).paid), "muted"],
+                  ["Balance after this", rupees(Math.max(0, total - money(editing).paid)), total > money(editing).paid ? "rust" : "emerald"],
+                ]} />
+                {total < money(editing).paid ? (
+                  <p className="text-xs text-rust">The new total is less than what was paid. Record a refund on the booking first.</p>
+                ) : null}
+                <button className={cn(goldButtonClass, "w-full")} disabled={busy || !quote} onClick={submit}>
+                  {busy ? "Saving..." : "Save change"}
+                </button>
+              </div>
+            </Panel>
+          ) : (
           <Panel title="Paid now">
             <div className="space-y-3">
               <Field label="Advance"><input className={monoInputClass} inputMode="decimal" value={d.advance} onChange={(e) => set({ advance: e.target.value })} /></Field>
@@ -417,8 +491,22 @@ function NewBooking() {
               </button>
             </div>
           </Panel>
+          )}
         </div>
       </div>
+
+      {/* phones: the total stays in sight while picking items */}
+      {quote ? (
+        <div className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-border bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg lg:hidden">
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Total</p>
+            <p className="font-mono text-lg font-semibold">{rupees(total)}</p>
+          </div>
+          <button className={goldButtonClass} onClick={() => document.getElementById("booking-summary")?.scrollIntoView({ behavior: "smooth" })}>
+            {editing ? "Review and save" : "Payment and confirm"}
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }

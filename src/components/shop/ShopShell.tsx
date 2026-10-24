@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Building2, CalendarPlus, ClipboardList, Home, KeyRound, LayoutGrid, LineChart, LogOut, Menu, Settings, Store, Users, UserSquare, X,
+  Building2, CalendarDays, CalendarPlus, ClipboardList, Home, KeyRound, LayoutGrid, LineChart, LogOut, Menu, Settings, Store, Users, UserSquare, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/overbooked/AuthContext";
 import { useShop } from "@/lib/shop/ShopContext";
 import { OfflineBanner } from "@/components/overbooked/OfflineBanner";
 import { Field, Modal, goldButtonClass, ghostButtonClass, inputClass } from "./ui";
+import { SubscriptionBanner } from "./Subscription";
 
 export function ShopShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -25,6 +26,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
     { href: "/", label: "Today", icon: Home, show: true },
     { href: "/book", label: "New booking", icon: CalendarPlus, show: true },
     { href: "/rentals", label: "Bookings", icon: ClipboardList, show: true },
+    { href: "/calendar", label: "Calendar", icon: CalendarDays, show: true },
     { href: "/customers", label: "Customers", icon: UserSquare, show: true },
     { href: "/catalog", label: word("items", "Catalog"), icon: LayoutGrid, show: true },
     { href: "/dashboard", label: "Money and reports", icon: LineChart, show: canManage },
@@ -93,6 +95,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
       <main className="min-w-0 px-4 pb-24 pt-[calc(4.5rem+env(safe-area-inset-top))] sm:px-6 lg:ml-64 lg:px-8 lg:pb-12 lg:pt-8">
         <div className="mx-auto max-w-6xl">
           <OfflineBanner />
+          <SubscriptionBanner />
           {children}
         </div>
       </main>

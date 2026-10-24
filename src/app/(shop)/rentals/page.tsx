@@ -86,7 +86,7 @@ export default function Rentals() {
             onChange={(e) => { setQuery(e.target.value); if (!e.target.value) setTerm(""); }} />
         </form>
         {!myBranchId && activeBranches.length > 1 ? (
-          <select className={inputClass + " w-auto"} aria-label="Branch" value={branch} onChange={(e) => setBranch(e.target.value)}>
+          <select className={cn(inputClass, "w-auto")} aria-label="Branch" value={branch} onChange={(e) => setBranch(e.target.value)}>
             <option value="">All branches</option>
             {activeBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>

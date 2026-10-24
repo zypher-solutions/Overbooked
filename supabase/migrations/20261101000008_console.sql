@@ -57,7 +57,7 @@ BEGIN
       'rentals_30d', (SELECT count(*) FROM public.rentals WHERE shop_id = p_shop_id AND created_at > now() - interval '30 days'),
       'open_rentals', (SELECT count(*) FROM public.rentals WHERE shop_id = p_shop_id AND status IN ('reserved', 'active')),
       'last_rental_at', (SELECT max(created_at) FROM public.rentals WHERE shop_id = p_shop_id)),
-    'payments', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', sp.id, 'amount', sp.amount, 'paid_on', sp.paid_on,
+    'payments', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', sp.id, 'receipt_no', sp.receipt_no, 'kind', sp.kind, 'amount', sp.amount, 'paid_on', sp.paid_on,
                    'period_to', sp.period_to, 'method', sp.method, 'note', sp.note) ORDER BY sp.paid_on DESC, sp.created_at DESC), '[]')
                  FROM public.shop_payments sp WHERE sp.shop_id = p_shop_id),
     -- every switch the shop's templates know about, with its current value
