@@ -35,7 +35,7 @@ interface Profile {
 const SHOP_ROLES = ["owner", "manager", "staff"] as const;
 
 export function StaffManagement() {
-  const { profile } = useAuth();
+  const { profile, shop } = useAuth();
   const canManage = profile?.role === "super_admin" || profile?.role === "owner";
   const [invite, setInvite] = useState({ email: "", fullName: "", role: "staff" as (typeof SHOP_ROLES)[number], branchId: "" });
   const [inviting, setInviting] = useState(false);
@@ -248,6 +248,7 @@ export function StaffManagement() {
       Invite pending · New link
     </button>
   ) : (
+    <span className="inline-flex items-center gap-1.5">
     <button
       type="button"
       onClick={() => setPending({ kind: "status", p, value: !p.is_active })}
@@ -263,6 +264,19 @@ export function StaffManagement() {
       {p.is_active ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
       {p.is_active ? "Active" : "Inactive"}
     </button>
+    {p.id !== profile?.id && (profile?.role === "super_admin" || p.role !== "owner") && (
+      <button
+        type="button"
+        onClick={() => freshLink(p)}
+        disabled={updatingId === p.id}
+        title="New login link (forgotten password)"
+        aria-label={"New login link for " + p.full_name}
+        className="rounded-full border border-border p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+      >
+        <Link2 className="h-3 w-3" />
+      </button>
+    )}
+    </span>
   );
 
   const getBranchDisplay =(p: Profile) => {
@@ -300,7 +314,7 @@ export function StaffManagement() {
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
           <UserPlus className="h-4 w-4 text-gold" /> Invite staff
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto_auto_auto]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto_auto_auto]">
           <input type="text" required placeholder="Full name" aria-label="Full name" value={invite.fullName}
             onChange={(e) => setInvite({ ...invite, fullName: e.target.value })}
             className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-gold focus:outline-none" />
@@ -420,7 +434,7 @@ export function StaffManagement() {
             className="w-full rounded-md border border-border bg-background p-2 font-mono text-xs text-foreground" />
           <AlertDialogFooter>
             <AlertDialogCancel>Close</AlertDialogCancel>
-            <a href={"https://wa.me/?text=" + encodeURIComponent("Your Overbooked login: " + (shareLink?.link ?? ""))}
+            <a href={"https://wa.me/?text=" + encodeURIComponent("Your login for " + (shop?.name ?? "Overbooked") + ": " + (shareLink?.link ?? ""))}
               target="_blank" rel="noreferrer"
               className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted">
               Send on WhatsApp

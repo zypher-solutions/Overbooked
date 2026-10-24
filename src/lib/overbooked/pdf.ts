@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { format } from "date-fns";
 import type { Rental } from "./types";
 import { LedgerDocument } from "./LedgerDocument";
+import { shopBrand } from "./brand";
 
 export async function generateLedgerPDF(
   rows: Rental[],
@@ -16,7 +17,7 @@ export async function generateLedgerPDF(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `Overbooked-Ledger-${format(new Date(), "yyyy-MM-dd")}.pdf`;
+  link.download = `${shopBrand().replace(/[^A-Za-z0-9]+/g, "-")}-Ledger-${format(new Date(), "yyyy-MM-dd")}.pdf`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

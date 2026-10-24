@@ -102,21 +102,22 @@ export async function inviteStaff(input: { email: string; fullName: string; role
   return { link };
 }
 
-// A fresh link for someone who has not set a password yet (links expire after an hour).
+// A fresh one-hour link that lets someone (re)set their password: an invite that expired, or a
+// forgotten password. Owners can do this for managers and staff; Zypher for anyone in the shop.
 export async function newInviteLink(userId: string) {
-  const { supabase, role } = await getCaller();
-  if (role !== "owner" && role !== "super_admin") throw new Error("Only the shop owner can send invite links.");
+  const { supabase, user, role } = await getCaller();
+  if (role !== "owner" && role !== "super_admin") throw new Error("Only the shop owner can send login links.");
+  if (userId === user.id) throw new Error("Use Change password for your own account.");
 
   // the cookie client only sees profiles of this shop
-  const { data: target } = await supabase.from("profiles").select("id").eq("id", userId).maybeSingle();
+  const { data: target } = await supabase.from("profiles").select("id, role").eq("id", userId).maybeSingle();
   if (!target) throw new Error("Staff member not found in this shop.");
+  if (role === "owner" && target.role === "owner") throw new Error("Only Zypher can send a login link to another owner.");
 
   const admin = createAdminClient();
   const { data: authUser } = await admin.auth.admin.getUserById(userId);
-  const account = authUser?.user;
-  if (!account?.email) throw new Error("This account has no email.");
-  if (account.last_sign_in_at) throw new Error("This person has already signed in. They can use Change password.");
-  const email = account.email;
+  const email = authUser?.user?.email;
+  if (!email) throw new Error("This account has no email.");
 
   const { data, error } = await admin.auth.admin.generateLink({ type: "recovery", email });
   if (error || !data?.properties?.hashed_token) throw new Error("Could not create a new link: " + (error?.message ?? "unknown error"));

@@ -158,8 +158,8 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
         .select(`
           id, token, customer_id, branch_id, booking_date, status, notes, created_at, updated_at, total, advance, security_deposit, advance_payment_method, security_deposit_payment_method,
           cancellation_fee, advance_refund, security_deposit_refund, refund_payment_method, cancellation_reason, cancelled_at, cancelled_by,
-          customers ( full_name, phone ),
-          branches ( id, name ),
+          customers!bookings_shop_customer_fkey ( full_name, phone ),
+          branches!bookings_shop_branch_fkey ( id, name ),
           booking_items (
             id, booking_id, product_id, variation_id, product_name, sku, image_url, qty, daily_rate, pickup_date, return_date, buffer_days, subtotal,
             booking_item_inventory (
@@ -174,8 +174,8 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
           .from('bookings')
           .select(`
             id, token, customer_id, branch_id, booking_date, status, notes, created_at, updated_at, total, advance, security_deposit, advance_payment_method, security_deposit_payment_method,
-            customers ( full_name, phone ),
-            branches ( id, name ),
+            customers!bookings_shop_customer_fkey ( full_name, phone ),
+            branches!bookings_shop_branch_fkey ( id, name ),
             booking_items (
               id, booking_id, product_id, variation_id, product_name, sku, image_url, qty, daily_rate, pickup_date, return_date, buffer_days, subtotal,
               booking_item_inventory (
@@ -282,7 +282,7 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
         supabase.from('categories').select('*'),
         supabase.from('products').select(`
           *,
-          categories(name),
+          categories!products_shop_category_fkey(name),
           product_variations(
             id, name, sku, daily_rate, is_enabled, attributes,
             product_stock(quantity, branch_id, branches(id, name))
@@ -1680,10 +1680,10 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
       toast.success("Product deleted.");
 
       if (productToDelete?.image && productToDelete.image.includes('product_images/')) {
-        const parts = productToDelete.image.split('/');
-        const filename = parts[parts.length - 1];
-        if (filename) {
-          await supabase.storage.from("product_images").remove([filename]);
+        // path inside the bucket, e.g. "<shop id>/<file>"
+        const path = decodeURIComponent(productToDelete.image.split('product_images/')[1] ?? '');
+        if (path) {
+          await supabase.storage.from("product_images").remove([path]);
         }
       }
     })();

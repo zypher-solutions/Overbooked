@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
-import { BarChart3, ClipboardList, LayoutGrid, ScanLine, Upload, ChevronDown, Plus, Tag, LogOut, KeyRound, Calendar, Building2, Users, X } from "lucide-react";
+import { BarChart3, ClipboardList, LayoutGrid, ScanLine, Upload, ChevronDown, Plus, Tag, LogOut, KeyRound, Calendar, Building2, Users, X, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOverbooked } from "@/lib/overbooked/store";
 import { useAuth } from "@/lib/overbooked/AuthContext";
@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export type PageKey = "scan" | "products" | "dashboard" | "rentals" | "bookings" | "stock" | "categories" | "import" | "add-product" | "branches" | "staff";
+export type PageKey = "scan" | "products" | "dashboard" | "rentals" | "bookings" | "stock" | "categories" | "import" | "add-product" | "branches" | "staff" | "zypher";
 
 export function Sidebar({
   active,
@@ -32,7 +32,8 @@ export function Sidebar({
   onClose?: () => void;
 }) {
   const { categories, locations, cart } = useOverbooked();
-  const { profile, signOut } = useAuth();
+  const { profile, shop, signOut } = useAuth();
+  const isZypher = profile?.role === "super_admin";
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     "Rental Management": true,
     Products: true,
@@ -102,10 +103,10 @@ export function Sidebar({
       <div className="px-6 pt-7 pb-6 flex justify-between items-center">
         <div>
           <h1 className="font-display text-2xl leading-none font-semibold text-foreground">
-            Overbooked
+            {shop?.name ?? "Overbooked"}
           </h1>
           <p className="mt-1.5 text-[10px] tracking-[0.22em] text-gold uppercase">
-            Rental Studio
+            {isZypher ? "Zypher view" : "Powered by Overbooked"}
           </p>
         </div>
         {isOpen && (
@@ -118,6 +119,28 @@ export function Sidebar({
       <nav className="flex flex-col gap-4 px-3 pb-8">
         {/* Top-level standalone items */}
         <div className="flex flex-col gap-1 mb-2">
+          {isZypher && (
+            <button
+              onClick={() => onChange("zypher")}
+              aria-current={active === "zypher" ? "page" : undefined}
+              className={cn(
+                "group relative flex items-center gap-3 rounded-md px-3 py-3 lg:py-2.5 text-sm transition-all duration-200",
+                active === "zypher"
+                  ? "bg-white/[0.06] text-foreground"
+                  : "text-muted-foreground hover:bg-white/[0.03] hover:text-foreground",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-1.5 bottom-1.5 left-0 w-[2px] rounded-full transition-all duration-200",
+                  active === "zypher" ? "bg-gold" : "bg-transparent",
+                )}
+              />
+              <Store className={cn("h-4 w-4", active === "zypher" && "text-gold")} />
+              Zypher Console
+            </button>
+          )}
+          {shop && (
           <button
             onClick={() => onChange("dashboard")}
             aria-current={active === "dashboard" ? "page" : undefined}
@@ -137,9 +160,10 @@ export function Sidebar({
             <BarChart3 className={cn("h-4 w-4", active === "dashboard" && "text-gold")} />
             Dashboard
           </button>
+          )}
         </div>
 
-        {navGroups.map((group) => {
+        {shop && navGroups.map((group) => {
           const isOpen = openGroups[group.title];
           return (
             <div key={group.title} className="flex flex-col">
@@ -198,7 +222,7 @@ export function Sidebar({
         {profile ? (
           <div className="mb-4">
             <p className="text-foreground/80 font-medium">{profile.full_name}</p>
-            <p className="mt-1 uppercase tracking-widest text-[9px] text-gold">{profile.role}</p>
+            <p className="mt-1 uppercase tracking-widest text-[9px] text-gold">{isZypher ? "Zypher" : profile.role}</p>
             <p className="mt-1 text-muted-foreground/80">
               {(profile.role === "super_admin" || profile.role === "owner")
                 ? "All Branches" 

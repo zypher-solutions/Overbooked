@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { shopBrand } from "./brand";
 import {
   Document,
   Page,
@@ -254,13 +255,13 @@ export function LedgerDocument({ rows, filters }: LedgerDocProps) {
   if (filters?.status && filters.status !== "all") filterParts.push(`Status: ${filters.status.toUpperCase()}`);
 
   return (
-    <Document title="Overbooked Financial Ledger" author="Overbooked">
+    <Document title={`${shopBrand()} Financial Ledger`} author={shopBrand()}>
       <Page size="A4" style={s.page} wrap>
         {/* ── HEADER ── */}
         <View style={s.header} fixed>
           <View>
-            <Text style={s.brandName}>Overbooked</Text>
-            <Text style={s.brandSub}>Rental Studio</Text>
+            <Text style={s.brandName}>{shopBrand()}</Text>
+            <Text style={s.brandSub}>Powered by Overbooked</Text>
           </View>
           <View>
             <Text style={s.docTitle}>Financial Ledger</Text>
@@ -415,7 +416,7 @@ export function LedgerDocument({ rows, filters }: LedgerDocProps) {
 
         {/* ── FOOTER ── */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>Overbooked — Confidential</Text>
+          <Text style={s.footerText}>{shopBrand()} — Confidential</Text>
           <Text
             style={s.footerText}
             render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}

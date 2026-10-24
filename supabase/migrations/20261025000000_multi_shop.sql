@@ -233,6 +233,32 @@ ALTER TABLE public.rental_item_inventory  ADD CONSTRAINT rii_shop_rental_item_fk
 ALTER TABLE public.payments               ADD CONSTRAINT payments_shop_rental_fkey FOREIGN KEY (shop_id, rental_id) REFERENCES public.rentals (shop_id, id);
 ALTER TABLE public.ledger_entries         ADD CONSTRAINT ledger_entries_shop_branch_fkey FOREIGN KEY (shop_id, branch_id) REFERENCES public.branches (shop_id, id);
 
+-- The old single-column foreign keys are now covered by the composite ones above (shop_id is NOT NULL),
+-- and two links between the same tables make the API's embedded selects ambiguous. Drop the old ones.
+-- Their delete rules carry over: rentals.booking_id keeps ON DELETE SET NULL; variations are deleted
+-- before their product by delete_or_deactivate_product.
+DO $$
+DECLARE c RECORD;
+BEGIN
+  FOR c IN
+    SELECT old.conrelid::regclass AS tbl, old.conname
+    FROM pg_constraint old
+    WHERE old.contype = 'f'
+      AND old.connamespace = 'public'::regnamespace
+      AND array_length(old.conkey, 1) = 1
+      AND EXISTS (
+        SELECT 1 FROM pg_constraint comp
+        WHERE comp.contype = 'f'
+          AND comp.conrelid = old.conrelid
+          AND comp.confrelid = old.confrelid
+          AND array_length(comp.conkey, 1) = 2
+          AND old.conkey[1] = ANY (comp.conkey)
+      )
+  LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', c.tbl, c.conname);
+  END LOOP;
+END $$;
+
 -- ==============================================================================
 -- 6. Row level security
 -- ==============================================================================

@@ -55,7 +55,7 @@ export function AddProduct({
   onClose: () => void;
 }) {
   const { products, categories, branches, createProduct, updateProduct, locations } = useOverbooked();
-  const { profile, isLoading: isAuthLoading } = useAuth();
+  const { profile, shop, isLoading: isAuthLoading } = useAuth();
   const branchesToRender = profile?.role === "manager"
     ? branches.filter(b => locations.find(l => l.name === b)?.id === profile.branch_id)
     : branches;
@@ -362,7 +362,8 @@ export function AddProduct({
         if (activeSessionId !== draftSessionIdRef.current) return;
 
         const fileExt = file.name.split('.').pop();
-        const fileName = `${crypto.randomUUID()}.${fileExt}`;
+        // each shop may only write inside its own folder (storage policy)
+        const fileName = `${shop?.id}/${crypto.randomUUID()}.${fileExt}`;
 
         const { error } = await supabase.storage
           .from('product_images')

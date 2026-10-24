@@ -18,6 +18,8 @@ import { BranchManagement } from "@/components/overbooked/pages/BranchManagement
 import { StaffManagement } from "@/components/overbooked/pages/StaffManagement";
 import { AddProduct } from "@/components/overbooked/pages/AddProduct";
 import { Bookings } from "@/components/overbooked/pages/Bookings";
+import { ZypherConsole } from "@/components/overbooked/pages/ZypherConsole";
+import { useAuth } from "@/lib/overbooked/AuthContext";
 import { OfflineBanner } from "@/components/overbooked/OfflineBanner";
 import { Menu, ShoppingCart } from "lucide-react";
 import { useOverbooked } from "@/lib/overbooked/store";
@@ -26,6 +28,9 @@ import { saveRentalDraft } from "@/lib/overbooked/draftStorage";
 
 function OverbookedApp() {
   const [page, setPage] = useState<PageKey>("scan");
+  const { profile, shop } = useAuth();
+  // Zypher staff outside any shop only have the console
+  const noShop = profile?.role === "super_admin" && !shop;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const { products, cart, addToCart, clearCart, discardRentalDraft, fetchInitialData, loadError } = useOverbooked();
@@ -45,10 +50,18 @@ function OverbookedApp() {
   
   const [productToEditId, setProductToEditId] = useState<string | null>(null);
 
+  // reopen the last page, unless this user's role may not see it (the browser may be shared)
   useEffect(() => {
+    if (!profile) return;
     const saved = localStorage.getItem("overbooked_last_page") as PageKey;
-    if (saved) setPage(saved);
-  }, []);
+    const role = profile.role;
+    const allowed =
+      saved === "zypher" ? role === "super_admin"
+      : ["branches", "staff", "stock"].includes(saved) ? role === "super_admin" || role === "owner"
+      : ["add-product", "categories", "import"].includes(saved) ? role !== "staff"
+      : true;
+    if (saved && allowed) setPage(saved);
+  }, [profile]);
 
   const handlePageChange = (p: PageKey) => {
     setPage(p);
@@ -111,7 +124,7 @@ function OverbookedApp() {
         >
           <Menu className="w-6 h-6" />
         </button>
-        <span className="ml-2 font-display font-semibold text-lg">Overbooked</span>
+        <span className="ml-2 font-display font-semibold text-lg">{shop?.name ?? "Overbooked"}</span>
       </div>
 
       {/* Overlay for mobile sidebar */}
@@ -139,6 +152,8 @@ function OverbookedApp() {
             </button>
           </div>
         )}
+        {page === "zypher" || noShop ? <ZypherConsole /> : null}
+        {noShop ? null : <>
         {page === "dashboard" ? <Dashboard onEdit={setEditing} /> : null}
         {page === "scan" ? <ScanLookup /> : null}
         {page === "bookings" ? <Bookings onNavigate={handlePageChange} /> : null}
@@ -160,9 +175,10 @@ function OverbookedApp() {
         {page === "add-product" ? (
           <AddProduct 
             productToEditId={productToEditId} 
-            onClose={() => handlePageChange("products")} 
+            onClose={() => handlePageChange("products")}
           />
         ) : null}
+        </>}
       </main>
 
       <RentalFormModal

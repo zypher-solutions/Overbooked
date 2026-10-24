@@ -11,7 +11,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "Overbooked — Rental Management",
-  description: "Overbooked internal rental management panel for premium clothing rentals across Kerala branches.",
+  description: "Overbooked rental management for rental shops: stock, bookings, returns and payments across branches.",
   authors: [{ name: "Overbooked" }],
   openGraph: {
     title: "Overbooked — Rental Management",

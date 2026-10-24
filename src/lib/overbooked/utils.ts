@@ -1,4 +1,5 @@
 import type { PaymentStatus, Rental } from "./types";
+import { shopBrand } from "./brand";
 
 /** Whole rupees stay whole; paise are shown when present so displayed parts add up to the total. */
 export const inr = (n: number) => {
@@ -55,7 +56,7 @@ export const waMessage = (r: any) => {
 
   return [
     `✨ *Rental Confirmed!* ✨`,
-    `Hi ${r.customerName}, thank you for choosing *Overbooked*!`,
+    `Hi ${r.customerName}, thank you for choosing *${shopBrand()}*!`,
     ``,
     `👔 *Item:* ${r.items?.length === 1 ? r.items[0].productName : `${r.items?.length || 0} items`} (${sku})`,
     `📅 *Rented On:* ${fmtDate(rentDate)}`,
@@ -82,17 +83,17 @@ export const waReminder = (r: any) => {
 
   if (r.status === "returned" || r.status === "completed") {
     return [
-      `🎉 *Thank You from Overbooked!* 🎉`,
+      `🎉 *Thank You from ${shopBrand()}!* 🎉`,
       `Hi ${r.customerName},`,
       ``,
       `We have successfully received the *${r.items?.length === 1 ? r.items[0].productName : `${r.items?.length || 0} items`}* (Token: ${r.token}).`,
       ``,
-      `Thank you so much for choosing Overbooked for your event! We hope you loved it and look forward to serving you again. ✨`,
+      `Thank you so much for choosing ${shopBrand()} for your event! We hope you loved it and look forward to serving you again. ✨`,
     ].join("\n");
   }
 
   return [
-    isOverdue(r) ? `⚠️ *OVERDUE RENTAL ALERT* ⚠️` : `🔔 *Friendly Reminder from Overbooked!* 🔔`,
+    isOverdue(r) ? `⚠️ *OVERDUE RENTAL ALERT* ⚠️` : `🔔 *Friendly Reminder from ${shopBrand()}!* 🔔`,
     `Hi ${r.customerName},`,
     ``,
     isOverdue(r)

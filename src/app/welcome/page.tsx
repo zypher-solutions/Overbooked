@@ -1,11 +1,15 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { inputClass, goldButtonClass } from "@/components/overbooked/primitives";
+
+// A token works once. Signing in makes AuthProvider re-mount this page, so the result is kept per token
+// for the life of the page instead of in component state.
+const verifications = new Map<string, Promise<boolean>>();
 
 // Landing page of an invite link: signs the person in with the link's token, then they choose a password.
 function Welcome() {
@@ -16,21 +20,20 @@ function Welcome() {
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
   const [saving, setSaving] = useState(false);
-  const verified = useRef(false);
 
   useEffect(() => {
-    // a token works once; React may run this effect twice in development
-    if (verified.current) return;
-    verified.current = true;
     const tokenHash = params.get("token_hash");
     const type = params.get("type") === "recovery" ? "recovery" : "invite";
     if (!tokenHash) {
       setState("invalid");
       return;
     }
-    supabase.auth.verifyOtp({ token_hash: tokenHash, type }).then(({ error }) => {
-      setState(error ? "invalid" : "ready");
-    });
+    if (!verifications.has(tokenHash)) {
+      verifications.set(tokenHash, supabase.auth.verifyOtp({ token_hash: tokenHash, type }).then(({ error }) => !error));
+    }
+    let live = true;
+    verifications.get(tokenHash)!.then((ok) => { if (live) setState(ok ? "ready" : "invalid"); });
+    return () => { live = false; };
   }, [params, supabase]);
 
   const save = async (e: React.FormEvent) => {

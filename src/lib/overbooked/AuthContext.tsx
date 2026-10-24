@@ -5,6 +5,7 @@ import { User, Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { clearRentalDraft } from "./draftStorage";
+import { setShopBrand } from "./brand";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,14 +22,33 @@ interface Profile {
   role: "super_admin" | "manager" | "owner" | "staff";
   branch_id: string | null;
   is_active: boolean;
+  shop_id: string | null;
+  active_shop_id: string | null;
+}
+
+export interface Shop {
+  id: string;
+  name: string;
+  slug: string;
+  token_prefix: string;
+  plan: "starter" | "pro" | "business";
+  status: "active" | "suspended";
+  paid_until: string | null;
+  logo_url: string | null;
+  phone: string | null;
+  address: string | null;
 }
 
 interface AuthContextValue {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
+  /** The shop being worked in: the user's own shop, or for Zypher staff the shop they switched into. */
+  shop: Shop | null;
   isLoading: boolean;
   signOut: () => Promise<void>;
+  /** Zypher staff only: work inside another shop (null = no shop). Reloads the app. */
+  switchShop: (shopId: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -37,10 +57,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [shop, setShop] = useState<Shop | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const supabase = createClient();
-  const [notice, setNotice] = useState<"session" | "deactivated" | null>(null);
+  const [notice, setNotice] = useState<"session" | "deactivated" | "paused" | null>(null);
   // True while we end the session ourselves, so SIGNED_OUT is not reported as a lost session.
   const endingOnPurpose = useRef(false);
   const userIdRef = useRef<string | null>(null);
@@ -58,6 +79,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("id", userId)
         .single();
       if (!mounted || !profileData) return;
+      const shopId = profileData.role === "super_admin" ? profileData.active_shop_id : profileData.shop_id;
+      const { data: shopData } = shopId
+        ? await supabase.from("shops").select("*").eq("id", shopId).maybeSingle()
+        : { data: null };
+      if (!mounted) return;
+      // a suspended shop locks out its people; Zypher staff can still open it
+      if (profileData.role !== "super_admin" && shopData?.status === "suspended") {
+        endingOnPurpose.current = true;
+        setNotice("paused");
+        await supabase.auth.signOut({ scope: "local" });
+        return;
+      }
       // get_my_role() is null for staff whose branch is inactive (derived lockout, see branch_lifecycle migration).
       const { data: role } = profileData.is_active === false ? { data: null } : await supabase.rpc("get_my_role");
       if (!mounted) return;
@@ -67,6 +100,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut({ scope: "local" });
         return;
       }
+      setShopBrand(shopData?.name);
+      setShop((shopData as Shop) ?? null);
       setProfile(profileData as Profile);
     }
 
@@ -106,6 +141,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null);
         setUser(null);
         setProfile(null);
+        setShop(null);
+        setShopBrand(null);
         userIdRef.current = null;
         if (event === "SIGNED_OUT" && !endingOnPurpose.current) setNotice("session");
       }
@@ -139,17 +176,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/login";
   };
 
+  const switchShop = async (shopId: string | null) => {
+    const { error } = await supabase.rpc("switch_shop", { p_shop_id: shopId });
+    if (error) {
+      toast.error(error.message || "Could not switch shop.");
+      return;
+    }
+    // the cart, drafts and every list belong to the shop being left
+    const uid = user?.id || profile?.id;
+    clearRentalDraft(uid);
+    localStorage.removeItem("overbooked_last_page");
+    window.location.href = "/";
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user, profile, isLoading, signOut }}>
-      {checking || notice === "deactivated" ? null : children}
+    <AuthContext.Provider value={{ session, user, profile, shop, isLoading, signOut, switchShop }}>
+      {checking || notice === "deactivated" || notice === "paused" ? null : children}
       <AlertDialog open={notice !== null}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{notice === "deactivated" ? "Account deactivated" : "Session ended"}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {notice === "deactivated" ? "Account deactivated" : notice === "paused" ? "Account paused" : "Session ended"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {notice === "deactivated"
                 ? "Your account or your branch has been deactivated. Contact the owner."
-                : "Your session ended, please sign in again."}
+                : notice === "paused"
+                  ? "Your shop's Overbooked account is paused. Please contact Zypher."
+                  : "Your session ended, please sign in again."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
