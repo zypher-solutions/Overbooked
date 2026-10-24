@@ -33,7 +33,8 @@ export async function proxy(request: NextRequest) {
   const { data: { user: session } } = await supabase.auth.getUser();
 
   // If there is no session and the user is NOT already on the login page, redirect them to login.
-  if (!session && !request.nextUrl.pathname.startsWith("/login")) {
+  // /welcome is the invite link landing page: it signs the person in itself.
+  if (!session && !request.nextUrl.pathname.startsWith("/login") && !request.nextUrl.pathname.startsWith("/welcome")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

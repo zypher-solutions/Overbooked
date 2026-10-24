@@ -47,18 +47,20 @@ export function BranchManagement() {
     setLoading(false);
   };
 
+  const canManage = profile?.role === "super_admin" || profile?.role === "owner";
+
   useEffect(() => {
-    if (profile?.role === "super_admin") {
+    if (canManage) {
       fetchBranches();
     }
   }, [profile]);
 
-  if (profile?.role !== "super_admin") {
+  if (!canManage) {
     return (
       <div className="flex h-[50vh] flex-col items-center justify-center text-center">
         <ShieldAlert className="h-12 w-12 text-red-500 mb-4" />
         <h2 className="text-xl font-semibold text-foreground">Access Denied</h2>
-        <p className="text-muted-foreground mt-2">Only Super Admins can manage branches.</p>
+        <p className="text-muted-foreground mt-2">Only the shop owner can manage branches.</p>
       </div>
     );
   }
@@ -393,7 +395,7 @@ export function BranchManagement() {
                 <label className="text-sm font-medium text-muted-foreground">Email Address</label>
                 <input
                   type="email"
-                  placeholder="e.g. kozhikode@trendz.com"
+                  placeholder="e.g. branch@yourshop.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"

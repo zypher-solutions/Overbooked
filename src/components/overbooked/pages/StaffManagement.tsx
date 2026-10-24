@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Users, ShieldAlert, Check, X, Building2 } from "lucide-react";
+import { Users, ShieldAlert, Check, X, Building2, UserPlus, Copy, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/overbooked/AuthContext";
+import { inviteStaff, newInviteLink } from "@/app/actions/staff";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -28,10 +29,17 @@ interface Profile {
   branch_id: string | null;
   is_active: boolean;
   email?: string;
+  pending?: boolean;
 }
+
+const SHOP_ROLES = ["owner", "manager", "staff"] as const;
 
 export function StaffManagement() {
   const { profile } = useAuth();
+  const canManage = profile?.role === "super_admin" || profile?.role === "owner";
+  const [invite, setInvite] = useState({ email: "", fullName: "", role: "staff" as (typeof SHOP_ROLES)[number], branchId: "" });
+  const [inviting, setInviting] = useState(false);
+  const [shareLink, setShareLink] = useState<{ name: string; link: string } | null>(null);
   const supabase = createClient();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -59,16 +67,15 @@ export function StaffManagement() {
     } else {
       let finalProfiles = profileData || [];
       
-      // If user is super_admin, fetch emails securely
-      if (profile?.role === 'super_admin') {
-        const { data: emailData, error: emailError } = await supabase.rpc('get_staff_emails');
-        if (!emailError && emailData) {
-          const emailMap = new Map(emailData.map((e: any) => [e.id, e.email]));
-          finalProfiles = finalProfiles.map((p: any) => ({
-            ...p,
-            email: emailMap.get(p.id) || "No email"
-          }));
-        }
+      // Emails and invite state (never signed in = invite pending)
+      const { data: emailData, error: emailError } = await supabase.rpc('get_staff_emails');
+      if (!emailError && emailData) {
+        const emailMap = new Map<string, any>(emailData.map((e: any) => [e.id, e]));
+        finalProfiles = finalProfiles.map((p: any) => ({
+          ...p,
+          email: emailMap.get(p.id)?.email || "No email",
+          pending: emailMap.has(p.id) && !emailMap.get(p.id).last_sign_in_at,
+        }));
       }
       
       setProfiles(finalProfiles);
@@ -91,20 +98,62 @@ export function StaffManagement() {
   };
 
   useEffect(() => {
-    if (profile?.role === "super_admin") {
+    if (canManage) {
       fetchData();
     }
   }, [profile]);
 
-  if (profile?.role !== "super_admin") {
+  if (!canManage) {
     return (
       <div className="flex h-[50vh] flex-col items-center justify-center text-center">
         <ShieldAlert className="h-12 w-12 text-red-500 mb-4" />
         <h2 className="text-xl font-semibold text-foreground">Access Denied</h2>
-        <p className="text-muted-foreground mt-2">Only Super Admins can manage staff assignments.</p>
+        <p className="text-muted-foreground mt-2">Only the shop owner can manage staff.</p>
       </div>
     );
   }
+
+  const sendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviting(true);
+    try {
+      const { link } = await inviteStaff({
+        email: invite.email,
+        fullName: invite.fullName,
+        role: invite.role,
+        branchId: invite.role === "owner" ? null : invite.branchId || null,
+      });
+      setShareLink({ name: invite.fullName, link });
+      setInvite({ email: "", fullName: "", role: "staff", branchId: "" });
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Could not create the invite");
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const freshLink = async (p: Profile) => {
+    setUpdatingId(p.id);
+    try {
+      const { link } = await newInviteLink(p.id);
+      setShareLink({ name: p.full_name, link });
+    } catch (err: any) {
+      toast.error(err.message || "Could not create a new link");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!shareLink) return;
+    try {
+      await navigator.clipboard.writeText(shareLink.link);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Could not copy. Select the link and copy it by hand.");
+    }
+  };
 
   const handleBranchChange = async (userId: string, newBranchId: string) => {
     setUpdatingId(userId);
@@ -181,13 +230,24 @@ export function StaffManagement() {
       aria-label={"Role for " + p.full_name}
       className="rounded-md border border-border bg-surface px-2 py-1 text-xs uppercase tracking-widest text-foreground focus:border-gold focus:outline-none disabled:opacity-50"
     >
-      {["super_admin", "owner", "manager", "staff"].map(r => (
-        <option key={r} value={r}>{r.replace("_", " ")}</option>
+      {SHOP_ROLES.map(r => (
+        <option key={r} value={r}>{r}</option>
       ))}
     </select>
   );
 
-  const getStatusToggle = (p: Profile) => (
+  const getStatusToggle = (p: Profile) => p.pending ? (
+    <button
+      type="button"
+      onClick={() => freshLink(p)}
+      disabled={updatingId === p.id}
+      aria-label={"New invite link for " + p.full_name}
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider border bg-gold/10 text-gold border-gold/30 disabled:opacity-50"
+    >
+      <Link2 className="h-3 w-3" />
+      Invite pending · New link
+    </button>
+  ) : (
     <button
       type="button"
       onClick={() => setPending({ kind: "status", p, value: !p.is_active })}
@@ -235,6 +295,37 @@ export function StaffManagement() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-display font-semibold text-foreground">Staff Management</h2>
       </div>
+
+      <form onSubmit={sendInvite} className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+          <UserPlus className="h-4 w-4 text-gold" /> Invite staff
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto_auto_auto]">
+          <input type="text" required placeholder="Full name" aria-label="Full name" value={invite.fullName}
+            onChange={(e) => setInvite({ ...invite, fullName: e.target.value })}
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-gold focus:outline-none" />
+          <input type="email" required placeholder="Email" aria-label="Email" value={invite.email}
+            onChange={(e) => setInvite({ ...invite, email: e.target.value })}
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-gold focus:outline-none" />
+          <select aria-label="Role" value={invite.role}
+            onChange={(e) => setInvite({ ...invite, role: e.target.value as (typeof SHOP_ROLES)[number] })}
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm uppercase tracking-widest text-foreground focus:border-gold focus:outline-none">
+            {SHOP_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <select aria-label="Branch" value={invite.branchId} disabled={invite.role === "owner"}
+            required={invite.role !== "owner"}
+            onChange={(e) => setInvite({ ...invite, branchId: e.target.value })}
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-gold focus:outline-none disabled:opacity-50">
+            <option value="">{invite.role === "owner" ? "All branches" : "Branch"}</option>
+            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+          <button type="submit" disabled={inviting}
+            className="rounded-md bg-gold px-4 py-2 text-sm font-semibold text-white hover:bg-gold/90 disabled:opacity-50">
+            {inviting ? "Creating..." : "Create invite link"}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">You get a link to send on WhatsApp. It works once, for one hour; the person opens it and chooses a password.</p>
+      </form>
 
       {loading ? (
         <div className="text-center py-10 text-muted-foreground">Loading staff...</div>
@@ -318,6 +409,28 @@ export function StaffManagement() {
           </div>
         </div>
       )}
+
+      <AlertDialog open={shareLink !== null} onOpenChange={(o) => { if (!o) setShareLink(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Invite link for {shareLink?.name}</AlertDialogTitle>
+            <AlertDialogDescription>Send this link to them. It works once and expires in one hour.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <textarea readOnly value={shareLink?.link ?? ""} aria-label="Invite link" rows={3}
+            className="w-full rounded-md border border-border bg-background p-2 font-mono text-xs text-foreground" />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Close</AlertDialogCancel>
+            <a href={"https://wa.me/?text=" + encodeURIComponent("Your Overbooked login: " + (shareLink?.link ?? ""))}
+              target="_blank" rel="noreferrer"
+              className="inline-flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted">
+              Send on WhatsApp
+            </a>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); void copyLink(); }}>
+              <Copy className="mr-1 h-4 w-4" /> Copy link
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={pending !== null} onOpenChange={(o) => { if (!o) setPending(null); }}>
         <AlertDialogContent>

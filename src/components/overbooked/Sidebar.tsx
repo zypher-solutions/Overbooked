@@ -82,12 +82,12 @@ export function Sidebar({
         { key: "products" as PageKey, label: "All Products", icon: LayoutGrid },
         { key: "add-product" as PageKey, label: "Add New Product", icon: Plus, managementOnly: true },
         { key: "categories" as PageKey, label: "Categories", icon: Tag, managementOnly: true },
-        { key: "branches" as PageKey, label: "Branch Management", icon: Building2, superAdminOnly: true },
-        { key: "staff" as PageKey, label: "Staff Management", icon: Users, superAdminOnly: true },
-        { key: "stock" as PageKey, label: "Stock Locations", icon: LayoutGrid, superAdminOnly: true },
+        { key: "branches" as PageKey, label: "Branch Management", icon: Building2, ownerOnly: true },
+        { key: "staff" as PageKey, label: "Staff Management", icon: Users, ownerOnly: true },
+        { key: "stock" as PageKey, label: "Stock Locations", icon: LayoutGrid, ownerOnly: true },
         { key: "import" as PageKey, label: "CSV Import", icon: Upload, managementOnly: true },
       ].filter(item => {
-        if ((item as any).superAdminOnly) return profile?.role === "super_admin";
+        if ((item as any).ownerOnly) return profile?.role === "super_admin" || profile?.role === "owner";
         if ((item as any).managementOnly) return profile?.role === "super_admin" || profile?.role === "owner" || profile?.role === "manager";
         return true;
       }),
