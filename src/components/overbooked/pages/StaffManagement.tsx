@@ -111,10 +111,10 @@ export function StaffManagement() {
     try {
       const branchIdToSave = newBranchId === "none" ? null : newBranchId;
       
-      const { error } = await supabase
-        .from('profiles')
-        .update({ branch_id: branchIdToSave })
-        .eq('id', userId);
+      const { error } = await supabase.rpc('set_staff_branch', {
+        p_user_id: userId,
+        p_branch_id: branchIdToSave,
+      });
 
       if (error) throw error;
       

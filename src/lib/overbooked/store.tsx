@@ -720,7 +720,7 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
             daily_rate: variation.dailyRate,
             is_enabled: variation.enabled,
             attributes: variation.attributes || {},
-          }, { onConflict: 'sku' })
+          }, { onConflict: 'shop_id,sku' })
           .select("id")
           .single();
 
@@ -904,7 +904,7 @@ export function OverbookedProvider({ children }: { children: ReactNode }) {
                   daily_rate: rateToSave,
                   is_enabled: v.enabled,
                   attributes: v.attributes || {}
-                }, { onConflict: 'sku' })
+                }, { onConflict: 'shop_id,sku' })
                 .select("id")
                 .single();
                 
