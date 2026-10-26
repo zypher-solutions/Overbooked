@@ -11,13 +11,21 @@ import { addDays, dayRange, errorText, fmtDate, todayLocal } from "@/lib/shop/fo
 import { CameraScanner } from "@/components/overbooked/CameraScanner";
 import { RentalList, type ListRental } from "@/components/shop/RentalList";
 import { RemindersPanel } from "@/components/shop/RemindersPanel";
+import { TrendzDashboard } from "@/components/shop/TrendzDashboard";
 import { APPOINTMENT_COLUMNS, AppointmentDialog, AppointmentList } from "@/components/shop/Appointments";
 import type { Appointment } from "@/lib/shop/types";
 import { PageHeader, Panel, StatusBadge, SummaryCard, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
 
 interface Board { pickups: ListRental[]; returns: ListRental[]; upcoming: ListRental[]; outNow: number }
 
-export default function Today() {
+export default function Home() {
+  // bridal and groom shops open on the TRENDZ dashboard; other businesses on Today
+  const { trendz, loading } = useShop();
+  if (loading) return <p className="py-10 text-center text-sm text-muted-foreground">Loading...</p>;
+  return trendz ? <TrendzDashboard /> : <Today />;
+}
+
+function Today() {
   const { tz, word, feature } = useShop();
   const [appts, setAppts] = useState<Appointment[]>([]);
   const [editAppt, setEditAppt] = useState<Appointment | null>(null);

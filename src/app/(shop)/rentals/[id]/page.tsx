@@ -39,7 +39,9 @@ function RentalView() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [editAppt, setEditAppt] = useState<Appointment | null>(null);
   const [r, setR] = useState<RentalDetail | null | undefined>(undefined);
-  const [dialog, setDialog] = useState<DialogName>(params.get("new") ? "whatsapp" : null);
+  // ?new=1 after booking (WhatsApp), ?receive=<piece id or 1> from Inventory Search, ?handover=1 from the dashboard
+  const [dialog, setDialog] = useState<DialogName>(params.get("new") ? "whatsapp" : params.get("receive") ? "return" : params.get("handover") ? "pickup" : null);
+  const [scannedUnit] = useState(() => { const u = params.get("receive"); return u && u !== "1" ? u : undefined; });
   const [fix, setFix] = useState<Fix | null>(null);
   const [photos, setPhotos] = useState<Record<string, string>>({});
 
@@ -57,7 +59,7 @@ function RentalView() {
     }
   }, [id, feature]);
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { if (params.get("new")) router.replace(`/rentals/${id}`); }, [params, router, id]);
+  useEffect(() => { if (params.get("new") || params.get("receive") || params.get("handover")) router.replace(`/rentals/${id}`); }, [params, router, id]);
 
   if (r === undefined) return <p className="py-10 text-center text-sm text-muted-foreground">Loading...</p>;
   if (r === null) {
@@ -313,8 +315,8 @@ function RentalView() {
         </div>
       </div>
 
-      <PickupDialog rental={r} open={dialog === "pickup"} onClose={close} onDone={load} />
-      <ReturnDialog rental={r} open={dialog === "return"} onClose={close} onDone={load} />
+      <PickupDialog rental={r} open={dialog === "pickup" && r.status === "reserved"} onClose={close} onDone={load} />
+      <ReturnDialog rental={r} open={dialog === "return" && r.status === "active"} onClose={close} onDone={load} scannedUnitId={scannedUnit} />
       <PaymentDialog rental={r} open={dialog === "pay"} onClose={close} onDone={load} />
       <ChargeDialog rental={r} open={dialog === "charge"} onClose={close} onDone={load} />
       <ExtendDialog rental={r} open={dialog === "extend"} onClose={close} onDone={load} />

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
+import { useCart, type CartLine } from "@/lib/shop/cart";
 import { call, loadRental, money, type RentalDetail } from "@/lib/shop/api";
 import { headlinePrice, useCatalog, variationLabel } from "@/lib/shop/useCatalog";
 import {
@@ -15,10 +16,10 @@ import {
 import type { Customer, Method, Product, Quote, Template, Variation } from "@/lib/shop/types";
 import { CustomerPicker, emptyCustomer, type NewCustomer } from "@/components/shop/CustomerPicker";
 import {
-  Field, MethodPicker, MoneyRows, PageHeader, Panel, StatusBadge, ghostButtonClass, goldButtonClass, inputClass, monoInputClass,
+  Field, MethodPicker, Modal, MoneyRows, PageHeader, Panel, StatusBadge, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass,
 } from "@/components/shop/ui";
 
-interface Line { variation_id: string; qty: number; amount_override: string; unit_ids: string[] }
+type Line = CartLine;
 interface Draft {
   branchId: string;
   start: string;
@@ -60,7 +61,7 @@ function defaultPeriod(kind: Template["kind"] | undefined, tz: string, checkIn: 
 function NewBooking() {
   const router = useRouter();
   const params = useSearchParams();
-  const { shop, tz, myBranchId, activeBranches, categories, templates, addOns, templateOf, feature, setting, word } = useShop();
+  const { shop, tz, myBranchId, activeBranches, categories, templates, addOns, templateOf, feature, setting, word, trendz } = useShop();
   const { products } = useCatalog();
   const storageKey = `ob_booking_${shop.id}`;
   // ?edit=<rental id>: change a booking that has not been picked up
@@ -133,6 +134,20 @@ function NewBooking() {
 
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
 
+  // A new booking takes its items and branch from the cart (filled from Inventory Search, All Rentals or
+  // the list below); changing a booking works on its own copy.
+  const cart = useCart();
+  const lines = editId ? d.lines : cart.lines;
+  const branchId = editId ? d.branchId : (myBranchId ?? (cart.lines.length && cart.branchId ? cart.branchId : d.branchId));
+  const setLines = (fn: (ls: Line[]) => Line[]) => {
+    if (editId) setD((x) => ({ ...x, lines: fn(x.lines).filter((l) => l.qty > 0) }));
+    else cart.setLines(fn);
+  };
+  const setBranch = (id: string) => {
+    set({ branchId: id, lines: d.lines.map((l) => ({ ...l, unit_ids: [] })) });
+    if (!editId) cart.setBranch(id);
+  };
+
   // ---- catalog lookups ----
   const variations = useMemo(() => {
     const map = new Map<string, { product: Product; variation: Variation; template: Template | undefined }>();
@@ -146,10 +161,10 @@ function NewBooking() {
   const prefill = params.get("variation");
   useEffect(() => {
     if (prefill && variations.has(prefill)) {
-      setD((x) => x.lines.some((l) => l.variation_id === prefill) ? x
-        : { ...x, lines: [...x.lines, { variation_id: prefill, qty: 1, amount_override: "", unit_ids: [] }] });
+      if (!lines.some((l) => l.variation_id === prefill)) cart.add(branchId, prefill);
       router.replace("/book");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill, variations, router]);
 
   // ?customer=... from a customer's page
@@ -168,10 +183,10 @@ function NewBooking() {
 
   const cartTemplates = useMemo(() => {
     const keys = new Set<string>();
-    for (const l of d.lines) { const t = variations.get(l.variation_id)?.template; if (t) keys.add(t.key); }
+    for (const l of lines) { const t = variations.get(l.variation_id)?.template; if (t) keys.add(t.key); }
     if (d.wholeProperty) templates.filter((t) => t.kind === "room").forEach((t) => keys.add(t.key));
     return templates.filter((t) => keys.has(t.key));
-  }, [d.lines, d.wholeProperty, variations, templates]);
+  }, [lines, d.wholeProperty, variations, templates]);
   const kinds = new Set(cartTemplates.map((t) => t.kind));
   const hasRoom = kinds.has("room");
   const hasVehicle = kinds.has("vehicle");
@@ -180,11 +195,11 @@ function NewBooking() {
   // ---- availability for the period ----
   const [avail, setAvail] = useState<Record<string, { free: number; total: number }>>({});
   useEffect(() => {
-    if (!periodOk || !d.branchId) return;
+    if (!periodOk || !branchId) return;
     const t = setTimeout(async () => {
       try {
         const rows = await call<{ variation_id: string; free: number; total: number }[]>("branch_availability",
-          { p_branch_id: d.branchId, p_start: startIso, p_end: endIso });
+          { p_branch_id: branchId, p_start: startIso, p_end: endIso });
         // when changing a booking, the units it already holds count as free for it
         const own = new Map<string, number>();
         for (const u of editing?.unit_reservations ?? []) {
@@ -196,24 +211,24 @@ function NewBooking() {
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [d.branchId, startIso, endIso, periodOk, editing]);
+  }, [branchId, startIso, endIso, periodOk, editing]);
 
   // ---- live quote ----
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const quoteInput = useMemo(() => ({
-    branch_id: d.branchId, start_at: startIso, end_at: endIso, adults: d.adults, children: d.children,
+    branch_id: branchId, start_at: startIso, end_at: endIso, adults: d.adults, children: d.children,
     with_driver: d.withDriver && hasVehicle, whole_property: d.wholeProperty,
-    lines: d.lines.map((l) => ({
+    lines: lines.map((l) => ({
       variation_id: l.variation_id, qty: l.qty,
       ...(l.amount_override.trim() !== "" ? { amount_override: num(l.amount_override) } : {}),
       ...(l.unit_ids.length === l.qty ? { unit_ids: l.unit_ids } : {}),
     })),
     add_ons: Object.entries(d.addOns).map(([add_on_id, quantity]) => ({ add_on_id, quantity })),
-  }), [d, startIso, endIso, hasVehicle]);
+  }), [d, branchId, lines, startIso, endIso, hasVehicle]);
 
   useEffect(() => {
-    if (!periodOk || !d.branchId || (d.lines.length === 0 && !d.wholeProperty)) {
+    if (!periodOk || !branchId || (lines.length === 0 && !d.wholeProperty)) {
       setQuote(null);
       setQuoteError(null);
       return;
@@ -228,16 +243,18 @@ function NewBooking() {
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [quoteInput, periodOk, d.branchId, d.lines.length, d.wholeProperty]);
+  }, [quoteInput, periodOk, branchId, lines.length, d.wholeProperty]);
 
   // ---- cart ----
-  const addLine = (variationId: string) => setD((x) => {
-    const existing = x.lines.find((l) => l.variation_id === variationId);
-    if (existing) return { ...x, lines: x.lines.map((l) => l === existing ? { ...l, qty: l.qty + 1, unit_ids: [] } : l) };
-    return { ...x, lines: [...x.lines, { variation_id: variationId, qty: 1, amount_override: "", unit_ids: [] }] };
-  });
-  const updateLine = (variationId: string, patch: Partial<Line>) =>
-    set({ lines: d.lines.map((l) => l.variation_id === variationId ? { ...l, ...patch } : l).filter((l) => l.qty > 0) });
+  const addLine = (variationId: string) => {
+    if (!editId) return cart.add(branchId, variationId);
+    setD((x) => {
+      const existing = x.lines.find((l) => l.variation_id === variationId);
+      if (existing) return { ...x, lines: x.lines.map((l) => l === existing ? { ...l, qty: l.qty + 1, unit_ids: [] } : l) };
+      return { ...x, lines: [...x.lines, { variation_id: variationId, qty: 1, amount_override: "", unit_ids: [] }] };
+    });
+  };
+  const updateLine = (variationId: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => l.variation_id === variationId ? { ...l, ...patch } : l));
 
   // ---- submit ----
   const [busy, setBusy] = useState(false);
@@ -282,6 +299,7 @@ function NewBooking() {
         },
       });
       try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
+      cart.clear();
       toast.success(`Booked: ${res.token}`);
       router.push(`/rentals/${res.rental_id}?new=1`);
     } catch (e) {
@@ -291,10 +309,13 @@ function NewBooking() {
     }
   };
 
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const reset = () => {
     try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
+    cart.clear();
     setCustomer(null);
     setD(initial());
+    setConfirmDiscard(false);
   };
 
   const visibleAddOns = addOns.filter((a) => a.is_active
@@ -303,11 +324,25 @@ function NewBooking() {
 
   return (
     <>
-      <PageHeader title={editing ? `Change booking ${editing.token}` : "New booking"}
-        subtitle={editing ? "Change dates, items, guests or extras. The pieces it already has are kept where possible." : undefined}
+      <PageHeader title={editing ? `Change booking ${editing.token}` : trendz ? "Create Booking" : "New booking"}
+        subtitle={editing ? "Change dates, items, guests or extras. The pieces it already has are kept where possible."
+          : trendz ? "Pick the dates first: each item is checked for them and a free piece is kept for it." : undefined}
         actions={editing
           ? <button className={ghostButtonClass} onClick={() => router.push(`/rentals/${editing.id}`)}>Cancel</button>
-          : <button className={ghostButtonClass} onClick={reset}>Start over</button>} />
+          : <>
+            {trendz ? <button className={ghostButtonClass} onClick={() => router.push("/scan")}>Close (keep draft)</button> : null}
+            <button className={trendz ? dangerButtonClass : ghostButtonClass} onClick={() => (trendz ? setConfirmDiscard(true) : reset())}>
+              {trendz ? "Discard draft" : "Start over"}
+            </button>
+          </>} />
+      <Modal open={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Discard this draft?"
+        description="All cart items and the customer details typed in are cleared."
+        footer={<>
+          <button className={ghostButtonClass} onClick={() => setConfirmDiscard(false)}>Keep it</button>
+          <button className={goldButtonClass} onClick={reset}>Discard</button>
+        </>}>
+        <span />
+      </Modal>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
@@ -315,8 +350,8 @@ function NewBooking() {
             <div className="grid gap-3 sm:grid-cols-3">
               {activeBranches.length > 1 ? (
                 <Field label="Branch">
-                  <select className={inputClass} value={d.branchId} disabled={!!myBranchId || !!editing}
-                    onChange={(e) => set({ branchId: e.target.value, lines: d.lines.map((l) => ({ ...l, unit_ids: [] })) })}>
+                  <select className={inputClass} value={branchId} disabled={!!myBranchId || !!editing}
+                    onChange={(e) => setBranch(e.target.value)}>
                     {activeBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </Field>
@@ -348,7 +383,7 @@ function NewBooking() {
 
           {!d.wholeProperty ? (
             <ItemPicker products={products} categories={categories} templateOf={templateOf} avail={avail} periodOk={periodOk}
-              inCart={Object.fromEntries(d.lines.map((l) => [l.variation_id, l.qty]))} onAdd={addLine} />
+              inCart={Object.fromEntries(lines.map((l) => [l.variation_id, l.qty]))} onAdd={addLine} />
           ) : null}
 
           <Panel title="Customer">
@@ -363,11 +398,11 @@ function NewBooking() {
 
         <div id="booking-summary" className="space-y-4 lg:sticky lg:top-6 lg:self-start">
           <Panel title="Booking">
-            {d.lines.length === 0 && !d.wholeProperty ? (
+            {lines.length === 0 && !d.wholeProperty ? (
               <p className="text-sm text-muted-foreground">Add {word("items").toLowerCase()} from the list.</p>
             ) : null}
             <ul className="space-y-3">
-              {d.lines.map((l) => {
+              {lines.map((l) => {
                 const info = variations.get(l.variation_id);
                 const ql = quoteLineFor(l.variation_id);
                 const free = avail[l.variation_id]?.free;
@@ -395,8 +430,8 @@ function NewBooking() {
                         aria-label="Agreed price for this line" value={l.amount_override}
                         onChange={(e) => updateLine(l.variation_id, { amount_override: e.target.value })} />
                     </div>
-                    {periodOk && (info?.template?.kind === "vehicle" || info?.template?.kind === "room") ? (
-                      <UnitChooser branchId={d.branchId} variationId={l.variation_id} startIso={startIso} endIso={endIso}
+                    {periodOk && (info?.template?.kind === "vehicle" || info?.template?.kind === "room" || (trendz && info?.template?.kind === "wearable")) ? (
+                      <UnitChooser branchId={branchId} variationId={l.variation_id} startIso={startIso} endIso={endIso}
                         qty={l.qty} chosen={l.unit_ids} onChange={(ids) => updateLine(l.variation_id, { unit_ids: ids })} />
                     ) : null}
                   </li>

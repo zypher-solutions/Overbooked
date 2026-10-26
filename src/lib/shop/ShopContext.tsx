@@ -28,6 +28,8 @@ interface ShopContextValue {
   setting: <T>(key: string, fallback: T) => T;
   /** wording for the whole shop: one business type uses its own words, mixed shops use neutral ones */
   word: (key: "item" | "items" | "unit" | "units" | "start" | "end", fallback?: string) => string;
+  /** bridal and groom shops use the TRENDZ screens (sidebar, scanner, cart); other businesses keep theirs */
+  trendz: boolean;
   loading: boolean;
   refresh: () => Promise<void>;
 }
@@ -99,6 +101,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       feature,
       setting,
       word,
+      trendz: shopTemplates.length > 0 && shopTemplates.every((t) => t.kind === "wearable"),
       loading,
       refresh,
     };

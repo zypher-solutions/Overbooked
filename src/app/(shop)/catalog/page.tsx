@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Plus, QrCode, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -9,19 +10,26 @@ import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { BASIS_LABELS, errorText, num, rupees } from "@/lib/shop/format";
 import { headlinePrice, useCatalog, variationLabel } from "@/lib/shop/useCatalog";
-import type { AddOn, AddOnBasis, Category, Unit } from "@/lib/shop/types";
+import type { AddOn, AddOnBasis, Category, Product, Unit } from "@/lib/shop/types";
 import {
   Empty, Field, Modal, PageHeader, Panel, StatusBadge, ghostButtonClass, goldButtonClass, inputClass, monoInputClass, tableWrap, theadClass,
 } from "@/components/shop/ui";
 
 type Tab = "items" | "extras" | "categories";
 
-export default function Catalog() {
-  const { canManage, word, feature, templates } = useShop();
-  const [tab, setTab] = useState<Tab>("items");
+export default function CatalogPage() {
+  return <Suspense fallback={null}><Catalog /></Suspense>;
+}
+
+function Catalog() {
+  const { canManage, word, feature, templates, trendz } = useShop();
+  // ?tab=categories: the sidebar's Categories item
+  const asked = useSearchParams().get("tab");
+  const [tab, setTab] = useState<Tab>(asked === "categories" || asked === "extras" ? asked : "items");
+  useEffect(() => { setTab(asked === "categories" || asked === "extras" ? asked : "items"); }, [asked]);
   return (
     <>
-      <PageHeader title={word("items", "Catalog")}
+      <PageHeader title={trendz ? (tab === "categories" ? "Categories" : "All Products") : word("items", "Catalog")}
         actions={canManage ? <>
           <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link>
           <Link href="/catalog/import" className={ghostButtonClass}><Upload className="h-4 w-4" /> Import</Link>
@@ -44,7 +52,7 @@ export default function Catalog() {
 }
 
 function Items() {
-  const { categories, branches, templateOf, word } = useShop();
+  const { categories, branches, templateOf, word, trendz } = useShop();
   const { products } = useCatalog({ includeInactive: true });
   const [units, setUnits] = useState<Pick<Unit, "variation_id" | "branch_id" | "status">[]>([]);
   const [q, setQ] = useState("");
@@ -56,7 +64,8 @@ function Items() {
       const supabase = createClient();
       const all: Pick<Unit, "variation_id" | "branch_id" | "status">[] = [];
       for (let from = 0; ; from += 1000) {
-        const { data, error } = await supabase.from("units").select("variation_id, branch_id, status").range(from, from + 999);
+        // paging needs a fixed order, or rows can repeat or go missing between pages
+        const { data, error } = await supabase.from("units").select("variation_id, branch_id, status").order("id").range(from, from + 999);
         if (error) { toast.error(errorText(error)); break; }
         all.push(...(data ?? []));
         if (!data || data.length < 1000) break;
@@ -98,6 +107,7 @@ function Items() {
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /> Show switched-off
         </label>
       </div>
+      {trendz ? <ProductTable list={list} units={units} loading={products === null} /> : (
       <div className={tableWrap}>
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className={theadClass}>
@@ -134,8 +144,68 @@ function Items() {
           </tbody>
         </table>
       </div>
-      {branches.length > 1 ? <p className="mt-2 text-xs text-muted-foreground">Counts cover all branches; open an item to see each branch.</p> : null}
+      )}
+      {branches.length > 1 && !trendz ? <p className="mt-2 text-xs text-muted-foreground">Counts cover all branches; open an item to see each branch.</p> : null}
     </>
+  );
+}
+
+// All Products, as in TRENDZ: one row per product with its variations, rate, stock and branches
+function ProductTable({ list, units, loading }: { list: Product[]; units: Pick<Unit, "variation_id" | "branch_id" | "status">[]; loading: boolean }) {
+  const { categories, activeBranches, canManage } = useShop();
+  const byVariation = useMemo(() => {
+    const m = new Map<string, Map<string, number>>();
+    for (const u of units) {
+      if (u.status === "retired") continue;
+      const b = m.get(u.variation_id) ?? new Map<string, number>();
+      b.set(u.branch_id, (b.get(u.branch_id) ?? 0) + 1);
+      m.set(u.variation_id, b);
+    }
+    return m;
+  }, [units]);
+  const perBranch = (p: Product, branchId: string) => (p.product_variations ?? []).reduce((s, v) => s + (byVariation.get(v.id)?.get(branchId) ?? 0), 0);
+
+  return (
+    <div className={tableWrap}>
+      <table className="w-full min-w-[860px] text-left text-sm">
+        <thead className={theadClass}>
+          <tr>
+            <th className="w-14 px-4 py-3" /><th className="px-4 py-3">Name</th><th className="px-4 py-3">Category</th><th className="px-4 py-3">Variations</th>
+            <th className="px-4 py-3">Daily rate</th><th className="px-4 py-3 text-right">Total stock</th><th className="px-4 py-3">Branches</th>
+            <th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {loading ? <tr><td colSpan={9} className="px-4 py-6 text-center text-muted-foreground">Loading...</td></tr>
+            : list.length === 0 ? <tr><td colSpan={9}><Empty>No products yet. Add one with Add New Product.</Empty></td></tr>
+            : list.map((p) => {
+              const vars = (p.product_variations ?? []).filter((v) => v.is_enabled);
+              const rates = vars.map((v) => headlinePrice(v)?.amount).filter((x): x is number => x !== undefined);
+              const total = activeBranches.reduce((s, b) => s + perBranch(p, b.id), 0);
+              return (
+                <tr key={p.id} className="hover:bg-black/[0.02]">
+                  <td className="px-4 py-2">{p.image_url ? <img src={p.image_url} alt="" className="h-10 w-10 rounded object-cover" /> : null}</td>
+                  <td className="px-4 py-2">
+                    <Link href={`/catalog/${p.id}`} className="font-medium hover:text-gold">{p.name}</Link>
+                    <span className="block font-mono text-xs text-muted-foreground">{p.sku}</span>
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground">{categories.find((c) => c.id === p.category_id)?.name}</td>
+                  <td className="px-4 py-2">{p.is_set ? <StatusBadge tone="indigo">Set</StatusBadge> : vars.length}</td>
+                  <td className="px-4 py-2 font-mono text-gold">{rates.length ? (Math.min(...rates) === Math.max(...rates) ? rupees(rates[0]) : `${rupees(Math.min(...rates))} – ${rupees(Math.max(...rates))}`) : <span className="text-rust">No price</span>}</td>
+                  <td className="px-4 py-2 text-right font-mono">{p.is_set ? "—" : total}</td>
+                  <td className="px-4 py-2">
+                    <span className="flex flex-wrap gap-1">
+                      {activeBranches.map((b) => <span key={b.id} className="rounded-md border border-border px-1.5 py-0.5 text-[10px]">{b.name} {perBranch(p, b.id)}</span>)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2"><StatusBadge tone={p.is_active ? "emerald" : "rust"}>{p.is_active ? "Active" : "Inactive"}</StatusBadge></td>
+                  <td className="px-4 py-2 text-right"><Link href={`/catalog/${p.id}`} className={ghostButtonClass}>{canManage ? "Edit" : "View"}</Link></td>
+                </tr>
+              );
+            })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
