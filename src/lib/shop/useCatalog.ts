@@ -16,7 +16,7 @@ export function useCatalog({ includeInactive = false } = {}) {
     for (let from = 0; ; from += 500) {
       let q = supabase.from("products")
         .select("*, product_variations!product_variations_shop_product_fkey(*, variation_rates!variation_rates_shop_variation_fkey(rate_type, amount))")
-        .order("name").range(from, from + 499);
+        .order("name").order("id").range(from, from + 499);
       if (!includeInactive) q = q.eq("is_active", true);
       const { data, error } = await q;
       if (error) {

@@ -52,6 +52,24 @@ says "Check-in" and asks for guests, a car shop asks for odometer, fuel and lice
 | Money and reports | Money in by method, booked value, owed, deposits held, every money record (CSV), stock right now |
 | Branches, Staff, Settings | Owner only: branches, invite links, roles, shop rules (grace time, check-in/out times, licence rule) |
 
+### Bridal and groom shops: the TRENDZ screens
+A shop whose business types are all clothes (`trendz` in `ShopContext`) gets the screens of TRENDZ, the
+admin panel Overbooked grew from. Cars, bikes and resorts keep the screens above.
+
+| Menu | Screen | What it does |
+| --- | --- | --- |
+| | Dashboard (`/`) | Pickups today / Returns due today / Overdue cards that pick the list below (Hand over, Return, WhatsApp); To collect; all rentals out, sortable and filtered |
+| | Finance | Earned, collected, outstanding, deposits held (vs the previous period); daily close per payment method; by branch; ledger CSV |
+| Rentals | Bookings | Cards by upcoming pickup; pickups today / tomorrow / a date; status, branch, search incl. SKU; pieces kept |
+| | Inventory Search (`/scan`) | Scan a tag (camera or USB scanner) or type a name, SKU, piece code or booking no. Find and book: stock per branch (Total / Avail / Rented), Add to Cart. Receive back: a scanned piece opens its return with that piece ticked |
+| | All Rentals | Products with stock per branch; tap for Add to Cart per size and branch, and who has it out |
+| Products | All Products, Add New Product, Categories | Add New Product is a 3-step form: basic info, attributes (Colour, Size...), variations and pieces per branch (pieces are created with codes for QR tags). Changing a product uses the same form |
+| Admin | Branch / Staff Management, Stock Locations, CSV Import, Shop settings | Stock Locations: pieces per branch (free, out, service, lost) |
+
+The cart (`src/lib/shop/cart.tsx`) keeps items per person and shop on the device; a floating Checkout (n)
+opens the booking form with them. On a return, clothes are ticked piece by piece (scanned, typed or tapped);
+a missing piece must be marked lost.
+
 Shared code: `src/lib/shop` (types, formats in the shop's time zone, data helpers, WhatsApp texts),
 `src/components/shop` (dialogs and parts). Sign-in and the current shop: `src/lib/overbooked/AuthContext.tsx`.
 

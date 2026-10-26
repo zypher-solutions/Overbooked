@@ -10,13 +10,15 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { errorText } from "@/lib/shop/format";
 import type { Product } from "@/lib/shop/types";
 import { ProductEditor } from "@/components/shop/ProductEditor";
+import { ProductWizard } from "@/components/shop/ProductWizard";
 import { UnitsPanel } from "@/components/shop/UnitsPanel";
 import { Panel } from "@/components/shop/ui";
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
-  const { templateOf, loading } = useShop();
+  const { templateOf, loading, trendz } = useShop();
   const [p, setP] = useState<Product | null | undefined>(undefined);
+  const [version, setVersion] = useState(0); // after a save the form and the pieces list start from the saved product
 
   const load = useCallback(async () => {
     const { data, error } = await createClient().from("products")
@@ -26,6 +28,8 @@ export default function ProductPage() {
     const product = (data as Product) ?? null;
     product?.product_variations?.sort((a, b) => a.sku.localeCompare(b.sku));
     setP(product);
+    setVersion((v) => v + 1);
+    setVersion((v) => v + 1);
   }, [id]);
   useEffect(() => { void load(); }, [load]);
 
@@ -35,10 +39,10 @@ export default function ProductPage() {
 
   return (
     <>
-      <Link href="/catalog" className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ChevronLeft className="h-3.5 w-3.5" /> Catalog</Link>
+      <Link href="/catalog" className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ChevronLeft className="h-3.5 w-3.5" /> {trendz ? "All Products" : "Catalog"}</Link>
       <div className="space-y-4">
-        <ProductEditor product={p} onSaved={load} />
-        {template && !p.is_set ? <UnitsPanel product={p} template={template} /> : null}
+        {trendz && !p.is_set ? <ProductWizard key={version} product={p} onSaved={load} /> : <ProductEditor product={p} onSaved={load} />}
+        {template && !p.is_set ? <UnitsPanel key={version} product={p} template={template} /> : null}
       </div>
     </>
   );

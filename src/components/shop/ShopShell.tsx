@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Building2, CalendarClock, CalendarDays, CalendarPlus, ClipboardList, Home, KeyRound, LayoutGrid, LineChart, LogOut, Menu, Settings, Store, Users, UserSquare, X,
+  BarChart3, Boxes, Building2, Calendar, CalendarClock, CalendarDays, CalendarPlus, ChevronDown, ClipboardList, Home, KeyRound, LayoutGrid, LineChart,
+  LogOut, Menu, Plus, ScanLine, Settings, ShoppingBag, Store, Tag, Upload, Users, UserSquare, Wallet, X, type LucideIcon,
 } from "lucide-react";
+import { useCart } from "@/lib/shop/cart";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/overbooked/AuthContext";
@@ -15,14 +17,45 @@ import { OfflineBanner } from "@/components/overbooked/OfflineBanner";
 import { Field, Modal, goldButtonClass, ghostButtonClass, inputClass } from "./ui";
 import { SubscriptionBanner } from "./Subscription";
 
+type NavItem = { href: string; label: string; icon: LucideIcon; show: boolean };
+type NavGroup = { title?: string; items: NavItem[] };
+
 export function ShopShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
-  const { shop, role, isOwner, canManage, branches, myBranchId, word, feature } = useShop();
+  const { shop, role, isOwner, canManage, branches, myBranchId, word, feature, trendz, loading } = useShop();
+  const cart = useCart();
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
-  const nav = [
+  // Bridal and groom: the TRENDZ menu. Other businesses keep the simpler one.
+  const groups: NavGroup[] = loading ? [] : trendz ? [
+    { items: [
+      { href: "/", label: "Dashboard", icon: BarChart3, show: true },
+      { href: "/finance", label: "Finance", icon: Wallet, show: canManage },
+    ] },
+    { title: "Rentals", items: [
+      { href: "/bookings", label: "Bookings", icon: Calendar, show: true },
+      { href: "/scan", label: "Inventory Search", icon: ScanLine, show: true },
+      { href: "/all-rentals", label: "All Rentals", icon: ClipboardList, show: true },
+      { href: "/calendar", label: "Calendar", icon: CalendarDays, show: true },
+      { href: "/customers", label: "Customers", icon: UserSquare, show: true },
+      { href: "/appointments", label: "Appointments", icon: CalendarClock, show: feature("appointments") },
+    ] },
+    { title: "Products", items: [
+      { href: "/catalog", label: "All Products", icon: LayoutGrid, show: true },
+      { href: "/catalog/new", label: "Add New Product", icon: Plus, show: canManage },
+      { href: "/catalog?tab=categories", label: "Categories", icon: Tag, show: canManage },
+    ] },
+    { title: "Admin", items: [
+      { href: "/branches", label: "Branch Management", icon: Building2, show: isOwner },
+      { href: "/staff", label: "Staff Management", icon: Users, show: isOwner },
+      { href: "/stock-locations", label: "Stock Locations", icon: Boxes, show: isOwner },
+      { href: "/catalog/import", label: "CSV Import", icon: Upload, show: canManage },
+      { href: "/settings", label: "Shop settings", icon: Settings, show: isOwner },
+    ] },
+  ] : [{ items: [
     { href: "/", label: "Today", icon: Home, show: true },
     { href: "/book", label: "New booking", icon: CalendarPlus, show: true },
     { href: "/rentals", label: "Bookings", icon: ClipboardList, show: true },
@@ -34,10 +67,11 @@ export function ShopShell({ children }: { children: ReactNode }) {
     { href: "/branches", label: "Branches", icon: Building2, show: isOwner },
     { href: "/staff", label: "Staff", icon: Users, show: isOwner },
     { href: "/settings", label: "Shop settings", icon: Settings, show: isOwner },
-  ].filter((n) => n.show);
+  ] }];
+  const visible = groups.map((g) => ({ ...g, items: g.items.filter((n) => n.show) })).filter((g) => g.items.length);
 
-  const active = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/"));
   const myBranch = branches.find((b) => b.id === myBranchId)?.name;
+  const leave = () => (cart.count > 0 ? setConfirmSignOut(true) : void signOut());
 
   return (
     <div className="min-h-screen bg-background">
@@ -54,42 +88,36 @@ export function ShopShell({ children }: { children: ReactNode }) {
         <div className="flex items-start justify-between px-5 pb-4 pt-6">
           <div className="min-w-0">
             <p className="truncate font-display text-xl font-semibold text-foreground">{shop.name}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-gold">{role === "super_admin" ? "Zypher view" : "Overbooked"}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-gold">{role === "super_admin" ? "Zypher view" : trendz ? "Rental Studio" : "Overbooked"}</p>
           </div>
           <button aria-label="Close menu" onClick={() => setOpen(false)} className="rounded-md p-2 hover:bg-black/5 lg:hidden"><X className="h-4 w-4" /></button>
         </div>
-        <nav className="flex-1 px-3">
+        <nav className="flex-1 px-3 pb-4">
           {role === "super_admin" ? (
             <a href="/zypher" className="mb-2 flex items-center gap-3 rounded-md border border-gold/30 bg-gold/5 px-3 py-2 text-sm text-foreground hover:bg-gold/10">
               <Store className="h-4 w-4 text-gold" /> Zypher console
             </a>
           ) : null}
-          <ul className="space-y-0.5">
-            {nav.map((n) => (
-              <li key={n.href}>
-                <Link href={n.href} onClick={() => setOpen(false)} aria-current={active(n.href) ? "page" : undefined}
-                  className={cn("flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors lg:py-2",
-                    active(n.href) ? "bg-gold/10 font-medium text-foreground" : "text-muted-foreground hover:bg-black/5 hover:text-foreground")}>
-                  <n.icon className={cn("h-4 w-4", active(n.href) && "text-gold")} />
-                  {n.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          {/* which item is active depends on ?tab= too (Categories), so it reads the address in its own boundary */}
+          <Suspense fallback={<NavGroups groups={visible} pathname={pathname} tab={null} onPick={() => setOpen(false)} />}>
+            <NavWithTab groups={visible} pathname={pathname} onPick={() => setOpen(false)} />
+          </Suspense>
         </nav>
         <div className="space-y-2 border-t border-border p-4 text-xs">
           <div>
             <p className="truncate font-medium text-foreground">{profile?.full_name}</p>
-            <p className="capitalize text-muted-foreground">{role === "super_admin" ? "Zypher" : role}{myBranch ? ` · ${myBranch}` : ""}</p>
+            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-gold">{role === "super_admin" ? "Zypher" : role}</p>
+            <p className="text-muted-foreground">{myBranch ?? "All branches"}</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <button onClick={() => setPwOpen(true)} className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
-              <KeyRound className="h-3.5 w-3.5" /> Password
+              <KeyRound className="h-3.5 w-3.5" /> Change password
             </button>
-            <button onClick={signOut} className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
+            <button onClick={leave} className="inline-flex items-center gap-1.5 text-rust hover:text-rust/80">
               <LogOut className="h-3.5 w-3.5" /> Sign out
             </button>
           </div>
+          {trendz ? <p className="font-mono text-[10px] text-muted-foreground/70">Staff panel v2.0</p> : null}
         </div>
       </aside>
 
@@ -101,7 +129,74 @@ export function ShopShell({ children }: { children: ReactNode }) {
         </div>
       </main>
 
+      {/* the cart's way to checkout, on every screen but the booking form itself */}
+      {cart.count > 0 && pathname !== "/book" ? (
+        <Link href="/book" className={cn(goldButtonClass, "fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-30 px-5 py-3 text-sm shadow-xl")}>
+          <ShoppingBag className="h-4 w-4" /> Checkout ({cart.count})
+        </Link>
+      ) : null}
+
       <PasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />
+      <Modal open={confirmSignOut} onClose={() => setConfirmSignOut(false)} title="Sign out with items in the cart?"
+        description="The cart and the booking you are filling in will be discarded. Stay signed in to keep them."
+        footer={<>
+          <button className={ghostButtonClass} onClick={() => setConfirmSignOut(false)}>Stay signed in</button>
+          <button className={goldButtonClass} onClick={() => { cart.clear(); try { sessionStorage.removeItem(`ob_booking_${shop.id}`); } catch { /* ignore */ } void signOut(); }}>Sign out</button>
+        </>}>
+        <span />
+      </Modal>
+    </div>
+  );
+}
+
+function NavWithTab(props: { groups: NavGroup[]; pathname: string; onPick: () => void }) {
+  const tab = useSearchParams().get("tab");
+  return <NavGroups {...props} tab={tab} />;
+}
+
+function NavGroups({ groups, pathname, tab, onPick }: { groups: NavGroup[]; pathname: string; tab: string | null; onPick: () => void }) {
+  const [closed, setClosed] = useState<Record<string, boolean>>({});
+  // the most specific item wins: /catalog/new is "Add New Product", not "All Products"
+  const all = groups.flatMap((g) => g.items);
+  const score = (href: string) => {
+    const [path, query] = href.split("?");
+    if (query) return pathname === path && tab === new URLSearchParams(query).get("tab") ? path.length + 1 : -1;
+    if (path === "/") return pathname === "/" ? 1 : -1;
+    return (pathname === path || pathname.startsWith(path + "/")) && !(path === "/catalog" && tab) ? path.length : -1;
+  };
+  const best = all.reduce<{ href: string; s: number }>((b, n) => { const s = score(n.href); return s > b.s ? { href: n.href, s } : b; }, { href: "", s: -1 });
+
+  return (
+    <div className="space-y-3">
+      {groups.map((g, gi) => (
+        <div key={g.title ?? gi}>
+          {g.title ? (
+            <button type="button" onClick={() => setClosed((c) => ({ ...c, [g.title!]: !c[g.title!] }))} aria-expanded={!closed[g.title]}
+              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
+              {g.title}
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !closed[g.title] && "rotate-180")} />
+            </button>
+          ) : null}
+          {g.title && closed[g.title] ? null : (
+            <ul className="space-y-0.5">
+              {g.items.map((n) => {
+                const on = best.href === n.href;
+                return (
+                  <li key={n.href}>
+                    <Link href={n.href} onClick={onPick} aria-current={on ? "page" : undefined}
+                      className={cn("relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors lg:py-2",
+                        on ? "bg-gold/10 font-medium text-foreground" : "text-muted-foreground hover:bg-black/5 hover:text-foreground")}>
+                      <span className={cn("absolute bottom-1.5 left-0 top-1.5 w-[2px] rounded-full", on ? "bg-gold" : "bg-transparent")} />
+                      <n.icon className={cn("h-4 w-4", on && "text-gold")} />
+                      {n.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -15,14 +15,21 @@ async function signIn(page: Page, email: string) {
 
 const field = (page: Page, label: string) => page.locator("label", { hasText: label }).locator("input, select, textarea").first();
 
-test("an owner gets the shop's own wording and every menu", async ({ page }) => {
+test("a bridal owner gets the TRENDZ menu", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
-  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   const nav = page.getByLabel("Main navigation");
   await expect(nav.getByText("Kalyani Bridal")).toBeVisible();
-  for (const item of ["New booking", "Bookings", "Customers", "Outfits", "Money and reports", "Branches", "Staff", "Shop settings"]) {
-    await expect(nav.getByRole("link", { name: item })).toBeVisible();
+  for (const item of ["Dashboard", "Finance", "Bookings", "Inventory Search", "All Rentals", "Calendar", "Customers", "All Products",
+    "Add New Product", "Categories", "Branch Management", "Staff Management", "Stock Locations", "CSV Import", "Shop settings"]) {
+    await expect(nav.getByRole("link", { name: item, exact: true })).toBeVisible();
   }
+});
+
+test("a resort owner keeps the simpler menu", async ({ page }) => {
+  await signIn(page, "owner@resort.test");
+  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
+  await expect(page.getByLabel("Main navigation").getByRole("link", { name: "Money and reports" })).toBeVisible();
 });
 
 test("staff have no money, settings or console", async ({ page }) => {
@@ -76,6 +83,7 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
 
   await page.getByRole("button", { name: "Mark returned" }).click();
   const ret = page.getByRole("dialog");
+  await ret.getByRole("button", { name: "All received" }).click(); // clothes: every piece is ticked as it comes back
   await ret.getByRole("radio", { name: "Damaged" }).click();
   await ret.getByRole("button", { name: "Add charge" }).click();
   await ret.getByLabel("Charge amount").fill("500");
@@ -85,4 +93,65 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   await expect(page.getByText("Returned", { exact: true })).toBeVisible();
   await expect(page.getByText("₹2,900").first()).toBeVisible(); // 2,400 + 500 damage
   await expect(page.getByText("Paid", { exact: true }).first()).toBeVisible();
+});
+
+// a far, random day so repeated runs never collide
+const farDay = () => new Date(Date.now() + (60 + Math.floor(Math.random() * 300)) * 86_400_000).toISOString().slice(0, 10);
+
+test("bridal: scan a tag into the cart, check out, hand over, then scan it back in", async ({ page }) => {
+  await signIn(page, "owner@bridal.test");
+  await page.goto("/scan");
+  const box = page.getByLabel("Scan or type");
+  await box.fill("BR-SAR-001-GOLD-2");
+  await box.press("Enter");
+  await page.getByRole("button", { name: "Add this piece to cart" }).click();
+  await page.getByRole("link", { name: "Checkout (1)" }).first().click();
+  await expect(page).toHaveURL(/\/book$/);
+
+  const day = farDay();
+  await field(page, "Pickup").fill(`${day}T10:00`);
+  await field(page, "Return").fill(`${new Date(Date.parse(day) + 86_400_000).toISOString().slice(0, 10)}T18:00`);
+  await field(page, "Phone").fill("97" + String(Date.now()).slice(-8));
+  await field(page, "Name").fill("Scanned Bride");
+  await page.getByRole("button", { name: "Confirm booking" }).click();
+  await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
+  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(page.getByText("BR-SAR-001-GOLD-2").first()).toBeVisible(); // the exact piece that was scanned
+
+  await page.getByRole("button", { name: "Hand over" }).click();
+  const pickup = page.getByRole("dialog");
+  await pickup.getByRole("radio", { name: "Cash" }).first().click();
+  await pickup.getByRole("button", { name: "Hand over" }).click();
+  await expect(page.getByText("Out", { exact: true })).toBeVisible();
+
+  // the customer brings it back: scan the tag on "Receive back"
+  await page.goto("/scan");
+  await page.getByRole("tab", { name: "Receive back" }).click();
+  await page.getByLabel("Scan or type").fill("BR-SAR-001-GOLD-2");
+  await page.getByLabel("Scan or type").press("Enter");
+  const ret = page.getByRole("dialog");
+  await expect(ret.getByText("Pieces received (1 of 1)")).toBeVisible({ timeout: 15_000 });
+  await ret.getByRole("button", { name: "Mark returned" }).click();
+  await expect(page.getByText("Returned", { exact: true })).toBeVisible();
+});
+
+test("bridal: Add New Product makes every size and colour with its pieces", async ({ page }) => {
+  await signIn(page, "owner@bridal.test");
+  await page.goto("/catalog/new");
+  await field(page, "Product name").fill(`PW Saree ${Date.now()}`);
+  await field(page, "Price per day").fill("1500");
+  await page.getByRole("button", { name: "Next: Attributes" }).click();
+  const colours = page.getByLabel("Colour values");
+  await colours.fill("Red");
+  await colours.press("Enter");
+  await colours.fill("Blue");
+  await colours.press("Enter");
+  await expect(page.getByText("This makes 2 variations")).toBeVisible();
+  await page.getByRole("button", { name: "Next: Variations & Stock" }).click();
+  const stock = page.getByLabel("Pieces at MG Road");
+  await stock.nth(0).fill("2");
+  await stock.nth(1).fill("1");
+  await page.getByRole("button", { name: "Save product" }).first().click();
+  await expect(page.getByText("Saved, with 3 new pieces")).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/catalog\/[0-9a-f-]{36}$/);
 });

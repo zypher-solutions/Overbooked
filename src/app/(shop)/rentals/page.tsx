@@ -49,7 +49,8 @@ export default function Rentals() {
       const ids = (customers ?? []).map((c) => c.id);
       q = ids.length ? q.or(`token.ilike.${like},customer_id.in.(${ids.join(",")})`) : q.ilike("token", like);
     }
-    const { data, error } = await q.range(from, from + PAGE - 1);
+    // a unique last order keeps pages from repeating or skipping rows with the same date
+    const { data, error } = await q.order("id").range(from, from + PAGE - 1);
     if (error) {
       toast.error("Could not load bookings: " + errorText(error));
       return [];

@@ -27,7 +27,7 @@ export default function Customers() {
   const [busy, setBusy] = useState(false);
 
   const fetchPage = useCallback(async (from: number) => {
-    let q = createClient().from("customers").select("*").order("created_at", { ascending: false }).range(from, from + PAGE - 1);
+    let q = createClient().from("customers").select("*").order("created_at", { ascending: false }).order("id").range(from, from + PAGE - 1);
     if (term) {
       const like = `%${term.replace(/[%_,()*]/g, "")}%`;
       q = q.or(`full_name.ilike.${like},phone.ilike.${like},email.ilike.${like}`);

@@ -5,9 +5,11 @@ interface CameraScannerProps {
   onScan: (decodedText: string) => void;
   onError?: (error: any) => void;
   onClose: () => void;
+  /** shown in place (inside a dialog) instead of over the whole screen */
+  inline?: boolean;
 }
 
-export function CameraScanner({ onScan, onError, onClose }: CameraScannerProps) {
+export function CameraScanner({ onScan, onError, onClose, inline = false }: CameraScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -121,8 +123,8 @@ export function CameraScanner({ onScan, onError, onClose }: CameraScannerProps) 
   }, [onScan, onError]);
 
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4 backdrop-blur-sm ${isClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-surface p-4 shadow-2xl">
+    <div className={inline ? "rounded-xl border border-border bg-surface p-3" : `fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4 backdrop-blur-sm ${isClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={inline ? "w-full" : "w-full max-w-md overflow-hidden rounded-2xl bg-surface p-4 shadow-2xl"}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-display text-lg font-semibold">Scan Barcode</h3>
           <button 

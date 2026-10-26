@@ -37,7 +37,7 @@ export default function AuditLog() {
   const [open, setOpen] = useState<number | null>(null);
 
   const fetchPage = useCallback(async (from: number, shop: string) => {
-    let q = createClient().from("audit_log").select("*").order("performed_at", { ascending: false }).range(from, from + PAGE - 1);
+    let q = createClient().from("audit_log").select("*").order("performed_at", { ascending: false }).order("id").range(from, from + PAGE - 1);
     if (shop) q = q.eq("shop_id", shop);
     const { data, error } = await q;
     if (error) {

@@ -78,7 +78,7 @@ export default function Dashboard() {
       const size = limit ? Math.min(limit, 1000) : 1000;
       let q = supabase.from("payments")
         .select("*, rentals!payments_shop_rental_fkey!inner(token, branch_id, customers!rentals_shop_customer_fkey(full_name))", i === 0 ? { count: "exact" } : undefined)
-        .gte("paid_at", dayRange(from, tz).from).lt("paid_at", dayRange(to, tz).to).order("paid_at", { ascending: false }).range(i, i + size - 1);
+        .gte("paid_at", dayRange(from, tz).from).lt("paid_at", dayRange(to, tz).to).order("paid_at", { ascending: false }).order("id").range(i, i + size - 1);
       if (branch) q = q.eq("rentals.branch_id", branch);
       const { data, error, count: c } = await q;
       if (error) { toast.error(errorText(error)); break; }
@@ -100,11 +100,12 @@ export default function Dashboard() {
 
   const exportCsv = async () => {
     const { rows: all } = await fetchLedger();
+    // escapeFormulae: a note starting with = + - or @ must not run as a formula in Excel
     const csv = Papa.unparse(all.map((r) => ({
       date: fmtDateTime(r.paid_at, tz), booking: r.rentals?.token, customer: r.rentals?.customers?.full_name, type: PAYMENT_LABELS[r.kind],
       method: r.method ? METHOD_LABELS[r.method] : "", amount: (r.kind === "refund" || r.kind === "deposit_refund" ? -1 : 1) * Number(r.amount),
       branch: branches.find((b) => b.id === r.rentals?.branch_id)?.name, note: r.note ?? "",
-    })));
+    })), { escapeFormulae: true });
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url;
