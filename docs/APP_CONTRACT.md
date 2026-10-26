@@ -28,8 +28,8 @@ signed-in user's session; the database decides what each person may see and do.
 ## 2. Signing in, the person and their shop
 
 1. Sign in with email and password: `supabase.auth.signInWithPassword({ email, password })`.
-   People get their account from an **invite link** created in the web app (owners invite staff, Zypher
-   invites owners). The link opens the web page `/welcome`, where they set their password. The app does
+   People get their account from an **invite link** created in the web app (Zypher invites owners and staff from the console;
+   shops do not invite). The link opens the web page `/welcome`, where they set their password. The app does
    not create accounts.
 2. Read the person: `profiles` where `id = auth.uid()`:
    `full_name, role ('owner' | 'manager' | 'staff' | 'super_admin'), shop_id, branch_id, is_active`.

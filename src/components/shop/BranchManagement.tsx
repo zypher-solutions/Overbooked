@@ -47,7 +47,8 @@ export function BranchManagement() {
     setLoading(false);
   };
 
-  const canManage = profile?.role === "super_admin" || profile?.role === "owner";
+  // branches are set up by Zypher (Open shop from the console); the database allows no one else
+  const canManage = profile?.role === "super_admin";
 
   useEffect(() => {
     if (canManage) {
@@ -60,7 +61,7 @@ export function BranchManagement() {
       <div className="flex h-[50vh] flex-col items-center justify-center text-center">
         <ShieldAlert className="h-12 w-12 text-red-500 mb-4" />
         <h2 className="text-xl font-semibold text-foreground">Access Denied</h2>
-        <p className="text-muted-foreground mt-2">Only the shop owner can manage branches.</p>
+        <p className="text-muted-foreground mt-2">Branches are set up by the Zypher team. Contact Zypher to add or change one.</p>
       </div>
     );
   }

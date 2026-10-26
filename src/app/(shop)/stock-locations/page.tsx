@@ -12,7 +12,7 @@ import { PageHeader, Panel, StatusBadge, ghostButtonClass, tableWrap, theadClass
 // Stock Locations, as in TRENDZ: each branch with its contact details and how many pieces it holds,
 // free, out, in service or lost; open a branch to see the count of every item there.
 export default function StockLocations() {
-  const { isOwner, branches } = useShop();
+  const { role, branches } = useShop();
   const { stock } = useStock();
   const { products } = useCatalog({ includeInactive: true });
   const [openId, setOpenId] = useState<string | null>(null);
@@ -27,7 +27,7 @@ export default function StockLocations() {
     total: t.total + r.total, free: t.free + r.available_now, out: t.out + r.out_now, service: t.service + Number(r.maintenance), lost: t.lost + Number(r.lost),
   }), { total: 0, free: 0, out: 0, service: 0, lost: 0 });
 
-  if (!isOwner) return <Panel><p className="text-sm text-muted-foreground">Stock locations are for the owner.</p></Panel>;
+  if (role !== "super_admin") return <Panel><p className="text-sm text-muted-foreground">Stock locations are set up by the Zypher team.</p></Panel>;
 
   return (
     <>

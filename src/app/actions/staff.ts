@@ -7,7 +7,8 @@ const LOGIN_LIMITS: Record<string, number | undefined> = { starter: 3 };
 
 export async function inviteStaff(input: { email: string; fullName: string; role: ShopRole; branchId: string | null }) {
   const { supabase, user, role, shopId } = await getCaller();
-  if (role !== "owner" && role !== "super_admin") throw new Error("Only the shop owner can invite staff.");
+  // staff are set up by Zypher from the console (Open shop), not by the shop itself
+  if (role !== "super_admin") throw new Error("Only Zypher can invite staff.");
   if (!shopId) throw new Error("No shop selected.");
   if (!EMAIL_RE.test(input.email.trim())) throw new Error("Enter a valid email address.");
   if (!input.fullName.trim()) throw new Error("Enter the person's name.");
@@ -39,16 +40,15 @@ export async function inviteStaff(input: { email: string; fullName: string; role
 }
 
 // A fresh one-hour link that lets someone (re)set their password: an invite that expired, or a
-// forgotten password. Owners can do this for managers and staff; Zypher for anyone in the shop.
+// forgotten password. Zypher does this for anyone in the shop.
 export async function newInviteLink(userId: string) {
   const { supabase, user, role } = await getCaller();
-  if (role !== "owner" && role !== "super_admin") throw new Error("Only the shop owner can send login links.");
+  if (role !== "super_admin") throw new Error("Only Zypher can send login links.");
   if (userId === user.id) throw new Error("Use Change password for your own account.");
 
   // the cookie client only sees profiles of this shop
   const { data: target } = await supabase.from("profiles").select("id, role").eq("id", userId).maybeSingle();
   if (!target) throw new Error("Staff member not found in this shop.");
-  if (role === "owner" && target.role === "owner") throw new Error("Only Zypher can send a login link to another owner.");
 
   const admin = createAdminClient();
   const { data: authUser } = await admin.auth.admin.getUserById(userId);

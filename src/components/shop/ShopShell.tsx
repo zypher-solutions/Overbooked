@@ -28,6 +28,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const isZypher = role === "super_admin";
 
   // Bridal and groom: the TRENDZ menu. Other businesses keep the simpler one.
   const groups: NavGroup[] = loading ? [] : trendz ? [
@@ -47,12 +48,13 @@ export function ShopShell({ children }: { children: ReactNode }) {
       { href: "/catalog", label: "All Products", icon: LayoutGrid, show: true },
       { href: "/catalog/new", label: "Add New Product", icon: Plus, show: canManage },
       { href: "/catalog?tab=categories", label: "Categories", icon: Tag, show: canManage },
-    ] },
-    { title: "Admin", items: [
-      { href: "/branches", label: "Branch Management", icon: Building2, show: isOwner },
-      { href: "/staff", label: "Staff Management", icon: Users, show: isOwner },
-      { href: "/stock-locations", label: "Stock Locations", icon: Boxes, show: isOwner },
       { href: "/catalog/import", label: "CSV Import", icon: Upload, show: canManage },
+    ] },
+    // branches, staff and where stock is kept are set up by Zypher (Open shop from the console), not by the shop
+    { title: "Admin", items: [
+      { href: "/branches", label: "Branch Management", icon: Building2, show: isZypher },
+      { href: "/staff", label: "Staff Management", icon: Users, show: isZypher },
+      { href: "/stock-locations", label: "Stock Locations", icon: Boxes, show: isZypher },
       { href: "/settings", label: "Shop settings", icon: Settings, show: isOwner },
     ] },
   ] : [{ items: [
@@ -64,8 +66,8 @@ export function ShopShell({ children }: { children: ReactNode }) {
     { href: "/customers", label: "Customers", icon: UserSquare, show: true },
     { href: "/catalog", label: word("items", "Catalog"), icon: LayoutGrid, show: true },
     { href: "/dashboard", label: "Money and reports", icon: LineChart, show: canManage },
-    { href: "/branches", label: "Branches", icon: Building2, show: isOwner },
-    { href: "/staff", label: "Staff", icon: Users, show: isOwner },
+    { href: "/branches", label: "Branches", icon: Building2, show: isZypher },
+    { href: "/staff", label: "Staff", icon: Users, show: isZypher },
     { href: "/settings", label: "Shop settings", icon: Settings, show: isOwner },
   ] }];
   const visible = groups.map((g) => ({ ...g, items: g.items.filter((n) => n.show) })).filter((g) => g.items.length);

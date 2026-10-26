@@ -21,9 +21,32 @@ test("a bridal owner gets the TRENDZ menu", async ({ page }) => {
   const nav = page.getByLabel("Main navigation");
   await expect(nav.getByText("Kalyani Bridal")).toBeVisible();
   for (const item of ["Dashboard", "Finance", "Bookings", "Inventory Search", "All Rentals", "Calendar", "Customers", "All Products",
-    "Add New Product", "Categories", "Branch Management", "Staff Management", "Stock Locations", "CSV Import", "Shop settings"]) {
+    "Add New Product", "Categories", "CSV Import", "Shop settings"]) {
     await expect(nav.getByRole("link", { name: item, exact: true })).toBeVisible();
   }
+  // branches, staff and stock locations are set up by Zypher, not by the shop
+  for (const item of ["Branch Management", "Staff Management", "Stock Locations"]) {
+    await expect(nav.getByRole("link", { name: item, exact: true })).toHaveCount(0);
+  }
+  await page.goto("/staff");
+  await expect(page.getByText("Staff logins are set up by the Zypher team.")).toBeVisible();
+});
+
+test("Zypher opens a bridal shop and gets its admin menu", async ({ page }) => {
+  await signIn(page, "zypher@overbooked.test");
+  await page.getByRole("link", { name: "Shops", exact: true }).click();
+  await page.getByRole("link", { name: "Kalyani Bridal" }).click();
+  const open = page.getByRole("button", { name: "Open shop" });
+  if (await open.isVisible()) await open.click(); // the demo data may already have it open
+  else await page.getByRole("link", { name: "Go to shop" }).click();
+  await page.waitForURL((u) => u.pathname === "/", { timeout: 15_000 });
+  const nav = page.getByLabel("Main navigation");
+  for (const item of ["Branch Management", "Staff Management", "Stock Locations"]) {
+    await expect(nav.getByRole("link", { name: item, exact: true })).toBeVisible();
+  }
+  await nav.getByRole("link", { name: "Staff Management", exact: true }).click();
+  await expect(page.getByRole("button", { name: /invite/i }).first()).toBeVisible();
+  await expect(page.getByText("Staff logins are set up by the Zypher team.")).toHaveCount(0);
 });
 
 test("a resort owner keeps the simpler menu", async ({ page }) => {

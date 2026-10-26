@@ -26,8 +26,8 @@ their shop, role and branch. The screens only make it pleasant; the database has
 ## Roles
 | Role | Who | Can |
 | --- | --- | --- |
-| super_admin | Zypher staff | The console; open any shop and act as its owner |
-| owner | Shop owner | Everything in the shop: all branches, money, corrections, staff, settings |
+| super_admin | Zypher staff | The console; open any shop and act as its owner; the only role that adds branches, invites staff and changes roles |
+| owner | Shop owner | Runs the shop: all branches, bookings, products, money, corrections, shop settings (branches and staff are set up by Zypher) |
 | manager | Branch manager | Own branch: bookings, catalog and units there, money reports for the branch |
 | staff | Counter staff | Own branch: bookings, handovers, returns, customers; no money reports |
 
@@ -50,7 +50,8 @@ says "Check-in" and asks for guests, a car shop asks for odometer, fuel and lice
 | Customers | Search, history, what they owe, ID and licence, block |
 | Catalog | Items by category with prices per rate type, units per branch and their status, extras, categories, CSV import |
 | Money and reports | Money in by method, booked value, owed, deposits held, every money record (CSV), stock right now |
-| Branches, Staff, Settings | Owner only: branches, invite links, roles, shop rules (grace time, check-in/out times, licence rule) |
+| Branches, Staff | Zypher only (Open shop from the console): branches, invite links, roles |
+| Settings | Owner: shop rules (grace time, check-in/out times, licence rule) |
 
 ### Bridal and groom shops: the TRENDZ screens
 A shop whose business types are all clothes (`trendz` in `ShopContext`) gets the screens of TRENDZ, the
@@ -64,7 +65,7 @@ admin panel Overbooked grew from. Cars, bikes and resorts keep the screens above
 | | Inventory Search (`/scan`) | Scan a tag (camera or USB scanner) or type a name, SKU, piece code or booking no. Find and book: stock per branch (Total / Avail / Rented), Add to Cart. Receive back: a scanned piece opens its return with that piece ticked |
 | | All Rentals | Products with stock per branch; tap for Add to Cart per size and branch, and who has it out |
 | Products | All Products, Add New Product, Categories | Add New Product is a 3-step form: basic info, attributes (Colour, Size...), variations and pieces per branch (pieces are created with codes for QR tags). Changing a product uses the same form |
-| Admin | Branch / Staff Management, Stock Locations, CSV Import, Shop settings | Stock Locations: pieces per branch (free, out, service, lost) |
+| Admin | Branch / Staff Management, Stock Locations (Zypher only), Shop settings (owner) | Stock Locations: pieces per branch (free, out, service, lost). CSV Import sits under Products |
 
 The cart (`src/lib/shop/cart.tsx`) keeps items per person and shop on the device; a floating Checkout (n)
 opens the booking form with them. On a return, clothes are ticked piece by piece (scanned, typed or tapped);

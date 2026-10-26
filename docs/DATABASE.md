@@ -56,7 +56,8 @@ fee); 0 ≤ paid ≤ total; deposit given back + kept ≤ deposit received; end 
 | Corrections (owner, with a reason) | `admin_set_discount`, `admin_set_line_amount`, `admin_update_payment`, `admin_delete_payment`, `admin_delete_charge`, `admin_delete_rental` |
 | Catalog | `save_product`, `save_set_items`, `import_catalog`, `delete_or_deactivate_product`, `set_unit_status` |
 | Reports | `inventory_status`, `dashboard_summary` |
-| Staff and shop | `get_staff_emails`, `admin_set_staff_status`, `set_staff_branch`, `update_my_shop` |
+| Staff (Zypher only, inside an opened shop) | `get_staff_emails`, `admin_set_staff_status`, `set_staff_branch`; branches are written by Zypher only |
+| Shop details (owner) | `update_my_shop` |
 | Zypher only | `create_shop`, `switch_shop`, `update_shop`, `record_shop_payment`, `platform_overview`, `console_summary`, `shop_detail`, `pause_overdue_shops` (also nightly) |
 
 Each function checks the caller's role, branch and shop itself. Shop functions are owned by `app_rpc`,

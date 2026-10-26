@@ -36,7 +36,8 @@ const SHOP_ROLES = ["owner", "manager", "staff"] as const;
 
 export function StaffManagement() {
   const { profile, shop } = useAuth();
-  const canManage = profile?.role === "super_admin" || profile?.role === "owner";
+  // staff are set up by Zypher (Open shop from the console); the database allows no one else
+  const canManage = profile?.role === "super_admin";
   const [invite, setInvite] = useState({ email: "", fullName: "", role: "staff" as (typeof SHOP_ROLES)[number], branchId: "" });
   const [inviting, setInviting] = useState(false);
   const [shareLink, setShareLink] = useState<{ name: string; link: string } | null>(null);
@@ -110,7 +111,7 @@ export function StaffManagement() {
       <div className="flex h-[50vh] flex-col items-center justify-center text-center">
         <ShieldAlert className="h-12 w-12 text-red-500 mb-4" />
         <h2 className="text-xl font-semibold text-foreground">Access Denied</h2>
-        <p className="text-muted-foreground mt-2">Only the shop owner can manage staff.</p>
+        <p className="text-muted-foreground mt-2">Staff logins are set up by the Zypher team. Contact Zypher to add someone or change a role.</p>
       </div>
     );
   }
