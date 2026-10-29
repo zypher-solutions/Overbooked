@@ -35,7 +35,7 @@
   Ledger Records with Record payment, Export PDF and Records CSV, search in place, phone cards. Audit in docs/TRENDZ_PARITY.md
 - Bookings (Buffer, Available, Completed Bookings) and All Products (stock filter, Delete, Reactivate, phone cards) match TRENDZ
 - One "Clothing rental" business type replaces Bridal wear and Groom wear (they were identical); Colour and Size attributes offer
-  clickable suggestions, the attribute name is a dropdown with Custom, "Can be booked" is now "Available for booking"
+  clickable suggestions, the attribute name is a dropdown with Custom, the "Can be booked" tick box is removed (Delete and Reactivate in All Products cover it)
 - **Zypher is setup and billing only**: the console and Open shop can no longer read or change a shop's bookings, customers, money,
   products or photos (the database refuses, not just the menu). A per-shop Zypher login (role `support`) works inside one shop for
   debugging, without money corrections. Closed: a recovery link could be made for any user; billing, shops and business types could be

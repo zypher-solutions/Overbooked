@@ -176,7 +176,6 @@ export function ProductEditor({ product, onSaved, asSet = false }: { product?: P
               <Field label="Purchase price (₹)" hint="For your own records">
                 <input className={monoInputClass} inputMode="decimal" value={d.purchase_price} onChange={(e) => set({ purchase_price: e.target.value })} />
               </Field>
-              <label className="flex flex-col gap-0.5 self-end pb-2 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={d.is_active} onChange={(e) => set({ is_active: e.target.checked })} /> Available for booking</span><span className="pl-6 text-xs text-muted-foreground">Untick to hide it from new bookings. Its history is kept.</span></label>
               <Field label="Description" className="sm:col-span-2"><textarea className={inputClass} rows={2} value={d.description} onChange={(e) => set({ description: e.target.value })} /></Field>
             </div>
             <div>

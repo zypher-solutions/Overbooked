@@ -297,7 +297,6 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
               <Field label="Replacement value (₹)" hint="Charged if it is lost">
                 <input className={monoInputClass} inputMode="decimal" value={basic.replacement_value} onChange={(e) => setBasic({ ...basic, replacement_value: e.target.value })} />
               </Field>
-              <label className="flex flex-col gap-0.5 self-end pb-2 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={basic.is_active} onChange={(e) => setBasic({ ...basic, is_active: e.target.checked })} /> Available for booking</span><span className="pl-6 text-xs text-muted-foreground">Untick to hide it from new bookings. Its history is kept.</span></label>
               <Field label="Description" className="sm:col-span-2"><textarea className={inputClass} rows={2} value={basic.description} onChange={(e) => setBasic({ ...basic, description: e.target.value })} /></Field>
             </div>
             <div>
