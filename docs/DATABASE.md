@@ -21,6 +21,8 @@ from zero; `npx supabase test db` then runs the database tests in `supabase/test
 | `20261101000023_expenses.sql` | Expenses and their totals for Finance |
 | `20261101000024_save_product_with_pieces.sql` | A product and its pieces saved in one step |
 | `20261101000025_invoice_numbers.sql` | Tax invoice number and date, fixed when issued |
+| `20261101000026_trial_in_console.sql` | The console shows a shop's trial end; a shop in its trial is not overdue |
+| `20261101000027_finance_open_money.sql` | The rentals where money is still open, for Finance's outstanding and deposits held |
 
 ## Business types are data
 A **template** (`business_templates`) describes a type of business: its kind (`wearable` by day,

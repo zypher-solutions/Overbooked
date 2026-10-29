@@ -17,6 +17,7 @@ const FILTERS: { key: "all" | BillingState; label: string }[] = [
   { key: "overdue", label: "Overdue" },
   { key: "due_soon", label: "Due soon" },
   { key: "paid", label: "Paid" },
+  { key: "trial", label: "Trial" },
   { key: "paused", label: "Paused" },
 ];
 

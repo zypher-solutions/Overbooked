@@ -156,8 +156,8 @@ SELECT is(jsonb_array_length(public.shop_detail('5a000000-0000-0000-0000-0000000
           'shop detail lists the shop''s logins, with emails');
 SELECT is((public.console_summary() ->> 'monthly_due')::numeric, (SELECT sum(monthly_fee) FROM shops WHERE status = 'active'),
           'console monthly fees = sum of active shops'' fees');
-SELECT is((public.console_summary() ->> 'overdue')::integer, 2,
-          'overdue = the unpaid seeded shop + the new shop that has never paid');
+SELECT is((public.console_summary() ->> 'overdue')::integer, 1,
+          'overdue = the unpaid seeded shop; the new shop is in its free trial');
 SELECT pg_temp.act_as(:bridal_owner);
 SELECT throws_like($$ SELECT public.shop_detail('5a000000-0000-0000-0000-000000000001') $$, 'Only Zypher can do this',
   'owners cannot read the console''s shop detail');

@@ -992,6 +992,11 @@ isOneToOne: false
 "extend_rental":
 { Args: { "p_new_end": string,"p_payment"?: Json,"p_rental_id": string }; Returns: Json
                            },
+"finance_open_money":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "actual_start_at": string,"branch_id": string,"cancellation_fee": number,"cancelled_at": string,"deposit_applied": number,"deposit_received": number,"deposit_refunded": number,"id": string,"paid": number,"status": string,"total": number
+            }[]
+                           },
 "find_available_units":
 { Args: { "p_branch_id": string,"p_end": string,"p_start": string,"p_variation_id": string }; Returns: {
               "code": string,"unit_id": string
@@ -1047,7 +1052,7 @@ isOneToOne: false
                            },
 "platform_overview":
 { Args: Record<PropertyKey, never>; Returns: {
-              "active_logins": number,"branches": number,"business_types": (string)[],"created_at": string,"last_payment_amount": number,"last_payment_on": string,"monthly_fee": number,"name": string,"paid_until": string,"phone": string,"plan": string,"rentals_30d": number,"shop_id": string,"slug": string,"status": string,"token_prefix": string,"units": number
+              "active_logins": number,"branches": number,"business_types": (string)[],"created_at": string,"last_payment_amount": number,"last_payment_on": string,"monthly_fee": number,"name": string,"paid_until": string,"phone": string,"plan": string,"rentals_30d": number,"shop_id": string,"slug": string,"status": string,"token_prefix": string,"trial_ends": string,"units": number
             }[]
                            },
 "price_line":

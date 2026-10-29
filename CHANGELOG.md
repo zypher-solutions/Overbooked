@@ -17,6 +17,13 @@
     a shop without GSTIN prints a plain receipt; a cancelled booking prints a cancellation receipt; optional SAC code in Shop settings
   - each kind of shop is sent to its own screens (bridal shops never land on the old lists, car shops never on the clothing screens)
   - the app can be added to a phone's home screen (web app manifest and icons)
+  - the return screen asks before closing a rental that leaves money unpaid or a deposit held, and a piece marked lost gets a
+    "Lost item" charge of its replacement value (staff can change it)
+  - the console shows "Trial, N days left" (migration 26); a shop in its trial is not counted as overdue; the owner invite checks the
+    plan's login limit first and is written to the audit log
+  - Finance loads only the rentals in the dates plus those with money still open (`finance_open_money`, migration 27), not every rental
+  - load test on today's code: one busy shop-year (6,000 bookings) adds 35 MB; screens load in 6 to 31 ms, 62 KB on average
+    (scripts/load-data.sql was updated for the SKU rule)
 - New database designed from scratch for bridal, groom, resort, car and bike rentals; the inherited TRENDZ
   migrations and QA history are removed
 - One rental record from booking to return, time ranges, double booking blocked by the database, business

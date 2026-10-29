@@ -23,9 +23,12 @@ aside until this is right.
   holds PR #1 (the TRENDZ screens). The pre-launch work of 29 Oct (migrations 22 to 25, expenses, invoices, route guards, phone app) is in
   one local commit on top. Nothing has been deployed; staging and production do not exist yet.
 - Checks at last run (29 Oct 2026, evening): `npx tsc --noEmit` clean, `npm run lint` clean, `npm run build` ok,
-  353 database tests, 23 browser tests, all passing.
+  358 database tests, 25 browser tests, all passing. Load test (6,000 bookings in one shop-year): 6 to 31 ms a screen.
 - The full plan, with decisions and costs: `docs/LAUNCH_PLAN.md`. Parked on purpose: our own backups beyond Supabase's 7 days
   (the owner will decide with the partner), and business and pricing talk.
+- Not done yet, on purpose: shop data export, voiding a wrong Zypher payment, usage page, announcements, offboarding, the per-shop
+  customisation tidy-up (a shop stores only what differs; checked settings), code clean-up (typed queries, unused components, big files),
+  hosting, email sender, backups beyond 7 days, the price list in the console, `docs/SALES.md`.
 - Open for the owner: the GitHub handle for `.github/CODEOWNERS` (still a placeholder); push and branch clean-up (delete the merged
   `multi-shop`, `v2-engine`, `feature/trendz-screens`); the late-return rule (a piece still out is unavailable for any future date until it
   comes back; confirm); whether the late fee should use the agreed price instead of the catalogue day rate; tax invoice timing

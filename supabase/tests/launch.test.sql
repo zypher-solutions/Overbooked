@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(25);
+SELECT plan(30);
 
 \set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
@@ -112,6 +112,16 @@ SELECT throws_like($$ UPDATE customers SET is_blocked = false WHERE phone = '900
 SELECT pg_temp.act_as(:bridal_manager);
 SELECT lives_ok($$ UPDATE customers SET is_blocked = false WHERE phone = '9000000088' $$, 'a manager can');
 
+-- ===== 5b. Finance loads only the rentals where money is still open =====
+SELECT pg_temp.act_as(:bridal_owner);
+SELECT is((SELECT count(*) FROM public.finance_open_money() WHERE id = (SELECT id FROM t_ids WHERE name = 'late')), 1::bigint,
+  'a returned rental whose deposit is still held is listed');
+SELECT is((SELECT count(*) FROM public.finance_open_money() WHERE id = (SELECT id FROM t_ids WHERE name = 'price')), 0::bigint,
+  'a booking not picked up is not');
+SELECT is((SELECT sum(deposit_received - deposit_refunded - deposit_applied) FROM public.finance_open_money()),
+  (SELECT sum(deposit_received - deposit_refunded - deposit_applied) FROM rentals WHERE status IN ('active', 'completed', 'cancelled', 'no_show')),
+  'the deposits held add up to the same as summing every rental');
+
 -- ===== 6. trial =====
 SELECT pg_temp.act_as(:zypher);
 SELECT lives_ok($$ SELECT public.create_shop('{"name": "Trial Boutique", "slug": "trial-boutique", "token_prefix": "TRB",
@@ -119,6 +129,10 @@ SELECT lives_ok($$ SELECT public.create_shop('{"name": "Trial Boutique", "slug":
 SELECT pg_temp.as_postgres();
 SELECT is((SELECT trial_ends FROM shops WHERE slug = 'trial-boutique'), (now() AT TIME ZONE 'Asia/Kolkata')::date + 14, 'it has a 14 day trial');
 SELECT is(public.pause_overdue_shops(), 0, 'a shop in its trial is not paused for a missing payment');
+
+SELECT pg_temp.act_as(:zypher);
+SELECT is((SELECT trial_ends FROM platform_overview() WHERE slug = 'trial-boutique'), (now() AT TIME ZONE 'Asia/Kolkata')::date + 14, 'the console shows the trial end');
+SELECT cmp_ok((public.console_summary() ->> 'in_trial')::integer, '>=', 1, 'and counts the shop as in trial, not overdue');
 
 SELECT * FROM finish();
 ROLLBACK;

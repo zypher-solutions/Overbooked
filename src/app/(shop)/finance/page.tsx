@@ -95,16 +95,22 @@ export default function Finance() {
     const start = first ? dayRange(first, tz).from : "1970-01-01T00:00:00Z";
     const end = dayRange(to > closeDay ? to : closeDay, tz).to;
     try {
-      const [p, r] = await Promise.all([
+      const [p, inRange, open] = await Promise.all([
         pageAll<PayRow>((a, b) => supabase.from("payments")
           .select("id, rental_id, kind, amount, method, paid_at, note, rentals!payments_shop_rental_fkey(token, branch_id, customers!rentals_shop_customer_fkey(full_name))")
           .gte("paid_at", start).lt("paid_at", end).order("paid_at").order("id").range(a, b)),
-        // shortcut: loads the money columns of every rental out or returned, for "outstanding" and "deposits held";
-        // move this into a database function once a shop has tens of thousands of rentals
-        pageAll<RentalMoney>((a, b) => supabase.from("rentals")
-          .select("id, branch_id, status, total, paid, cancellation_fee, actual_start_at, cancelled_at, deposit_received, deposit_refunded, deposit_applied")
-          .in("status", ["active", "completed", "cancelled", "no_show"]).order("id").range(a, b)),
+        // "earned" needs the rentals picked up (or cancelled) in the dates; "outstanding" and "deposits held" need the rentals where
+        // money is still open. Together that is a few rows, however many rentals the shop has had.
+        pageAll<RentalMoney>((a, b) => {
+          let q = supabase.from("rentals")
+            .select("id, branch_id, status, total, paid, cancellation_fee, actual_start_at, cancelled_at, deposit_received, deposit_refunded, deposit_applied")
+            .in("status", ["active", "completed", "cancelled", "no_show"]);
+          if (first) q = q.or(`actual_start_at.gte.${start},cancelled_at.gte.${start}`);
+          return q.order("id").range(a, b);
+        }),
+        pageAll<RentalMoney>((a, b) => supabase.rpc("finance_open_money").order("id").range(a, b)),
       ]);
+      const r = Array.from(new Map([...inRange, ...open].map((x) => [x.id, x])).values());
       setPays(p.map((x) => ({ ...x, amount: Number(x.amount) })));
       setRentals(r.map((x) => ({ ...x, total: Number(x.total), paid: Number(x.paid), cancellation_fee: Number(x.cancellation_fee),
         deposit_received: Number(x.deposit_received), deposit_refunded: Number(x.deposit_refunded), deposit_applied: Number(x.deposit_applied) })));

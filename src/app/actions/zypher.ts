@@ -59,6 +59,7 @@ export async function createShopWithOwner(input: {
       branchId: null,
       invitedBy: user.id,
     });
+    await supabase.rpc("log_setup_event", { p_shop_id: shopId as string, p_action: "shop_created", p_detail: { name: input.name, plan: input.plan, owner_email: input.ownerEmail.trim().toLowerCase() } });
     return { shopId: shopId as string, link };
   } catch (e: any) {
     return { shopId: shopId as string, link: null, inviteError: e?.message ?? "Could not create the owner's invite." };
@@ -67,9 +68,12 @@ export async function createShopWithOwner(input: {
 
 // Invite (or re-invite) a shop's owner without opening the shop.
 export async function inviteShopOwner(input: { shopId: string; ownerName: string; ownerEmail: string }) {
-  const { user } = await requireZypher();
+  const { supabase, user } = await requireZypher();
   if (!EMAIL_RE.test(input.ownerEmail.trim())) throw new Error("Enter a valid owner email.");
   if (!input.ownerName.trim()) throw new Error("Enter the owner's name.");
+  // the plan's login limit is checked first, so Zypher sees a clear message instead of a database error
+  const { error: limitErr } = await supabase.rpc("setup_check_invite", { p_shop_id: input.shopId, p_role: "owner", p_branch_id: null });
+  if (limitErr) throw new Error(limitErr.message);
   const link = await createInviteLink({
     shopId: input.shopId,
     email: input.ownerEmail,
@@ -78,6 +82,7 @@ export async function inviteShopOwner(input: { shopId: string; ownerName: string
     branchId: null,
     invitedBy: user.id,
   });
+  await supabase.rpc("log_setup_event", { p_shop_id: input.shopId, p_action: "invite_created", p_detail: { email: input.ownerEmail.trim().toLowerCase(), role: "owner" } });
   return { link };
 }
 
