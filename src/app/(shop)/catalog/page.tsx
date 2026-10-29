@@ -33,7 +33,7 @@ function Catalog() {
     <>
       <PageHeader title={trendz ? (tab === "categories" ? "Categories" : "All Products") : word("items", "Catalog")}
         actions={canManage ? <>
-          <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link>
+          {tab === "items" ? <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link> : null}
           <Link href="/catalog/import" className={ghostButtonClass}><Upload className="h-4 w-4" /> Import</Link>
           {feature("sets") && templates.some((t) => t.kind === "wearable") ? (
             <Link href="/catalog/new?set=1" className={ghostButtonClass}><Plus className="h-4 w-4" /> New set</Link>
