@@ -102,6 +102,8 @@ export interface Rental {
   children: number;
   with_driver: boolean;
   whole_property: boolean;
+  /** days a piece is kept back for cleaning after the return (bridal and groom); null = the product's own turnaround */
+  cleaning_days: number | null;
   deposit_agreed: number;
   items_total: number;
   add_ons_total: number;

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
+import { useCatalog } from "@/lib/shop/useCatalog";
 import { errorText, num } from "@/lib/shop/format";
 import type { Product, Unit } from "@/lib/shop/types";
 import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "./ui";
@@ -19,7 +20,9 @@ import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButt
 // branch holds; saving creates those pieces with their own codes (printable as QR tags).
 // Changing a product uses the same form: pieces can be added here, and removed from the Pieces list.
 interface Attr { key: string; label: string; values: string[] }
-interface VarRow { id?: string; key: string; attributes: Record<string, string>; name: string; sku: string; rate: string; enabled: boolean; stock: Record<string, string> }
+interface VarRow { id?: string; key: string; attributes: Record<string, string>; name: string; sku: string; savedSku?: string; rate: string; enabled: boolean; stock: Record<string, string> }
+// product and variation SKUs of bridal and groom shops, as in TRENDZ: BR-001, BR-001-GOLD-M
+const SKU_PATTERN = /^[A-Z]{2,6}-[0-9]{3,4}(-[A-Za-z0-9]+)*$/;
 interface Basic { category_id: string; name: string; sku: string; rate: string; replacement_value: string; description: string; image_url: string; is_active: boolean }
 type Step = "basic" | "attributes" | "variations";
 
@@ -78,7 +81,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     })));
     setRows(vars.map((v) => {
       const a = Object.fromEntries(Object.entries(v.attributes ?? {}).map(([k, x]) => [k, String(x)]));
-      return { id: v.id, key: comboKey(a), attributes: a, name: v.name, sku: v.sku, enabled: v.is_enabled, stock: {},
+      return { id: v.id, key: comboKey(a), attributes: a, name: v.name, sku: v.sku, savedSku: v.sku, enabled: v.is_enabled, stock: {},
         rate: String(v.variation_rates?.find((r) => r.rate_type === "day")?.amount ?? "") };
     }));
     const first = vars.find((v) => v.variation_rates?.some((r) => r.rate_type === "day"));
@@ -102,7 +105,21 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     try { localStorage.setItem(draftKey, JSON.stringify({ basic, attrs, rows })); } catch { /* ignore */ }
   }, [basic, attrs, rows, product, draftKey]);
 
-  const productSku = basic.sku || (basic.name ? `${categories.find((c) => c.id === basic.category_id)?.sku_prefix ? categories.find((c) => c.id === basic.category_id)!.sku_prefix + "-" : ""}${skuPart(basic.name)}` : "");
+  // As in TRENDZ the product SKU cannot be typed: the category's base SKU and the next number (BR-001, BR-002...).
+  // A product being changed keeps its SKU.
+  const { products: allProducts } = useCatalog({ includeInactive: true });
+  const prefix = categories.find((c) => c.id === basic.category_id)?.sku_prefix ?? "";
+  const nextSku = useMemo(() => {
+    if (!prefix) return "";
+    let max = 0;
+    for (const p of allProducts ?? []) {
+      if (!p.sku.startsWith(prefix + "-")) continue;
+      const n = parseInt(p.sku.slice(prefix.length + 1), 10);
+      if (!Number.isNaN(n) && n > max) max = n;
+    }
+    return `${prefix}-${String(max + 1).padStart(3, "0")}`;
+  }, [prefix, allProducts]);
+  const productSku = product ? product.sku : nextSku;
   const autoName = (a: Record<string, string>) => Object.values(a).filter(Boolean).join(" / ") || basic.name.trim() || "Standard";
   const autoSku = (a: Record<string, string>) => `${productSku}${Object.values(a).filter(Boolean).length ? "-" + skuPart(Object.values(a).filter(Boolean).join("-")) : ""}`;
 
@@ -130,7 +147,8 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   const validBasic = () => {
     if (!basic.category_id) { toast.error("Choose a category."); return false; }
     if (!basic.name.trim()) { toast.error("Name the product."); return false; }
-    if (!/^[A-Z0-9-]{2,40}$/.test(productSku)) { toast.error("The SKU can use letters, numbers and hyphens (2 to 40)."); return false; }
+    if (!product && !prefix) { toast.error("This category has no base SKU yet. Set it on the Categories page first."); return false; }
+    if (!product && allProducts === null) { toast.error("Still loading the products. Try again in a moment."); return false; }
     return true;
   };
   const goAttributes = () => { if (validBasic()) setStep("attributes"); };
@@ -160,6 +178,9 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     const sent = rows.filter((r) => r.id || r.enabled);
     const skus = sent.map((r) => (r.sku || autoSku(r.attributes)).toUpperCase());
     if (new Set(skus).size !== skus.length) return toast.error("Two variations have the same SKU. Change one of them.");
+    // a new or changed variation SKU follows the shop's pattern (a saved one that was not touched is left alone)
+    const bad = skus.find((s, i) => !SKU_PATTERN.test(s) && s !== sent[i].savedSku);
+    if (bad) return toast.error(`SKU ${bad} is not allowed: start with ${productSku}, then more parts after hyphens (e.g. ${productSku}-GOLD-M).`);
     setBusy(true);
     try {
       const id = await call<string>("save_product", {
@@ -267,8 +288,8 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
                   {wearCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </Field>
-              <Field label="SKU" hint="Filled in for you; type your own code if you have one">
-                <input className={monoInputClass} value={basic.sku} placeholder={productSku} onChange={(e) => setBasic({ ...basic, sku: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "") })} />
+              <Field label="Base SKU" hint={prefix || product ? "From the category and numbered for you" : "This category has no base SKU yet (Categories page)"}>
+                <input className={cn(monoInputClass, "cursor-not-allowed bg-surface opacity-70")} value={productSku} readOnly />
               </Field>
               <Field label="Price per day (₹)" hint="Starting price for every size; agree any price per booking">
                 <input className={monoInputClass} inputMode="decimal" value={basic.rate} onChange={(e) => setBasic({ ...basic, rate: e.target.value })} />

@@ -74,9 +74,9 @@ SELECT throws_like($$ SELECT public.update_rental((SELECT id FROM rentals WHERE 
 -- ===========================================================================
 SELECT pg_temp.as_postgres();
 INSERT INTO products (id, shop_id, category_id, name, sku) VALUES
-  ('d0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Bridal set', 'BR-SET-1');
+  ('d0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Bridal set', 'BR-901');
 INSERT INTO product_variations (id, shop_id, product_id, name, sku) VALUES
-  ('e0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-0000000000ff', 'Standard', 'BR-SET-1-STD');
+  ('e0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-0000000000ff', 'Standard', 'BR-901-STD');
 SELECT pg_temp.act_as(:bridal_owner);
 SELECT throws_like($$ SELECT public.save_set_items('d0000000-0000-0000-0000-0000000000ff', '[{"variation_id": "e0000000-0000-0000-0000-000000000011"}]') $$,
   'Sets are not switched on%', 'sets need the feature');

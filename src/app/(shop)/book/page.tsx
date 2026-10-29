@@ -11,7 +11,7 @@ import { useCart, type CartLine } from "@/lib/shop/cart";
 import { call, loadRental, money, type RentalDetail } from "@/lib/shop/api";
 import { headlinePrice, useCatalog, variationLabel } from "@/lib/shop/useCatalog";
 import {
-  BASIS_LABELS, addDays, errorText, isoToZoned, lineMath, num, plural, rupees, todayLocal, zonedToIso,
+  BASIS_LABELS, addDays, errorText, fmtDate, isoToZoned, lineMath, num, plural, rupees, todayLocal, zonedToIso,
 } from "@/lib/shop/format";
 import type { Customer, Method, Product, Quote, Template, Variation } from "@/lib/shop/types";
 import { CustomerPicker, emptyCustomer, type NewCustomer } from "@/components/shop/CustomerPicker";
@@ -29,6 +29,7 @@ interface Draft {
   children: number;
   withDriver: boolean;
   wholeProperty: boolean;
+  cleaningDays: string; // bridal and groom: days the pieces are kept back for cleaning after the return
   addOns: Record<string, number>; // add_on_id -> quantity
   customer: NewCustomer;
   customerId: string | null;
@@ -72,7 +73,7 @@ function NewBooking() {
     const p = defaultPeriod(templates[0]?.kind, tz, setting("check_in_time", "14:00"), setting("check_out_time", "11:00"));
     return {
       branchId: myBranchId ?? activeBranches[0]?.id ?? "", start: p.start, end: p.end, lines: [], adults: 1, children: 0,
-      withDriver: false, wholeProperty: false, addOns: {}, customer: emptyCustomer, customerId: null, discount: "",
+      withDriver: false, wholeProperty: false, cleaningDays: "", addOns: {}, customer: emptyCustomer, customerId: null, discount: "",
       depositAgreed: "", advance: "", advanceMethod: "", deposit: "", depositMethod: "", notes: "",
     };
   };
@@ -122,6 +123,7 @@ function NewBooking() {
           variation_id: l.variation_id, qty: l.qty, amount_override: l.is_override ? String(l.amount) : "", unit_ids: [],
         })),
         adults: r.adults, children: r.children, withDriver: r.with_driver, wholeProperty: r.whole_property,
+        cleaningDays: r.cleaning_days ? String(r.cleaning_days) : "",
         // the form asks "how many" for once-off and per-day extras; the booking stores the worked-out quantity
         addOns: Object.fromEntries(r.rental_add_ons.map((a) => [a.add_on_id,
           a.basis === "per_rental" ? Number(a.quantity) : a.basis === "per_day" ? Math.max(1, Math.round(Number(a.quantity) / days)) : 1])),
@@ -179,7 +181,11 @@ function NewBooking() {
 
   const startIso = d.start ? zonedToIso(d.start, tz) : "";
   const endIso = d.end ? zonedToIso(d.end, tz) : "";
-  const periodOk = !!startIso && !!endIso && endIso > startIso;
+  const startInPast = trendz && !editId && !!d.start && d.start.slice(0, 10) < todayLocal(tz);
+  const periodOk = !!startIso && !!endIso && endIso > startIso && !startInPast;
+  // bridal and groom: cleaning days are typed per booking (blank = none), like TRENDZ's maintenance buffer
+  const cleaningBad = trendz && d.cleaningDays.trim() !== "" && num(d.cleaningDays) < 0;
+  const cleaning = trendz ? Math.min(365, Math.max(0, Math.floor(num(d.cleaningDays)))) : undefined;
 
   const cartTemplates = useMemo(() => {
     const keys = new Set<string>();
@@ -199,7 +205,7 @@ function NewBooking() {
     const t = setTimeout(async () => {
       try {
         const rows = await call<{ variation_id: string; free: number; total: number }[]>("branch_availability",
-          { p_branch_id: branchId, p_start: startIso, p_end: endIso });
+          { p_branch_id: branchId, p_start: startIso, p_end: endIso, ...(cleaning !== undefined ? { p_cleaning_days: cleaning } : {}) });
         // when changing a booking, the units it already holds count as free for it
         const own = new Map<string, number>();
         for (const u of editing?.unit_reservations ?? []) {
@@ -211,7 +217,64 @@ function NewBooking() {
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [branchId, startIso, endIso, periodOk, editing]);
+  }, [branchId, startIso, endIso, periodOk, editing, cleaning]);
+
+  // ---- exact pieces (bridal and groom): the free pieces of every item for these dates, each booked piece
+  // is chosen, as in TRENDZ. A set is made of other items, so it only needs enough free sets.
+  type Piece = { unit_id: string; code: string };
+  const pieceLines = useMemo(() => (trendz ? lines.filter((l) => {
+    const v = variations.get(l.variation_id);
+    return v?.template?.kind === "wearable" && !v.product.is_set;
+  }) : []), [trendz, lines, variations]);
+  const pieceKey = pieceLines.map((l) => l.variation_id).join(",");
+  const [pieces, setPieces] = useState<Record<string, Piece[]> | null>(null); // null: not checked for these dates yet
+  useEffect(() => {
+    setPieces(null);
+    if (!trendz || !periodOk || !branchId || !pieceKey) return;
+    let live = true;
+    const t = setTimeout(async () => {
+      try {
+        const entries = await Promise.all(pieceKey.split(",").map(async (vid) => {
+          const rows = await call<Piece[]>("find_available_units",
+            { p_branch_id: branchId, p_variation_id: vid, p_start: startIso, p_end: endIso, p_cleaning_days: cleaning });
+          // when changing a booking, the pieces it already holds are free for it
+          const own = (editing?.unit_reservations ?? [])
+            .filter((u) => u.state === "held" && u.units?.variation_id === vid && !rows.some((r) => r.unit_id === u.unit_id))
+            .map((u) => ({ unit_id: u.unit_id, code: u.units!.code }));
+          return [vid, [...own, ...rows].sort((a, b) => a.code.localeCompare(b.code))] as const;
+        }));
+        if (live) setPieces(Object.fromEntries(entries));
+      } catch (e) {
+        if (live) { setPieces({}); toast.error(errorText(e)); }
+      }
+    }, 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [trendz, periodOk, branchId, pieceKey, startIso, endIso, cleaning, editing]);
+
+  // every booked piece starts on the first free one; staff can change it (a piece that is no longer free is replaced)
+  const lineSig = lines.map((l) => `${l.variation_id}:${l.qty}`).join(",");
+  useEffect(() => {
+    if (!pieces) return;
+    setLines((ls) => ls.map((l) => {
+      const list = pieces[l.variation_id];
+      if (!list) return l;
+      const keep = l.unit_ids.filter((id, i) => list.some((p) => p.unit_id === id) && l.unit_ids.indexOf(id) === i).slice(0, l.qty);
+      const fill = list.filter((p) => !keep.includes(p.unit_id)).slice(0, l.qty - keep.length).map((p) => p.unit_id);
+      const ids = [...keep, ...fill];
+      return ids.length === l.unit_ids.length && ids.every((id, i) => id === l.unit_ids[i]) ? l : { ...l, unit_ids: ids };
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pieces, lineSig]);
+
+  // customer and payment open only when every item is free for the dates (TRENDZ: "unlocked when products are available")
+  const shortItems = useMemo(() => lines.filter((l) => {
+    const v = variations.get(l.variation_id);
+    if (!trendz || !v) return false;
+    if (pieceLines.includes(l)) return pieces !== null && (pieces[l.variation_id]?.length ?? 0) < l.qty;
+    return (avail[l.variation_id]?.free ?? 0) < l.qty;
+  }), [trendz, lines, variations, pieceLines, pieces, avail]);
+  const checkingStock = trendz && periodOk && lines.length > 0 && pieceLines.length > 0 && pieces === null;
+  const detailsOpen = !trendz || !!editing || (periodOk && lines.length > 0 && !checkingStock && shortItems.length === 0);
 
   // ---- live quote ----
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -225,7 +288,8 @@ function NewBooking() {
       ...(l.unit_ids.length === l.qty ? { unit_ids: l.unit_ids } : {}),
     })),
     add_ons: Object.entries(d.addOns).map(([add_on_id, quantity]) => ({ add_on_id, quantity })),
-  }), [d, branchId, lines, startIso, endIso, hasVehicle]);
+    ...(cleaning !== undefined ? { cleaning_days: cleaning } : {}),
+  }), [d, branchId, lines, startIso, endIso, hasVehicle, cleaning]);
 
   useEffect(() => {
     if (!periodOk || !branchId || (lines.length === 0 && !d.wholeProperty)) {
@@ -263,6 +327,16 @@ function NewBooking() {
   const submit = async () => {
     if (!periodOk) return toast.error(`The ${word("end").toLowerCase()} must be after the ${word("start").toLowerCase()}.`);
     if (!quote) return toast.error(quoteError ?? "Add at least one item.");
+    if (cleaningBad) return toast.error("Cleaning days cannot be negative.");
+    for (const l of pieceLines) {
+      const label = variations.get(l.variation_id)?.product.name ?? "this item";
+      const free = pieces?.[l.variation_id] ?? [];
+      for (let i = 0; i < l.qty; i++) {
+        const id = l.unit_ids[i];
+        if (!id) return toast.error(`Please choose a piece for ${label} (piece ${i + 1}).`);
+        if (!free.some((p) => p.unit_id === id)) return toast.error(`The piece chosen for ${label} (piece ${i + 1}) is no longer free. Choose another.`);
+      }
+    }
     if (!customer && (!d.customer.full_name.trim() || !d.customer.phone.trim())) return toast.error("Enter the customer's name and phone.");
     if (num(d.advance) > 0 && !d.advanceMethod) return toast.error("Choose how the advance was paid.");
     if (num(d.deposit) > 0 && !d.depositMethod) return toast.error("Choose how the deposit was paid.");
@@ -347,7 +421,7 @@ function NewBooking() {
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           <Panel title="When">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className={cn("grid gap-3", trendz ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
               {activeBranches.length > 1 ? (
                 <Field label="Branch">
                   <select className={inputClass} value={branchId} disabled={!!myBranchId || !!editing}
@@ -356,15 +430,29 @@ function NewBooking() {
                   </select>
                 </Field>
               ) : null}
-              <Field label={hasRoom ? "Check-in" : word("start")}>
+              <Field label={hasRoom ? "Check-in" : word("start")}
+                error={startInPast ? `The ${word("start").toLowerCase()} cannot be in the past` : undefined}>
                 <input type="datetime-local" className={inputClass} value={d.start} onChange={(e) => set({ start: e.target.value })} />
               </Field>
               <Field label={hasRoom ? "Check-out" : word("end")}
-                error={d.start && d.end && !periodOk ? "Must be after the start" : undefined}
+                error={d.start && d.end && endIso <= startIso ? "Must be after the start" : undefined}
                 hint={quote ? periodText(quote, kinds) : undefined}>
                 <input type="datetime-local" className={inputClass} value={d.end} onChange={(e) => set({ end: e.target.value })} />
               </Field>
+              {trendz ? (
+                <Field label="Cleaning days" hint="Days the piece is kept back for cleaning after the return"
+                  error={cleaningBad ? "Cannot be negative" : undefined}>
+                  <input type="number" min={0} className={monoInputClass} inputMode="numeric" value={d.cleaningDays}
+                    onChange={(e) => set({ cleaningDays: e.target.value })} />
+                </Field>
+              ) : null}
             </div>
+            {trendz && periodOk ? (
+              <p className="mt-3 border-t border-border/40 pt-3 font-mono text-xs text-muted-foreground">
+                Cleaning: <strong className="text-foreground">{plural(cleaning ?? 0, "day")}</strong>
+                {" · "}Free again: <strong className="text-emerald">{fmtDate(addDays(d.end.slice(0, 10), (cleaning ?? 0) + 1))}</strong>
+              </p>
+            ) : null}
             {(hasRoom || (roomShop && feature("guests"))) ? (
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Field label="Adults"><input type="number" min={0} className={monoInputClass} value={d.adults} onChange={(e) => set({ adults: Math.max(0, Math.floor(num(e.target.value))) })} /></Field>
@@ -386,6 +474,27 @@ function NewBooking() {
               inCart={Object.fromEntries(lines.map((l) => [l.variation_id, l.qty]))} onAdd={addLine} />
           ) : null}
 
+          {!detailsOpen ? (
+            <div className="glass rounded-xl border border-dashed border-border/80 p-6 text-center">
+              <h2 className="text-sm font-semibold">Customer and payment</h2>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                {!periodOk
+                  ? "Select the pickup and return dates above to check availability before entering customer details."
+                  : lines.length === 0 ? "Add the items from the list above first."
+                  : checkingStock ? "Checking stock across the pieces..."
+                  : "Some cart items are unavailable for the selected dates. Change the dates or the cart items to unlock customer details."}
+              </p>
+              {periodOk && shortItems.length > 0 ? (
+                <ul className="mx-auto mt-3 max-w-md space-y-0.5 text-left text-xs font-medium text-rust">
+                  {shortItems.map((l) => {
+                    const v = variations.get(l.variation_id);
+                    const free = pieceLines.includes(l) ? pieces?.[l.variation_id]?.length ?? 0 : avail[l.variation_id]?.free ?? 0;
+                    return <li key={l.variation_id}>{v ? variationLabel(v.product, v.variation) : "Item"}: needed {l.qty}, free {free}</li>;
+                  })}
+                </ul>
+              ) : null}
+            </div>
+          ) : (
           <Panel title="Customer">
             {editing ? (
               <p className="text-sm"><span className="font-medium">{editing.customers.full_name}</span> · {editing.customers.phone}</p>
@@ -394,6 +503,7 @@ function NewBooking() {
                 draft={d.customer} onDraft={(c) => set({ customer: c })} needsLicence={hasVehicle} />
             )}
           </Panel>
+          )}
         </div>
 
         <div id="booking-summary" className="space-y-4 lg:sticky lg:top-6 lg:self-start">
@@ -419,20 +529,45 @@ function NewBooking() {
                       <span className="font-mono text-sm">{ql ? rupees(ql.amount) : ""}</span>
                     </div>
                     <div className="mt-2 flex items-center gap-2">
-                      <button aria-label="One less" className="rounded border border-border p-1" onClick={() => updateLine(l.variation_id, { qty: l.qty - 1, unit_ids: [] })}>
+                      <button aria-label="One less" className="rounded border border-border p-1" onClick={() => updateLine(l.variation_id, { qty: l.qty - 1, unit_ids: l.unit_ids.slice(0, l.qty - 1) })}>
                         {l.qty === 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
                       </button>
                       <span className="w-6 text-center font-mono text-sm">{l.qty}</span>
-                      <button aria-label="One more" className="rounded border border-border p-1" onClick={() => updateLine(l.variation_id, { qty: l.qty + 1, unit_ids: [] })}>
+                      <button aria-label="One more" className="rounded border border-border p-1" onClick={() => updateLine(l.variation_id, { qty: l.qty + 1, unit_ids: trendz ? l.unit_ids : [] })}>
                         <Plus className="h-3.5 w-3.5" />
                       </button>
                       <input className={cn(monoInputClass, "ml-auto w-28 py-1 text-xs")} inputMode="decimal" placeholder="Agreed price"
                         aria-label="Agreed price for this line" value={l.amount_override}
                         onChange={(e) => updateLine(l.variation_id, { amount_override: e.target.value })} />
                     </div>
-                    {periodOk && (info?.template?.kind === "vehicle" || info?.template?.kind === "room" || (trendz && info?.template?.kind === "wearable")) ? (
+                    {periodOk && (info?.template?.kind === "vehicle" || info?.template?.kind === "room") ? (
                       <UnitChooser branchId={branchId} variationId={l.variation_id} startIso={startIso} endIso={endIso}
                         qty={l.qty} chosen={l.unit_ids} onChange={(ids) => updateLine(l.variation_id, { unit_ids: ids })} />
+                    ) : null}
+                    {pieceLines.includes(l) && pieces?.[l.variation_id] ? (
+                      <div className="mt-2 space-y-1.5">
+                        {Array.from({ length: l.qty }, (_, i) => {
+                          const val = l.unit_ids[i] ?? "";
+                          return (
+                            <label key={i} className="flex items-center gap-2 text-xs">
+                              <span className="w-14 shrink-0 text-muted-foreground">Piece {i + 1}</span>
+                              <select className={cn(inputClass, "py-1 text-xs")} value={val}
+                                aria-label={`Piece ${i + 1} of ${info ? variationLabel(info.product, info.variation) : "item"}`}
+                                onChange={(e) => {
+                                  const ids = Array.from({ length: l.qty }, (_, k) => l.unit_ids[k] ?? "");
+                                  ids[i] = e.target.value;
+                                  updateLine(l.variation_id, { unit_ids: ids.filter(Boolean) });
+                                }}>
+                                <option value="" disabled>Choose a piece</option>
+                                {pieces[l.variation_id].map((p) => {
+                                  const elsewhere = l.unit_ids.includes(p.unit_id) && val !== p.unit_id;
+                                  return <option key={p.unit_id} value={p.unit_id} disabled={elsewhere}>{p.code}{elsewhere ? " (chosen for another piece)" : ""}</option>;
+                                })}
+                              </select>
+                            </label>
+                          );
+                        })}
+                      </div>
                     ) : null}
                   </li>
                 );
@@ -509,6 +644,10 @@ function NewBooking() {
                   {busy ? "Saving..." : "Save change"}
                 </button>
               </div>
+            </Panel>
+          ) : !detailsOpen ? (
+            <Panel title="Paid now">
+              <p className="text-sm text-muted-foreground">Payment opens once the dates are set and every item is free.</p>
             </Panel>
           ) : (
           <Panel title="Paid now">

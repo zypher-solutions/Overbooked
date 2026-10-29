@@ -523,14 +523,14 @@ isOneToOne: false
                   ]
                 },"rentals": {
                   Row: {
-                    "actual_end_at": string | null,"actual_start_at": string | null,"add_ons_total": number,"adults": number,"branch_id": string,"cancel_reason": string | null,"cancellation_fee": number,"cancelled_at": string | null,"cancelled_by": string | null,"charges_total": number,"children": number,"created_at": string,"created_by": string | null,"customer_id": string,"deposit_agreed": number,"deposit_applied": number,"deposit_received": number,"deposit_refunded": number,"discount": number,"end_at": string,"id": string,"id_verified_at": string | null,"id_verified_by": string | null,"items_total": number,"notes": string | null,"paid": number,"shop_id": string,"start_at": string,"status": string,"token": string,"total": number | null,"updated_at": string,"whole_property": boolean,"with_driver": boolean
+                    "actual_end_at": string | null,"actual_start_at": string | null,"add_ons_total": number,"adults": number,"branch_id": string,"cancel_reason": string | null,"cancellation_fee": number,"cancelled_at": string | null,"cancelled_by": string | null,"charges_total": number,"children": number,"cleaning_days": number | null,"created_at": string,"created_by": string | null,"customer_id": string,"deposit_agreed": number,"deposit_applied": number,"deposit_received": number,"deposit_refunded": number,"discount": number,"end_at": string,"id": string,"id_verified_at": string | null,"id_verified_by": string | null,"items_total": number,"notes": string | null,"paid": number,"shop_id": string,"start_at": string,"status": string,"token": string,"total": number | null,"updated_at": string,"whole_property": boolean,"with_driver": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id": string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"created_at"?: string,"created_by"?: string | null,"customer_id": string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at": string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id": string,"start_at": string,"status"?: string,"token": string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
+                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id": string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id": string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at": string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id": string,"start_at": string,"status"?: string,"token": string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
                   }
                   Update: {
-                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id"?: string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at"?: string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id"?: string,"start_at"?: string,"status"?: string,"token"?: string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
+                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id"?: string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at"?: string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id"?: string,"start_at"?: string,"status"?: string,"token"?: string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
                   }
                   Relationships: [
                     {
@@ -817,6 +817,8 @@ isOneToOne: false
                            },
 "_period":
 { Args: { "p_end": string,"p_start": string,"p_variation_id": string }; Returns: unknown
+                           } |
+{ Args: { "p_cleaning_days": number,"p_end": string,"p_start": string,"p_variation_id": string }; Returns: unknown
                            },
 "_quote":
 { Args: { "p": Json }; Returns: Json
@@ -867,9 +869,17 @@ isOneToOne: false
 { Args: { "p_branch_id": string,"p_end": string,"p_start": string,"p_variation_id": string }; Returns: {
               "code": string,"unit_id": string
             }[]
+                           } |
+{ Args: { "p_branch_id": string,"p_cleaning_days": number,"p_end": string,"p_start": string,"p_variation_id": string }; Returns: {
+              "code": string,"unit_id": string
+            }[]
                            },
 "branch_availability":
 { Args: { "p_branch_id": string,"p_end": string,"p_start": string }; Returns: {
+              "free": number,"total": number,"variation_id": string
+            }[]
+                           } |
+{ Args: { "p_branch_id": string,"p_cleaning_days": number,"p_end": string,"p_start": string }; Returns: {
               "free": number,"total": number,"variation_id": string
             }[]
                            },
@@ -902,6 +912,10 @@ isOneToOne: false
                            },
 "find_available_units":
 { Args: { "p_branch_id": string,"p_end": string,"p_start": string,"p_variation_id": string }; Returns: {
+              "code": string,"unit_id": string
+            }[]
+                           } |
+{ Args: { "p_branch_id": string,"p_cleaning_days": number,"p_end": string,"p_start": string,"p_variation_id": string }; Returns: {
               "code": string,"unit_id": string
             }[]
                            },

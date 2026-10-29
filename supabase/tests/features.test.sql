@@ -84,9 +84,9 @@ SELECT is(public.cancel_rental((SELECT id FROM rentals WHERE token LIKE 'GVR-%-0
 -- ===========================================================================
 SELECT pg_temp.as_postgres();
 INSERT INTO products (id, shop_id, category_id, name, sku, is_set) VALUES
-  ('d0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Bridal set', 'BR-SET-1', true);
+  ('d0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Bridal set', 'BR-901', true);
 INSERT INTO product_variations (id, shop_id, product_id, name, sku) VALUES
-  ('e0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-0000000000ff', 'Standard', 'BR-SET-1-STD');
+  ('e0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-0000000000ff', 'Standard', 'BR-901-STD');
 INSERT INTO variation_rates (shop_id, variation_id, rate_type, amount) VALUES
   ('5a000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-0000000000ff', 'day', 3000);
 INSERT INTO set_items (shop_id, set_product_id, variation_id, qty) VALUES
@@ -97,20 +97,20 @@ SELECT is((pg_temp.book('b0000000-0000-0000-0000-000000000001', 'e0000000-0000-0
              pg_temp.ist(50, '10:00'), pg_temp.ist(51, '10:00')) ->> 'total')::numeric, 3000.00, 'a set is priced as one item');
 SELECT is((SELECT string_agg(u.code, ',' ORDER BY u.code) FROM unit_reservations ur JOIN units u ON u.id = ur.unit_id
            JOIN rentals r ON r.id = ur.rental_id WHERE r.start_at = pg_temp.ist(50, '10:00')),
-          'BR-LEH-001-M-1,BR-SAR-001-GOLD-1', 'a set holds one piece of each of its parts');
+          'BR-001-M-1,BR-002-GOLD-1', 'a set holds one piece of each of its parts');
 
 -- ===========================================================================
 -- Unit swaps and extensions
 -- ===========================================================================
 SELECT throws_like($$ SELECT public.swap_unit((SELECT id FROM rentals WHERE token LIKE 'KAL-%-0001'),
-    (SELECT id FROM units WHERE code = 'BR-LEH-001-M-1'), (SELECT id FROM units WHERE code = 'BR-LEH-001-M-2')) $$,
+    (SELECT id FROM units WHERE code = 'BR-001-M-1'), (SELECT id FROM units WHERE code = 'BR-001-M-2')) $$,
   'Choose an available unit of the same item in the same branch', 'cannot swap to a unit in another branch');
 SELECT pg_temp.act_as(:groom_staff);
 SELECT lives_ok($$ SELECT public.swap_unit((SELECT id FROM rentals WHERE token LIKE 'RAJ-%-0001'),
     (SELECT unit_id FROM unit_reservations WHERE rental_id = (SELECT id FROM rentals WHERE token LIKE 'RAJ-%-0001')),
-    (SELECT id FROM units WHERE code = 'GR-SHW-001-L-2')) $$, 'swap to another piece of the same item');
+    (SELECT id FROM units WHERE code = 'GR-001-L-2')) $$, 'swap to another piece of the same item');
 SELECT is((SELECT u.code FROM unit_reservations ur JOIN units u ON u.id = ur.unit_id
-           WHERE ur.rental_id = (SELECT id FROM rentals WHERE token LIKE 'RAJ-%-0001')), 'GR-SHW-001-L-2', 'the booking now holds the new piece');
+           WHERE ur.rental_id = (SELECT id FROM rentals WHERE token LIKE 'RAJ-%-0001')), 'GR-001-L-2', 'the booking now holds the new piece');
 SELECT lives_ok($$ SELECT pg_temp.book('b0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000022',
                                          pg_temp.ist(20, '10:00'), pg_temp.ist(21, '10:00')) $$, 'suit booked');
 SELECT lives_ok($$ SELECT pg_temp.book('b0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000022',

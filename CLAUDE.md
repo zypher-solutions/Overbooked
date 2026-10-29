@@ -1,5 +1,7 @@
 # Overbooked: Rental Management SaaS
 
+**Starting a session? Read docs/HANDOVER.md first** (current state, open questions, next steps).
+
 Product built from the TRENDZ admin panel (forked 22 Oct 2026 from TRENDZ `main` @ 54a190e).
 Goal: turn it into a sellable product for many rental shops. See docs/ROADMAP.md.
 

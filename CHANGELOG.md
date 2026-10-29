@@ -22,6 +22,22 @@
 - Optional features: sets, measurements, alterations, appointments
 - Hand-over pack for the mobile app: docs/APP_CONTRACT.md (contract v1) and generated types
   (src/lib/database.types.ts, regenerated with `npm run types`)
+- Bridal and groom shops get the TRENDZ screens: sidebar, cart with Checkout, Inventory Search (scan or type, receive back),
+  Dashboard, Finance, Bookings, All Rentals, All Products, 3-step Add New Product, Stock Locations; other business types keep their menu
+- Branches, staff and stock locations are Zypher-only (database policies and functions, not just the menu); migration 20261101000011
+- Paged lists use a unique order; CSV exports escape formulas
+- Bridal and groom booking form follows TRENDZ: customer and payment stay closed until the dates are valid and every item
+  is free; every booked piece is chosen (the first free one is pre-selected, staff can change it); cleaning days are typed
+  per booking
+- SKUs of bridal and groom shops follow TRENDZ: category base SKU (2 to 6 capital letters), product `BR-001` numbered for
+  you (not typable), variation `BR-001-GOLD-M`; checked in the forms, the CSV import and the database. Demo SKUs renamed
+- 181 database tests, 9 browser tests
+
+### Database
+- `20261101000012_cleaning_days_per_booking.sql`: `rentals.cleaning_days`; optional `p_cleaning_days` on `branch_availability`
+  and `find_available_units` (old calls unchanged); create, change, return and extend use it. APPLIED to local only
+- `20261101000013_sku_format_clothes.sql`: SKU format triggers for clothes shops, checked when a SKU is added or changed.
+  APPLIED to local only
 
 ## 0.2.0 (2026-10-24): many shops
 - One database serves many shops. Isolation is enforced by a restrictive policy, composite foreign keys

@@ -279,13 +279,15 @@ function Extras() {
 }
 
 function Categories() {
-  const { shop, categories, templates, canManage, refresh } = useShop();
+  const { shop, categories, templates, canManage, refresh, trendz } = useShop();
   const [edit, setEdit] = useState<Partial<Category> | null>(null);
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
     if (!edit?.name?.trim() || !edit.template_key) return toast.error("Name the category and choose its type.");
     const prefix = (edit.sku_prefix ?? "").trim().toUpperCase();
+    // bridal and groom shops number their products from the category's base SKU, as in TRENDZ
+    if (trendz && !prefix) return toast.error("Enter the base SKU: 2 to 6 capital letters, e.g. BR.");
     if (prefix && !/^[A-Z]{2,6}$/.test(prefix)) return toast.error("The SKU prefix needs 2 to 6 capital letters.");
     setBusy(true);
     const row = { name: edit.name.trim(), template_key: edit.template_key, sku_prefix: prefix || null };
@@ -318,7 +320,8 @@ function Categories() {
               {templates.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
             </select>
           </Field>
-          <Field label="SKU prefix (optional)" hint="2 to 6 capital letters, e.g. LEH">
+          <Field label={trendz ? "Base SKU" : "SKU prefix (optional)"}
+            hint={trendz ? "2 to 6 capital letters, e.g. BR. Products in this category are numbered BR-001, BR-002..." : "2 to 6 capital letters, e.g. LEH"}>
             <input className={monoInputClass} maxLength={6} value={edit.sku_prefix ?? ""} onChange={(e) => setEdit({ ...edit, sku_prefix: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") })} />
           </Field>
         </> : null}

@@ -121,11 +121,42 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
 // a far, random day so repeated runs never collide
 const farDay = () => new Date(Date.now() + (60 + Math.floor(Math.random() * 300)) * 86_400_000).toISOString().slice(0, 10);
 
+test("bridal: customer and payment open only when every item is free; the piece and cleaning days are kept", async ({ page }) => {
+  await signIn(page, "owner@bridal.test");
+  await page.goto("/book");
+  await expect(page.getByText("Add the items from the list above first.")).toBeVisible();
+  await expect(field(page, "Phone")).toHaveCount(0);
+
+  const day = farDay();
+  const end = new Date(Date.parse(day) + 2 * 86_400_000).toISOString().slice(0, 10);
+  await field(page, "Pickup").fill(`${day}T10:00`);
+  await field(page, "Return").fill(`${end}T18:00`);
+  await page.getByRole("button", { name: /Red bridal lehenga/ }).click();
+  await expect(page.getByLabel(/^Piece 1 of/)).toHaveValue(/.+/); // the free piece is already chosen
+  await expect(field(page, "Phone")).toBeVisible();
+
+  // MG Road has one of these: a second makes the dates unavailable and closes the customer and payment parts
+  await page.getByRole("button", { name: "One more" }).click();
+  await expect(page.getByText("Some cart items are unavailable for the selected dates.")).toBeVisible();
+  await expect(field(page, "Phone")).toHaveCount(0);
+  await expect(page.getByText("Payment opens once the dates are set and every item is free.")).toBeVisible();
+  await page.getByRole("button", { name: "One less" }).click();
+  await expect(field(page, "Phone")).toBeVisible();
+
+  await field(page, "Cleaning days").fill("2");
+  await field(page, "Phone").fill("98" + String(Date.now()).slice(-8));
+  await field(page, "Name").fill("Playwright Cleaning");
+  await page.getByRole("button", { name: "Confirm booking" }).click();
+  await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
+  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(page.getByText("BR-001-M-1").first()).toBeVisible(); // the piece that was chosen
+});
+
 test("bridal: scan a tag into the cart, check out, hand over, then scan it back in", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
   await page.goto("/scan");
   const box = page.getByLabel("Scan or type");
-  await box.fill("BR-SAR-001-GOLD-2");
+  await box.fill("BR-002-GOLD-2");
   await box.press("Enter");
   await page.getByRole("button", { name: "Add this piece to cart" }).click();
   await page.getByRole("link", { name: "Checkout (1)" }).first().click();
@@ -139,7 +170,7 @@ test("bridal: scan a tag into the cart, check out, hand over, then scan it back 
   await page.getByRole("button", { name: "Confirm booking" }).click();
   await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
   await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).first().click();
-  await expect(page.getByText("BR-SAR-001-GOLD-2").first()).toBeVisible(); // the exact piece that was scanned
+  await expect(page.getByText("BR-002-GOLD-2").first()).toBeVisible(); // the exact piece that was scanned
 
   await page.getByRole("button", { name: "Hand over" }).click();
   const pickup = page.getByRole("dialog");
@@ -150,7 +181,7 @@ test("bridal: scan a tag into the cart, check out, hand over, then scan it back 
   // the customer brings it back: scan the tag on "Receive back"
   await page.goto("/scan");
   await page.getByRole("tab", { name: "Receive back" }).click();
-  await page.getByLabel("Scan or type").fill("BR-SAR-001-GOLD-2");
+  await page.getByLabel("Scan or type").fill("BR-002-GOLD-2");
   await page.getByLabel("Scan or type").press("Enter");
   const ret = page.getByRole("dialog");
   await expect(ret.getByText("Pieces received (1 of 1)")).toBeVisible({ timeout: 15_000 });

@@ -8,14 +8,18 @@ import { toast } from "sonner";
 import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
 import { errorText } from "@/lib/shop/format";
+import { useCatalog } from "@/lib/shop/useCatalog";
 import { PageHeader, Panel, ghostButtonClass, goldButtonClass, tableWrap, theadClass } from "@/components/shop/ui";
 
 // One row per variation. Rows with the same item SKU become one item.
 // units: codes separated by "|" (room numbers, registrations) or a number of pieces (codes made for you).
 type Row = Record<string, string>;
+// bridal and groom SKUs, as in TRENDZ: BR-001, BR-001-GOLD-M
+const SKU_PATTERN = /^[A-Z]{2,6}-[0-9]{3,4}(-[A-Za-z0-9]+)*$/;
 
 export default function ImportCatalog() {
-  const { categories, templates, activeBranches, canManage } = useShop();
+  const { categories, templates, activeBranches, canManage, trendz } = useShop();
+  const { products } = useCatalog({ includeInactive: true });
   const [rows, setRows] = useState<Row[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ products: number; variations: number; units: number } | null>(null);
@@ -28,8 +32,9 @@ export default function ImportCatalog() {
   const sample = () => {
     const example = (t: (typeof templates)[number]) => {
       const cat = categories.find((c) => c.template_key === t.key)?.name ?? t.name;
-      const row: Row = { category: cat, item_name: "Example " + (t.labels.item ?? "item").toLowerCase(), item_sku: "EX-" + t.key.toUpperCase().slice(0, 3),
-        variation_name: "", variation_sku: "EX-" + t.key.toUpperCase().slice(0, 3) + "-1", branch: activeBranches[0]?.name ?? "",
+      // bridal and groom: the SKUs are numbered from the category's base SKU, so the sample leaves them empty
+      const row: Row = { category: cat, item_name: "Example " + (t.labels.item ?? "item").toLowerCase(), item_sku: trendz ? "" : "EX-" + t.key.toUpperCase().slice(0, 3),
+        variation_name: "", variation_sku: trendz ? "" : "EX-" + t.key.toUpperCase().slice(0, 3) + "-1", branch: activeBranches[0]?.name ?? "",
         units: t.kind === "wearable" ? "2" : t.kind === "room" ? "101|102" : "KL-07-XX-0001" };
       t.rate_types.forEach((r) => { row[r] = r === "day" || r === "night" ? "1000" : ""; });
       return row;
@@ -53,11 +58,40 @@ export default function ImportCatalog() {
 
   const items = () => {
     const bySku = new Map<string, { category: string; name: string; sku: string; replacement_value?: string; variations: unknown[] }>();
+    // bridal and groom, as in TRENDZ: an item without a SKU gets its category's base SKU and the next number
+    // (an item that already exists keeps its own); typed SKUs must follow the pattern
+    const highest = new Map<string, number>();
+    const knownSku = new Map<string, string>();
+    if (trendz) {
+      for (const p of products ?? []) {
+        knownSku.set(`${categories.find((c) => c.id === p.category_id)?.name.toLowerCase()}|${p.name.toLowerCase()}`, p.sku);
+        const m = /^([A-Z]{2,6})-(\d+)/.exec(p.sku);
+        if (m) highest.set(m[1], Math.max(highest.get(m[1]) ?? 0, Number(m[2])));
+      }
+    }
+    const itemSku = (r: Row) => {
+      const typed = (r.item_sku ?? "").trim().toUpperCase();
+      if (!trendz || typed) return typed;
+      const key = `${(r.category ?? "").trim().toLowerCase()}|${(r.item_name ?? "").trim().toLowerCase()}`;
+      const known = knownSku.get(key);
+      if (known) return known;
+      const prefix = categories.find((c) => c.name.toLowerCase() === (r.category ?? "").trim().toLowerCase())?.sku_prefix;
+      if (!prefix) throw new Error(`The category "${r.category}" has no base SKU. Set it on the Categories page first.`);
+      const next = (highest.get(prefix) ?? 0) + 1;
+      highest.set(prefix, next);
+      const sku = `${prefix}-${String(next).padStart(3, "0")}`;
+      knownSku.set(key, sku);
+      return sku;
+    };
     for (const r of rows ?? []) {
-      const sku = (r.item_sku ?? "").trim().toUpperCase();
-      if (!sku || !r.item_name?.trim() || !r.category?.trim()) throw new Error("Every row needs category, item_name and item_sku.");
+      const sku = itemSku(r);
+      if (!sku || !r.item_name?.trim() || !r.category?.trim()) throw new Error(trendz ? "Every row needs category and item_name." : "Every row needs category, item_name and item_sku.");
       const item = bySku.get(sku) ?? { category: r.category.trim(), name: r.item_name.trim(), sku, replacement_value: r.replacement_value, variations: [] };
-      const vSku = (r.variation_sku || `${sku}-${item.variations.length + 1}`).trim().toUpperCase();
+      const parts = trendz ? fieldCols.map((k) => (r[k] ?? "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "")).filter(Boolean).join("-") : "";
+      const vSku = (r.variation_sku || `${sku}-${parts || item.variations.length + 1}`).trim().toUpperCase();
+      if (trendz && !(SKU_PATTERN.test(sku) && SKU_PATTERN.test(vSku))) {
+        throw new Error(`SKU ${SKU_PATTERN.test(sku) ? vSku : sku} is not allowed: 2 to 6 capital letters, a hyphen, then 3 or 4 digits (e.g. BR-001), with more parts after hyphens for variations (e.g. BR-001-GOLD).`);
+      }
       const unitsText = (r.units ?? "").trim();
       const codes = /^\d+$/.test(unitsText)
         ? Array.from({ length: Math.min(200, Number(unitsText)) }, (_, i) => `${vSku}-${i + 1}`)
@@ -95,6 +129,7 @@ export default function ImportCatalog() {
       <Panel>
         <ol className="list-decimal space-y-1.5 pl-5 text-sm">
           <li>Download the sample and fill it in Excel or Google Sheets. One row per size, room type or model.</li>
+          {trendz ? <li>Leave <span className="font-mono">item_sku</span> and <span className="font-mono">variation_sku</span> empty: they are numbered for you from the category&apos;s base SKU (BR-001, BR-002...).</li> : null}
           <li><span className="font-mono">units</span>: a number of pieces (codes are made for you), or room numbers / registrations separated by <span className="font-mono">|</span>.</li>
           <li>Categories and branches must already exist; use their exact names.</li>
         </ol>

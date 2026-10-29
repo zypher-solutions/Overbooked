@@ -36,6 +36,7 @@ Full step-by-step guide: [docs/SETUP.md](docs/SETUP.md).
 ## Documentation
 | Doc | What's in it |
 | --- | --- |
+| [docs/HANDOVER.md](docs/HANDOVER.md) | Where the work stands, open questions, next steps (read first) |
 | [docs/SETUP.md](docs/SETUP.md) | Install, run, reset, test, common errors |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the pieces fit, main flows, business rules |
 | [docs/DATABASE.md](docs/DATABASE.md) | Tables, database functions, migrations |

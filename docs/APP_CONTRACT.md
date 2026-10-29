@@ -153,10 +153,10 @@ Payment `method`: `cash | upi | card | bank_transfer`.
 | Function | Input | Returns |
 | --- | --- | --- |
 | `quote_rental` | `p`: [quote input](#quote-input) | `{lines[], add_ons[], items_total, add_ons_total, total_before_discount, days, nights, hours}` |
-| `branch_availability` | `p_branch_id, p_start, p_end` | rows `{variation_id, free, total}` (sets included) |
-| `find_available_units` | `p_branch_id, p_variation_id, p_start, p_end` | rows `{unit_id, code}` |
-| `create_rental` | `p`: quote input + `customer`, `discount`, `deposit_agreed`, `notes`, `advance`, `deposit` | `{rental_id, token, total}` |
-| `update_rental` | `p_rental_id`, `p`: quote input (without `branch_id`) + `discount`, `deposit_agreed`, `notes` | `{total, paid, balance}`; only while `reserved` |
+| `branch_availability` | `p_branch_id, p_start, p_end, p_cleaning_days?` | rows `{variation_id, free, total}` (sets included) |
+| `find_available_units` | `p_branch_id, p_variation_id, p_start, p_end, p_cleaning_days?` | rows `{unit_id, code}` |
+| `create_rental` | `p`: quote input + `customer`, `discount`, `deposit_agreed`, `notes`, `advance`, `deposit`, `cleaning_days?` | `{rental_id, token, total}` |
+| `update_rental` | `p_rental_id`, `p`: quote input (without `branch_id`) + `discount`, `deposit_agreed`, `notes`, `cleaning_days?` | `{total, paid, balance}`; only while `reserved` |
 | `extend_rental` | `p_rental_id, p_new_end, p_payment?: {amount, method}` | `{end_at, total, paid, balance}` |
 | `swap_unit` | `p_rental_id, p_old_unit_id, p_new_unit_id` | nothing; only `held` units |
 | `cancel_rental` | `p_rental_id, p_fee, p_refund_method, p_reason, p_no_show` | `{status, fee, refunded, deposit_refunded}`; no-show only after the start |
@@ -232,7 +232,9 @@ advance and deposit; `create_rental`. Optional: measurements, alteration (charge
 `set_unit_status(..., 'alteration')`; the piece cannot go out until set back to `available`), fitting
 appointment. Pickup: condition, notes, photos, the rest of the money, deposit. Return: condition per
 piece, suggested late days and the penalty, damage or lost charges, keep or return the deposit. The
-piece is free again after its cleaning time.
+piece is free again after its cleaning time: the product's own turnaround, or the booking's `cleaning_days`
+(whole days, 0 to 365) when the app sends it; bridal and groom shops do, like TRENDZ's maintenance buffer. In those
+shops SKUs are `BR-001` for a product and `BR-001-GOLD-M` for a variation (the database refuses others).
 
 **Resort (room).** Check-in and check-out use the shop's usual times. Guests: `adults`, `children`
 (above the rooms' included guests the extra-person rate applies; more than the maximum is refused).
