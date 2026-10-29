@@ -11,7 +11,7 @@ import { addDays, dayRange, errorText, fmtDate, todayLocal } from "@/lib/shop/fo
 import { CameraScanner } from "@/components/overbooked/CameraScanner";
 import { RentalList, type ListRental } from "@/components/shop/RentalList";
 import { RemindersPanel } from "@/components/shop/RemindersPanel";
-import { TrendzDashboard } from "@/components/shop/TrendzDashboard";
+import { TrendzDashboard } from "@/modules/clothing/components/TrendzDashboard";
 import { APPOINTMENT_COLUMNS, AppointmentDialog, AppointmentList } from "@/components/shop/Appointments";
 import type { Appointment } from "@/lib/shop/types";
 import { PageHeader, Panel, StatusBadge, SummaryCard, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";

@@ -11,6 +11,8 @@ export default async function ZypherLayout({ children }: { children: React.React
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  const { data: needsCode } = await supabase.rpc("mfa_required");
+  if (needsCode) redirect("/mfa");
   const { data: isZypher } = await supabase.rpc("is_platform_admin");
   if (!isZypher) redirect("/");
   return <ZypherShell>{children}</ZypherShell>;

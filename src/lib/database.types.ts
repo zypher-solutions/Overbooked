@@ -247,14 +247,14 @@ isOneToOne: false
                   ]
                 },"platform_settings": {
                   Row: {
-                    "address": string | null,"auto_pause_after_days": number | null,"bank_details": string | null,"company_name": string,"email": string | null,"gstin": string | null,"id": number,"phone": string | null,"updated_at": string
+                    "address": string | null,"auto_pause_after_days": number | null,"bank_details": string | null,"company_name": string,"email": string | null,"gstin": string | null,"id": number,"phone": string | null,"require_mfa": boolean,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"auto_pause_after_days"?: number | null,"bank_details"?: string | null,"company_name"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: number,"phone"?: string | null,"updated_at"?: string
+                    "address"?: string | null,"auto_pause_after_days"?: number | null,"bank_details"?: string | null,"company_name"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: number,"phone"?: string | null,"require_mfa"?: boolean,"updated_at"?: string
                   }
                   Update: {
-                    "address"?: string | null,"auto_pause_after_days"?: number | null,"bank_details"?: string | null,"company_name"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: number,"phone"?: string | null,"updated_at"?: string
+                    "address"?: string | null,"auto_pause_after_days"?: number | null,"bank_details"?: string | null,"company_name"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: number,"phone"?: string | null,"require_mfa"?: boolean,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -815,6 +815,9 @@ isOneToOne: false
 "_is_clothes_shop":
 { Args: { "p_shop_id": string }; Returns: boolean
                            },
+"_mfa_ok":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
 "_money":
 { Args: { "p": Json,"p_key": string }; Returns: number
                            },
@@ -955,6 +958,9 @@ isOneToOne: false
                            },
 "mark_reminder_sent":
 { Args: { "p_kind": string,"p_rental_id": string }; Returns: undefined
+                           },
+"mfa_required":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "my_home_shop_id":
 { Args: Record<PropertyKey, never>; Returns: string

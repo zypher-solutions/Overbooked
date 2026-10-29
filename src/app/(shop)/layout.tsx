@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/overbooked/AuthContext";
 import { ShopProvider } from "@/lib/shop/ShopContext";
 import { ShopShell } from "@/components/shop/ShopShell";
-import { CartProvider } from "@/lib/shop/cart";
+import { CartProvider } from "@/modules/clothing/cart";
 
 const SETUP_PAGES = ["/branches", "/staff", "/stock-locations"];
 

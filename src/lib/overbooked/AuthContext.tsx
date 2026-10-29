@@ -107,6 +107,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // get_my_role() is null for staff whose branch is inactive (derived lockout, see branch_lifecycle migration).
       const { data: role } = profileData.is_active === false ? { data: null } : await supabase.rpc("get_my_role");
       if (!mounted) return;
+      // Zypher staff and support logins have no role until they pass two-step sign-in: send them there, do not sign them out
+      if (!role && profileData.is_active !== false) {
+        const { data: needsCode } = await supabase.rpc("mfa_required");
+        if (!mounted) return;
+        if (needsCode) {
+          if (!window.location.pathname.startsWith("/mfa")) window.location.replace("/mfa");
+          return;
+        }
+      }
       if (profileData.is_active === false || !role) {
         endingOnPurpose.current = true;
         setNotice("deactivated");

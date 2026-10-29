@@ -199,7 +199,7 @@ export default function Finance() {
   const exportPdf = async () => {
     setPdfBusy(true);
     try {
-      const { generateLedgerPDF } = await import("@/lib/shop/ledgerPdf");
+      const { generateLedgerPDF } = await import("@/modules/clothing/ledgerPdf");
       await generateLedgerPDF(shop.name, rows.map((r) => ({
         token: r.token, customer: r.customers?.full_name ?? "", phone: r.customers?.phone ?? "", item: itemsSummary(r.rental_lines), branch: branchName(r.branch_id),
         start: fmtDate(r.start_at, tz), due: fmtDate(r.end_at, tz), total: Number(r.total), paid: Number(r.paid), balance: balanceOf(r),

@@ -54,11 +54,11 @@ SELECT is((SELECT count(*) FROM profiles WHERE shop_id IS NOT NULL AND shop_id <
 SELECT lives_ok($$ SELECT * FROM public.get_staff_emails() $$, 'can list the setup shop''s logins');
 SELECT cmp_ok((SELECT count(*) FROM public.setup_branch_stock()), '>', 0::bigint, 'sees piece counts per branch');
 
-SELECT lives_ok($$ UPDATE shops SET monthly_fee = 1 WHERE id = '5a000000-0000-0000-0000-000000000001' $$, 'a free-form shop update does not error');
+SELECT throws_ok($$ UPDATE shops SET monthly_fee = 1 WHERE id = '5a000000-0000-0000-0000-000000000001' $$, '42501', NULL, 'a free-form shop update is refused');
 SELECT isnt((SELECT monthly_fee FROM shops WHERE id = '5a000000-0000-0000-0000-000000000001'), 1::numeric, 'but changes nothing');
-SELECT lives_ok($$ UPDATE shop_payments SET amount = 1 $$, 'a free-form billing update does not error');
+SELECT throws_ok($$ UPDATE shop_payments SET amount = 1 $$, '42501', NULL, 'a free-form billing update is refused');
 SELECT is((SELECT count(*) FROM shop_payments WHERE amount = 1), 0::bigint, 'but billing records are unchanged');
-SELECT lives_ok($$ DELETE FROM business_templates WHERE key = 'resort' $$, 'a free-form type delete does not error');
+SELECT throws_ok($$ DELETE FROM business_templates WHERE key = 'resort' $$, '42501', NULL, 'a free-form type delete is refused');
 SELECT is((SELECT count(*) FROM business_templates WHERE key = 'resort'), 1::bigint, 'but the business type is still there');
 
 -- an opened shop is logged

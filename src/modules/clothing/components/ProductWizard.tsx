@@ -12,7 +12,7 @@ import { call } from "@/lib/shop/api";
 import { useCatalog } from "@/lib/shop/useCatalog";
 import { errorText, num } from "@/lib/shop/format";
 import type { Product, Unit } from "@/lib/shop/types";
-import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "./ui";
+import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "@/components/shop/ui";
 
 // Add New Product, as in TRENDZ: three steps on one page.
 //   1. Basic info  2. Attributes (Colour, Size... with their values)  3. Variations & stock

@@ -8,13 +8,13 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
-import { useCart } from "@/lib/shop/cart";
+import { useCart } from "@/modules/clothing/cart";
 import { RENTAL_LIST_COLUMNS } from "@/lib/shop/api";
 import { errorText, fmtDateTime } from "@/lib/shop/format";
 import { useCatalog, variationLabel } from "@/lib/shop/useCatalog";
 import type { Product, Unit } from "@/lib/shop/types";
 import { CameraScanner } from "@/components/overbooked/CameraScanner";
-import { StockCard, useStock } from "@/components/shop/StockCard";
+import { StockCard, useStock } from "@/modules/clothing/components/StockCard";
 import type { ListRental } from "@/components/shop/RentalList";
 import { Empty, PageHeader, Panel, StatusBadge, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
 

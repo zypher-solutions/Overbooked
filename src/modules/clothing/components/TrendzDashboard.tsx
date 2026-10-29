@@ -12,9 +12,9 @@ import { RENTAL_LIST_COLUMNS, call } from "@/lib/shop/api";
 import { dayRange, errorText, fmtDate, fmtDateTime, rupees, todayLocal } from "@/lib/shop/format";
 import { quickMessage, waLink, type QuickKind } from "@/lib/shop/whatsapp";
 import { searchRentalIds } from "@/lib/shop/searchRentals";
-import type { ListRental } from "./RentalList";
-import { itemsSummary } from "./RentalList";
-import { BalanceBadge, RentalStatusBadge, SummaryCard, ghostButtonClass, goldButtonClass, inputClass } from "./ui";
+import type { ListRental } from "@/components/shop/RentalList";
+import { itemsSummary } from "@/components/shop/RentalList";
+import { BalanceBadge, RentalStatusBadge, SummaryCard, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
 
 // The TRENDZ dashboard for bridal and groom shops: today's work in three cards (tap one to see its list
 // with Hand over / Return / WhatsApp), money still to collect, every rental that is out, and the finished

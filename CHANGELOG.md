@@ -42,9 +42,21 @@
   edited with free-form writes. Setup changes are written to the audit log
 - GitHub Actions: CI (types, lint, build, database tests, browser tests) and an encrypted daily database backup, both off until the
   secrets exist; docs/RUNBOOKS.md
-- 224 database tests, 10 browser tests
+- Two-step sign-in (authenticator app) is required for Zypher admins and support logins, enforced in the database (`require_mfa`, nobody can switch
+  it off from the app); optional for everyone else (Change password > Set up two-step sign-in). New /mfa page, show-password eye, Caps Lock
+  warning and password rules checklist on login, welcome and change password; login errors no longer say which part was wrong
+- Attack tests (supabase/tests/security.test.sql): cross-shop, role escalation, signed-out, paused shop, audit log, and rules about the database
+  itself. Found and fixed: open self sign-up, signed-out and signed-in roles had every table right (TRUNCATE is not covered by row rules),
+  a leftover image host of the TRENDZ production project in next.config, no size or type limit on photo buckets, no security headers beyond
+  the basics (now a Content Security Policy)
+- Code structure: clothing-only code moved to `src/modules/clothing`; lint rules stop modules importing each other and stop client code importing
+  the service-role key; menus per module (`nav.ts`); GitHub templates, CODEOWNERS, dependabot, docs/BRANCHING.md; local `development` branch
+- 276 database tests, 13 browser tests
 
 ### Database
+- `20261101000019_storage_limits.sql`: photo buckets accept only jpeg/png/webp, 5 MB (products) and 10 MB (handover photos). NOT APPLIED to any hosted database
+- `20261101000018_least_privilege.sql`: signed-out role loses all table rights; signed-in role loses TRUNCATE/TRIGGER/REFERENCES and write rights where no write rule exists. NOT APPLIED to any hosted database
+- `20261101000017_two_factor.sql`: `platform_settings.require_mfa` (default on), `mfa_required()`, privileged roles need aal2. NOT APPLIED to any hosted database
 - `20261101000016_zypher_setup_only.sql`: Zypher setup-only (`setup_shop_id`, `current_shop_id` empty for Zypher), role `support`, audit of setup changes, billing/shops/types by function only. NOT APPLIED to any hosted database
 - `20261101000015_clothing_template.sql`: one `clothing` business type replaces `bridal` and `groom` (categories, shops, add-ons re-pointed), suggestions in the attribute list. NOT APPLIED to any hosted database
 - `20261101000014_reactivate_product.sql`: `reactivate_product(uuid)` for owners and managers. APPLIED to local only

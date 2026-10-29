@@ -7,7 +7,7 @@ import { ChevronDown, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useShop } from "@/lib/shop/ShopContext";
 import { useCatalog, variationLabel } from "@/lib/shop/useCatalog";
-import { useStock } from "@/components/shop/StockCard";
+import { useStock } from "@/modules/clothing/components/StockCard";
 import { PageHeader, Panel, StatusBadge, ghostButtonClass, tableWrap, theadClass } from "@/components/shop/ui";
 
 // Stock Locations, as in TRENDZ: each branch with its contact details and how many pieces it holds,

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
-import { useCart, type CartLine } from "@/lib/shop/cart";
+import { useCart, type CartLine } from "@/modules/clothing/cart";
 import { call, loadRental, money, type RentalDetail } from "@/lib/shop/api";
 import { headlinePrice, useCatalog, variationLabel } from "@/lib/shop/useCatalog";
 import {

@@ -228,3 +228,7 @@ BEGIN
   END LOOP;
   PERFORM set_config('request.jwt.claims', '', true);
 END $$;
+
+-- Local demo only: the demo logins have no authenticator app, so two-factor is off here.
+-- Hosted databases keep the default (on) and nobody can change it from the app.
+UPDATE public.platform_settings SET require_mfa = false;

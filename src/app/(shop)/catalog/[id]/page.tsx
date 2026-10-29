@@ -10,7 +10,7 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { errorText } from "@/lib/shop/format";
 import type { Product } from "@/lib/shop/types";
 import { ProductEditor } from "@/components/shop/ProductEditor";
-import { ProductWizard } from "@/components/shop/ProductWizard";
+import { ProductWizard } from "@/modules/clothing/components/ProductWizard";
 import { UnitsPanel } from "@/components/shop/UnitsPanel";
 import { Panel } from "@/components/shop/ui";
 
