@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Plus, QrCode, Search, Trash2, Upload } from "lucide-react";
+import { Pencil, Plus, QrCode, Search, Tag, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -27,20 +27,23 @@ function Catalog() {
   const { canManage, word, feature, templates, trendz } = useShop();
   // ?tab=categories: the sidebar's Categories item
   const asked = useSearchParams().get("tab");
+  const [adding, setAdding] = useState(0);
   const [tab, setTab] = useState<Tab>(asked === "categories" || asked === "extras" ? asked : "items");
   useEffect(() => { setTab(asked === "categories" || asked === "extras" ? asked : "items"); }, [asked]);
   return (
     <>
       <PageHeader title={trendz ? (tab === "categories" ? "Categories" : "All Products") : word("items", "Catalog")}
-        actions={canManage ? <>
+        actions={!canManage ? null : tab === "categories" ? (
+          <button className={goldButtonClass} onClick={() => setAdding((n) => n + 1)}><Plus className="h-4 w-4" /> Add Category</button>
+        ) : <>
           {tab === "items" ? <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link> : null}
           <Link href="/catalog/import" className={ghostButtonClass}><Upload className="h-4 w-4" /> Import</Link>
           {feature("sets") && templates.some((t) => t.kind === "wearable") ? (
             <Link href="/catalog/new?set=1" className={ghostButtonClass}><Plus className="h-4 w-4" /> New set</Link>
           ) : null}
           <Link href="/catalog/new" className={goldButtonClass}><Plus className="h-4 w-4" /> Add {word("item").toLowerCase()}</Link>
-        </> : null} />
-      <div className="mb-4 flex gap-1.5" role="tablist">
+        </>} />
+      <div className={cn("mb-4 flex gap-1.5", trendz && tab === "categories" && "hidden")} role="tablist">
         {([["items", word("items")], ["extras", "Extras"], ["categories", "Categories"]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
             className={cn("rounded-full border px-3 py-1 text-xs", tab === k ? "border-gold/60 bg-gold/10 font-medium" : "border-border text-muted-foreground")}>
@@ -48,7 +51,7 @@ function Catalog() {
           </button>
         ))}
       </div>
-      {tab === "items" ? <Items /> : tab === "extras" ? <Extras /> : <Categories />}
+      {tab === "items" ? <Items /> : tab === "extras" ? <Extras /> : <Categories addSignal={adding} />}
     </>
   );
 }
@@ -357,9 +360,20 @@ function Extras() {
   );
 }
 
-function Categories() {
+function Categories({ addSignal }: { addSignal: number }) {
   const { shop, categories, templates, canManage, refresh, trendz } = useShop();
   const [edit, setEdit] = useState<Partial<Category> | null>(null);
+  const [deleting, setDeleting] = useState<Category | null>(null);
+  // the page header's "Add Category" button counts up; each count opens the new-category form
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (addSignal > 0) setEdit({ template_key: templates[0]?.key }); }, [addSignal]);
+
+  const remove = async (c: Category) => {
+    const { error } = await createClient().from("categories").delete().eq("id", c.id);
+    if (error) return toast.error(error.code === "23503" ? `Products are still in ${c.name}. Move or delete them first.` : errorText(error));
+    toast.success(`${c.name} deleted`);
+    await refresh();
+  };
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
@@ -380,15 +394,39 @@ function Categories() {
   };
 
   return (
-    <Panel title="Categories" actions={canManage ? <button className={ghostButtonClass} onClick={() => setEdit({ template_key: templates[0]?.key })}><Plus className="h-4 w-4" /> Add category</button> : null}>
-      <ul className="divide-y divide-border">
-        {categories.map((c) => (
-          <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-            <span><span className="font-medium">{c.name}</span> <span className="text-xs text-muted-foreground">· {templates.find((t) => t.key === c.template_key)?.name}{c.sku_prefix ? ` · SKUs start ${c.sku_prefix}-` : ""}</span></span>
-            {canManage ? <button className={ghostButtonClass} onClick={() => setEdit(c)}>Edit</button> : null}
-          </li>
-        ))}
-      </ul>
+    <>
+      <div className={tableWrap}>
+        <table className="w-full text-left text-sm">
+          <thead className={theadClass}>
+            <tr><th className="px-6 py-3">Name</th>{trendz ? null : <th className="px-6 py-3">Type</th>}<th className="px-6 py-3">Base SKU</th>{canManage ? <th className="px-6 py-3 text-right">Actions</th> : null}</tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {categories.map((c) => (
+              <tr key={c.id}>
+                <td className="px-6 py-3">
+                  <span className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-md bg-gold/10 text-gold"><Tag className="h-4 w-4" /></span>
+                    <span className="font-medium">{c.name}</span>
+                  </span>
+                </td>
+                {trendz ? null : <td className="px-6 py-3 text-muted-foreground">{templates.find((t) => t.key === c.template_key)?.name}</td>}
+                <td className="px-6 py-3">{c.sku_prefix ? <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{c.sku_prefix}</span> : <span className="text-muted-foreground">-</span>}</td>
+                {canManage ? (
+                  <td className="px-6 py-3">
+                    <div className="flex justify-end gap-1">
+                      <button className="rounded-md p-2 text-muted-foreground hover:bg-black/5 hover:text-foreground" aria-label={`Edit ${c.name}`} title="Edit" onClick={() => setEdit(c)}><Pencil className="h-4 w-4" /></button>
+                      <button className="rounded-md p-2 text-muted-foreground hover:bg-black/5 hover:text-rust" aria-label={`Delete ${c.name}`} title="Delete" onClick={() => setDeleting(c)}><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  </td>
+                ) : null}
+              </tr>
+            ))}
+            {categories.length === 0 ? <tr><td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">No categories yet.</td></tr> : null}
+          </tbody>
+        </table>
+      </div>
+      <ConfirmDialog open={!!deleting} message={`Delete ${deleting?.name}?\n\nA category that still has products cannot be deleted.`}
+        onCancel={() => setDeleting(null)} onConfirm={() => { if (deleting) void remove(deleting); setDeleting(null); }} />
       <Modal open={edit !== null} onClose={() => setEdit(null)} title={edit?.id ? "Edit category" : "New category"}
         description="The type decides how items in it are priced and handed over."
         footer={<><button className={ghostButtonClass} onClick={() => setEdit(null)}>Cancel</button><button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save"}</button></>}>
@@ -405,6 +443,6 @@ function Categories() {
           </Field>
         </> : null}
       </Modal>
-    </Panel>
+    </>
   );
 }
