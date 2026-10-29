@@ -152,7 +152,7 @@ SELECT lives_ok($$ SELECT public.update_shop('5a000000-0000-0000-0000-0000000000
 SELECT is((public.shop_detail('5a000000-0000-0000-0000-000000000002') -> 'shop' ->> 'monthly_fee')::numeric, 749.00, 'the new fee is saved');
 SELECT is((public.shop_detail('5a000000-0000-0000-0000-000000000002') -> 'features' ->> 'sets')::boolean, true,
           'shop detail shows the switched feature');
-SELECT is(jsonb_array_length(public.shop_detail('5a000000-0000-0000-0000-000000000001') -> 'people'), 3,
+SELECT is(jsonb_array_length(public.shop_detail('5a000000-0000-0000-0000-000000000001') -> 'people'), 4,
           'shop detail lists the shop''s logins, with emails');
 SELECT is((public.console_summary() ->> 'monthly_due')::numeric, (SELECT sum(monthly_fee) FROM shops WHERE status = 'active'),
           'console monthly fees = sum of active shops'' fees');

@@ -1,0 +1,66 @@
+name: ci
+
+# Runs on every pull request and on pushes to development and main. Nothing here touches a real database:
+# the database tests run against a throwaway local Supabase started inside the runner.
+on:
+  pull_request:
+  push:
+    branches: [development, main]
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - name: Build (placeholder keys, nothing is contacted)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start a local Supabase
+        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+      - name: Apply migrations and demo data
+        run: supabase db reset
+      - name: Database tests (isolation, roles, money rules, Zypher setup-only)
+        run: supabase test db
+
+  browser:
+    runs-on: ubuntu-latest
+    needs: [app, database]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+      - run: supabase db reset
+      - name: Write the local test environment (local keys only)
+        run: |
+          supabase status -o env > /tmp/sb.env
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$(grep '^API_URL=' /tmp/sb.env | cut -d= -f2- | tr -d '\"')"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(grep '^ANON_KEY=' /tmp/sb.env | cut -d= -f2- | tr -d '\"')"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$(grep '^SERVICE_ROLE_KEY=' /tmp/sb.env | cut -d= -f2- | tr -d '\"')"
+          } > .env.local
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --reporter=line

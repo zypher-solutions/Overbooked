@@ -152,15 +152,15 @@ SELECT is((public.admin_delete_payment((SELECT p.id FROM payments p JOIN rentals
 -- Staff management, invites, login limit
 -- ===========================================================================
 -- branches and staff are Zypher's job: the shop's own owner is refused
-SELECT throws_like($$ SELECT public.get_staff_emails() $$, 'Your role (owner) cannot do this', 'an owner cannot list the logins');
+SELECT throws_like($$ SELECT public.get_staff_emails() $$, 'Only Zypher can do this', 'an owner cannot list the logins');
 SELECT throws_like($$ SELECT public.set_staff_branch('aaaaaaaa-0000-0000-0000-000000000013', 'b0000000-0000-0000-0000-000000000002') $$,
-  'Your role (owner) cannot do this', 'an owner cannot move staff between branches');
+  'Only Zypher can do this', 'an owner cannot move staff between branches');
 SELECT throws_ok($$ INSERT INTO branches (shop_id, name, slug) VALUES ('5a000000-0000-0000-0000-000000000001', 'Third', 'third') $$,
   '42501', NULL, 'an owner cannot add a branch');
 -- Zypher opens the shop from the console and does it
 SELECT pg_temp.act_as(:zypher);
 SELECT public.switch_shop('5a000000-0000-0000-0000-000000000001');
-SELECT is((SELECT count(*) FROM public.get_staff_emails()), 3::bigint, 'Zypher sees the shop''s 3 logins');
+SELECT is((SELECT count(*) FROM public.get_staff_emails()), 4::bigint, 'Zypher sees the shop''s 4 logins (one is the support login)');
 SELECT throws_like($$ SELECT public.admin_set_staff_status('aaaaaaaa-0000-0000-0000-000000000001', false, 'owner') $$,
   'You cannot change your own role or active status', 'Zypher cannot change their own login');
 SELECT throws_like($$ SELECT public.set_staff_branch('aaaaaaaa-0000-0000-0000-000000000013', 'b0000000-0000-0000-0000-000000000003') $$,

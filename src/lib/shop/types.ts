@@ -1,6 +1,6 @@
 // Row shapes of the v2 database as the shop app reads them.
 
-export type Role = "super_admin" | "owner" | "manager" | "staff";
+export type Role = "super_admin" | "owner" | "manager" | "staff" | "support";
 export type Kind = "wearable" | "vehicle" | "room";
 export type RentalStatus = "reserved" | "active" | "completed" | "cancelled" | "no_show";
 export type PaymentKind = "payment" | "refund" | "deposit" | "deposit_refund" | "deposit_applied";
@@ -11,7 +11,7 @@ export type ChargeType = "late" | "extra_km" | "fuel" | "damage" | "lost" | "cle
 export type UnitStatus = "available" | "maintenance" | "lost" | "retired";
 export type AddOnBasis = "per_rental" | "per_day" | "per_unit_day" | "per_person_night";
 
-export interface FieldDef { key: string; label: string; type: "text" | "number" | "select"; options?: string[]; required?: boolean }
+export interface FieldDef { key: string; label: string; type: "text" | "number" | "select"; options?: string[]; suggestions?: string[]; required?: boolean }
 
 export interface Template {
   key: string;

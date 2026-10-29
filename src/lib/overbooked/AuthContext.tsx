@@ -18,7 +18,7 @@ import {
 interface Profile {
   id: string;
   full_name: string;
-  role: "super_admin" | "manager" | "owner" | "staff";
+  role: "super_admin" | "manager" | "owner" | "staff" | "support";
   branch_id: string | null;
   is_active: boolean;
   shop_id: string | null;
@@ -194,7 +194,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // half-filled bookings belong to the shop being left
     clearBookingDrafts();
-    window.location.href = "/";
+    // opening a shop is for setup only: branches, staff, stock locations
+    window.location.href = shopId ? "/branches" : "/zypher";
   };
 
   return (

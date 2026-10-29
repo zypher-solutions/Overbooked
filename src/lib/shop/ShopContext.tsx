@@ -12,6 +12,8 @@ import type { AddOn, Branch, Category, Role, Template } from "./types";
 interface ShopContextValue {
   shop: Shop;
   role: Role;
+  /** a Zypher support login (works as owner in this one shop) */
+  isSupport: boolean;
   /** the signed-in person's branch (managers and staff); null for owners and Zypher */
   myBranchId: string | null;
   canManage: boolean; // owner, manager, Zypher
@@ -69,7 +71,9 @@ export function ShopProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ShopContextValue | null>(() => {
     if (!shop || !profile) return null;
-    const role = profile.role as Role;
+    // a Zypher support login works like the owner of its one shop (the database removes its destructive powers)
+    const isSupport = profile.role === "support";
+    const role = (isSupport ? "owner" : profile.role) as Role;
     const shopTemplates = templates.filter((t) => shop.business_types.includes(t.key));
     const templateOf = (categoryId: string | null | undefined) => {
       const cat = categories.find((c) => c.id === categoryId);
@@ -88,6 +92,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     return {
       shop,
       role,
+      isSupport,
       myBranchId: role === "manager" || role === "staff" ? profile.branch_id : null,
       canManage: role !== "staff",
       isOwner: role === "owner" || role === "super_admin",

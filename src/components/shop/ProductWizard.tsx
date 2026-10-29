@@ -297,7 +297,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
               <Field label="Replacement value (₹)" hint="Charged if it is lost">
                 <input className={monoInputClass} inputMode="decimal" value={basic.replacement_value} onChange={(e) => setBasic({ ...basic, replacement_value: e.target.value })} />
               </Field>
-              <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" checked={basic.is_active} onChange={(e) => setBasic({ ...basic, is_active: e.target.checked })} /> Can be booked</label>
+              <label className="flex flex-col gap-0.5 self-end pb-2 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={basic.is_active} onChange={(e) => setBasic({ ...basic, is_active: e.target.checked })} /> Available for booking</span><span className="pl-6 text-xs text-muted-foreground">Untick to hide it from new bookings. Its history is kept.</span></label>
               <Field label="Description" className="sm:col-span-2"><textarea className={inputClass} rows={2} value={basic.description} onChange={(e) => setBasic({ ...basic, description: e.target.value })} /></Field>
             </div>
             <div>
@@ -319,9 +319,12 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
           <ul className="space-y-3">
             {attrs.map((a, i) => (
               <li key={i} className="grid gap-2 rounded-lg border border-border p-3 sm:grid-cols-[180px_1fr_auto] sm:items-start">
-                <input className={inputClass} aria-label="Attribute name" placeholder="e.g. Fabric" value={a.label} disabled={template?.variation_fields.some((f) => f.key === a.key)}
-                  onChange={(e) => setAttrs(attrs.map((x, j) => j === i ? { ...x, label: e.target.value, key: e.target.value.trim().toLowerCase().replace(/\s+/g, "_") } : x))} />
-                <ChipInput values={a.values} label={a.label || "attribute"} onChange={(values) => setAttrs(attrs.map((x, j) => j === i ? { ...x, values } : x))} />
+                <AttributeName attr={a} locked={!!template?.variation_fields.some((f) => f.key === a.key)}
+                  choices={[...(template?.variation_fields.map((f) => f.label) ?? []), ...EXTRA_ATTRIBUTES].filter((n, k, all) => all.indexOf(n) === k
+                    && !attrs.some((x, j) => j !== i && x.label.toLowerCase() === n.toLowerCase()))}
+                  onChange={(label) => setAttrs(attrs.map((x, j) => j === i ? { ...x, label, key: label.trim().toLowerCase().replace(/\s+/g, "_") } : x))} />
+                <ChipInput values={a.values} label={a.label || "attribute"} suggestions={template?.variation_fields.find((f) => f.key === a.key)?.suggestions ?? []}
+                  onChange={(values) => setAttrs(attrs.map((x, j) => j === i ? { ...x, values } : x))} />
                 <button type="button" aria-label={`Remove ${a.label || "attribute"}`} className="rounded p-2 hover:bg-black/5" onClick={() => setAttrs(attrs.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4" /></button>
               </li>
             ))}
@@ -381,14 +384,37 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   );
 }
 
-function ChipInput({ values, label, onChange }: { values: string[]; label: string; onChange: (v: string[]) => void }) {
+// Names offered besides the business type's own attributes; "Custom..." lets the shop type its own.
+const EXTRA_ATTRIBUTES = ["Fabric", "Fit", "Length", "Work", "Style", "Occasion"];
+
+function AttributeName({ attr, locked, choices, onChange }: { attr: Attr; locked: boolean; choices: string[]; onChange: (label: string) => void }) {
+  const known = choices.includes(attr.label);
+  const [custom, setCustom] = useState(!!attr.label && !known);
+  return (
+    <div className="space-y-1.5">
+      <select className={inputClass} aria-label="Attribute name" disabled={locked} value={locked || known ? attr.label : custom ? "__custom" : ""}
+        onChange={(e) => { if (e.target.value === "__custom") { setCustom(true); onChange(""); } else { setCustom(false); onChange(e.target.value); } }}>
+        {locked ? <option value={attr.label}>{attr.label}</option> : <>
+          <option value="" disabled>Choose...</option>
+          {choices.map((n) => <option key={n} value={n}>{n}</option>)}
+          <option value="__custom">Custom...</option>
+        </>}
+      </select>
+      {!locked && custom ? <input className={inputClass} aria-label="Custom attribute name" placeholder="e.g. Sleeve type" value={attr.label} onChange={(e) => onChange(e.target.value)} /> : null}
+    </div>
+  );
+}
+
+function ChipInput({ values, label, onChange, suggestions = [] }: { values: string[]; label: string; onChange: (v: string[]) => void; suggestions?: string[] }) {
   const [text, setText] = useState("");
   const add = () => {
     const parts = text.split(",").map((s) => s.trim()).filter(Boolean).filter((s) => !values.includes(s));
     if (parts.length) onChange([...values, ...parts]);
     setText("");
   };
+  const left = suggestions.filter((s) => !values.includes(s));
   return (
+    <div>
     <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-md border border-input px-2 py-1.5">
       {values.map((v) => (
         <span key={v} className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-xs">
@@ -399,6 +425,13 @@ function ChipInput({ values, label, onChange }: { values: string[]; label: strin
       <input className="min-w-[8rem] flex-1 bg-transparent text-sm outline-none" aria-label={`${label} values`} placeholder={values.length ? "Add another" : "Type a value, press Enter"}
         value={text} onChange={(e) => setText(e.target.value)} onBlur={add}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); } else if (e.key === "Backspace" && !text && values.length) onChange(values.slice(0, -1)); }} />
+    </div>
+    {left.length ? (
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">Suggestions:</span>
+        {left.map((s) => <button key={s} type="button" className="rounded-md border border-border px-2 py-0.5 text-xs hover:bg-black/5" onClick={() => onChange([...values, s])}>{s}</button>)}
+      </div>
+    ) : null}
     </div>
   );
 }

@@ -34,9 +34,19 @@
 - Dashboard and Finance of bridal and groom shops completed to match TRENDZ: Filter panel with chips, Completed Rentals,
   Ledger Records with Record payment, Export PDF and Records CSV, search in place, phone cards. Audit in docs/TRENDZ_PARITY.md
 - Bookings (Buffer, Available, Completed Bookings) and All Products (stock filter, Delete, Reactivate, phone cards) match TRENDZ
-- 187 database tests, 9 browser tests
+- One "Clothing rental" business type replaces Bridal wear and Groom wear (they were identical); Colour and Size attributes offer
+  clickable suggestions, the attribute name is a dropdown with Custom, "Can be booked" is now "Available for booking"
+- **Zypher is setup and billing only**: the console and Open shop can no longer read or change a shop's bookings, customers, money,
+  products or photos (the database refuses, not just the menu). A per-shop Zypher login (role `support`) works inside one shop for
+  debugging, without money corrections. Closed: a recovery link could be made for any user; billing, shops and business types could be
+  edited with free-form writes. Setup changes are written to the audit log
+- GitHub Actions: CI (types, lint, build, database tests, browser tests) and an encrypted daily database backup, both off until the
+  secrets exist; docs/RUNBOOKS.md
+- 224 database tests, 10 browser tests
 
 ### Database
+- `20261101000016_zypher_setup_only.sql`: Zypher setup-only (`setup_shop_id`, `current_shop_id` empty for Zypher), role `support`, audit of setup changes, billing/shops/types by function only. NOT APPLIED to any hosted database
+- `20261101000015_clothing_template.sql`: one `clothing` business type replaces `bridal` and `groom` (categories, shops, add-ons re-pointed), suggestions in the attribute list. NOT APPLIED to any hosted database
 - `20261101000014_reactivate_product.sql`: `reactivate_product(uuid)` for owners and managers. APPLIED to local only
 - `20261101000012_cleaning_days_per_booking.sql`: `rentals.cleaning_days`; optional `p_cleaning_days` on `branch_availability`
   and `find_available_units` (old calls unchanged); create, change, return and extend use it. APPLIED to local only

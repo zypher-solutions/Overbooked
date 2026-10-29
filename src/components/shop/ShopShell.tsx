@@ -23,7 +23,7 @@ type NavGroup = { title?: string; items: NavItem[] };
 export function ShopShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
-  const { shop, role, isOwner, canManage, branches, myBranchId, word, feature, trendz, loading } = useShop();
+  const { shop, role, isSupport, isOwner, canManage, branches, myBranchId, word, feature, trendz, loading } = useShop();
   const cart = useCart();
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
@@ -31,7 +31,12 @@ export function ShopShell({ children }: { children: ReactNode }) {
   const isZypher = role === "super_admin";
 
   // Bridal and groom: the TRENDZ menu. Other businesses keep the simpler one.
-  const groups: NavGroup[] = loading ? [] : trendz ? [
+  // Zypher's console only sets a shop up: branches, staff, stock locations. It never sees bookings, customers or money.
+  const groups: NavGroup[] = loading ? [] : isZypher ? [{ title: "Setup", items: [
+    { href: "/branches", label: "Branch Management", icon: Building2, show: true },
+    { href: "/staff", label: "Staff Management", icon: Users, show: true },
+    { href: "/stock-locations", label: "Stock Locations", icon: Boxes, show: true },
+  ] }] : trendz ? [
     { items: [
       { href: "/", label: "Dashboard", icon: BarChart3, show: true },
       { href: "/finance", label: "Finance", icon: Wallet, show: canManage },
@@ -54,7 +59,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
     { title: "Admin", items: [
       { href: "/branches", label: "Branch Management", icon: Building2, show: isZypher },
       { href: "/staff", label: "Staff Management", icon: Users, show: isZypher },
-      { href: "/stock-locations", label: "Stock Locations", icon: Boxes, show: isZypher },
+      { href: "/stock-locations", label: "Stock Locations", icon: Boxes, show: isSupport },
       { href: "/settings", label: "Shop settings", icon: Settings, show: isOwner },
     ] },
   ] : [{ items: [
@@ -90,7 +95,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
         <div className="flex items-start justify-between px-5 pb-4 pt-6">
           <div className="min-w-0">
             <p className="truncate font-display text-xl font-semibold text-foreground">{shop.name}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-gold">{role === "super_admin" ? "Zypher view" : trendz ? "Rental Studio" : "Overbooked"}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-gold">{role === "super_admin" ? "Zypher setup" : isSupport ? "Zypher support" : trendz ? "Rental Studio" : "Overbooked"}</p>
           </div>
           <button aria-label="Close menu" onClick={() => setOpen(false)} className="rounded-md p-2 hover:bg-black/5 lg:hidden"><X className="h-4 w-4" /></button>
         </div>
@@ -108,7 +113,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
         <div className="space-y-2 border-t border-border p-4 text-xs">
           <div>
             <p className="truncate font-medium text-foreground">{profile?.full_name}</p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-gold">{role === "super_admin" ? "Zypher" : role}</p>
+            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-gold">{role === "super_admin" ? "Zypher" : isSupport ? "Zypher support" : role}</p>
             <p className="text-muted-foreground">{myBranch ?? "All branches"}</p>
           </div>
           <div className="flex flex-wrap gap-3">

@@ -6,6 +6,7 @@
 --   owner@bridal.test        owner    Kalyani Bridal (Pro plan, 2 branches)
 --   manager@bridal.test      manager  Kalyani Bridal, MG Road branch
 --   staff@bridal.test        staff    Kalyani Bridal, MG Road branch
+--   support@bridal.test      support  Zypher's login for Kalyani Bridal only (owner-like inside that shop, no money corrections)
 --   owner@groom.test         owner    Raja Groom Wear (Starter)
 --   staff@groom.test         staff    Raja Groom Wear
 --   owner@resort.test        owner    Green Valley Resort (Starter)
@@ -19,8 +20,8 @@
 
 -- ---- shops ----
 INSERT INTO public.shops (id, name, slug, token_prefix, business_types, plan, monthly_fee, phone, address, paid_until, settings) VALUES
-  ('5a000000-0000-0000-0000-000000000001', 'Kalyani Bridal', 'kalyani-bridal', 'KAL', ARRAY['bridal'], 'pro', 899, '9000000001', 'MG Road, Kochi', CURRENT_DATE + 30, '{}'),
-  ('5a000000-0000-0000-0000-000000000002', 'Raja Groom Wear', 'raja-groom', 'RAJ', ARRAY['groom'], 'starter', 599, '9000000002', 'Broadway, Kochi', CURRENT_DATE + 30, '{}'),
+  ('5a000000-0000-0000-0000-000000000001', 'Kalyani Bridal', 'kalyani-bridal', 'KAL', ARRAY['clothing'], 'pro', 899, '9000000001', 'MG Road, Kochi', CURRENT_DATE + 30, '{}'),
+  ('5a000000-0000-0000-0000-000000000002', 'Raja Groom Wear', 'raja-groom', 'RAJ', ARRAY['clothing'], 'starter', 599, '9000000002', 'Broadway, Kochi', CURRENT_DATE + 30, '{}'),
   ('5a000000-0000-0000-0000-000000000003', 'Green Valley Resort', 'green-valley', 'GVR', ARRAY['resort'], 'starter', 599, '9000000003', 'Vythiri, Wayanad', CURRENT_DATE + 30,
    '{"check_in_time": "14:00", "check_out_time": "11:00"}'),
   ('5a000000-0000-0000-0000-000000000004', 'Kochi Drive Cars', 'kochi-drive', 'KDC', ARRAY['car'], 'starter', 599, '9000000004', 'Edappally, Kochi', CURRENT_DATE + 30,
@@ -58,6 +59,7 @@ FROM (VALUES
   ('aaaaaaaa-0000-0000-0000-000000000011'::uuid, 'owner@bridal.test', 'Bridal Owner'),
   ('aaaaaaaa-0000-0000-0000-000000000012'::uuid, 'manager@bridal.test', 'Bridal Manager'),
   ('aaaaaaaa-0000-0000-0000-000000000013'::uuid, 'staff@bridal.test', 'Bridal Staff'),
+  ('aaaaaaaa-0000-0000-0000-000000000014'::uuid, 'support@bridal.test', 'Zypher Support (Kalyani)'),
   ('aaaaaaaa-0000-0000-0000-000000000021'::uuid, 'owner@groom.test', 'Groom Owner'),
   ('aaaaaaaa-0000-0000-0000-000000000022'::uuid, 'staff@groom.test', 'Groom Staff'),
   ('aaaaaaaa-0000-0000-0000-000000000031'::uuid, 'owner@resort.test', 'Resort Owner'),
@@ -84,6 +86,7 @@ FROM (VALUES
   ('aaaaaaaa-0000-0000-0000-000000000011'::uuid, 'owner',   '5a000000-0000-0000-0000-000000000001'::uuid, NULL::uuid),
   ('aaaaaaaa-0000-0000-0000-000000000012'::uuid, 'manager', '5a000000-0000-0000-0000-000000000001'::uuid, 'b0000000-0000-0000-0000-000000000001'::uuid),
   ('aaaaaaaa-0000-0000-0000-000000000013'::uuid, 'staff',   '5a000000-0000-0000-0000-000000000001'::uuid, 'b0000000-0000-0000-0000-000000000001'::uuid),
+  ('aaaaaaaa-0000-0000-0000-000000000014'::uuid, 'support', '5a000000-0000-0000-0000-000000000001'::uuid, NULL),
   ('aaaaaaaa-0000-0000-0000-000000000021'::uuid, 'owner',   '5a000000-0000-0000-0000-000000000002'::uuid, NULL),
   ('aaaaaaaa-0000-0000-0000-000000000022'::uuid, 'staff',   '5a000000-0000-0000-0000-000000000002'::uuid, 'b0000000-0000-0000-0000-000000000003'::uuid),
   ('aaaaaaaa-0000-0000-0000-000000000031'::uuid, 'owner',   '5a000000-0000-0000-0000-000000000003'::uuid, NULL),
@@ -97,8 +100,8 @@ WHERE p.id = v.id;
 
 -- ---- catalog: one category per shop, from its template ----
 INSERT INTO public.categories (id, shop_id, name, template_key, sku_prefix) VALUES
-  ('c0000000-0000-0000-0000-000000000001', '5a000000-0000-0000-0000-000000000001', 'Bridal wear', 'bridal', 'BR'),
-  ('c0000000-0000-0000-0000-000000000002', '5a000000-0000-0000-0000-000000000002', 'Groom wear', 'groom', 'GR'),
+  ('c0000000-0000-0000-0000-000000000001', '5a000000-0000-0000-0000-000000000001', 'Bridal wear', 'clothing', 'BR'),
+  ('c0000000-0000-0000-0000-000000000002', '5a000000-0000-0000-0000-000000000002', 'Groom wear', 'clothing', 'GR'),
   ('c0000000-0000-0000-0000-000000000003', '5a000000-0000-0000-0000-000000000003', 'Rooms', 'resort', 'RM'),
   ('c0000000-0000-0000-0000-000000000004', '5a000000-0000-0000-0000-000000000004', 'Cars', 'car', 'CR'),
   ('c0000000-0000-0000-0000-000000000005', '5a000000-0000-0000-0000-000000000005', 'Bikes', 'bike', 'BK');

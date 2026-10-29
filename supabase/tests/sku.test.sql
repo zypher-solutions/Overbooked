@@ -29,7 +29,7 @@ SELECT lives_ok($$ UPDATE products SET name = 'QA old renamed' WHERE id = 'd0000
   'an older SKU does not block other changes');
 
 SELECT throws_like($$ INSERT INTO categories (shop_id, name, template_key) VALUES
-    ('5a000000-0000-0000-0000-000000000001', 'QA no prefix', 'bridal') $$,
+    ('5a000000-0000-0000-0000-000000000001', 'QA no prefix', 'clothing') $$,
   'A category needs a base SKU%', 'a clothes category needs its base SKU');
 SELECT lives_ok($$ INSERT INTO categories (shop_id, name, template_key) VALUES
     ('5a000000-0000-0000-0000-000000000003', 'QA suites', 'resort') $$,

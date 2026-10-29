@@ -97,7 +97,7 @@ export async function listZypherTeam(): Promise<ZypherMember[]> {
 
 // a one-hour link for a new Zypher staff member; they choose their own password
 export async function inviteZypherMember(input: { fullName: string; email: string }) {
-  await requireZypher();
+  const { supabase } = await requireZypher();
   const email = input.email.trim().toLowerCase();
   if (!EMAIL_RE.test(email)) throw new Error("Enter a valid email.");
   if (!input.fullName.trim()) throw new Error("Enter their name.");
@@ -109,6 +109,7 @@ export async function inviteZypherMember(input: { fullName: string; email: strin
   // the new account starts inactive with no shop; make it Zypher staff
   const { error: upErr } = await admin.from("profiles").update({ role: "super_admin", is_active: true, shop_id: null, branch_id: null, active_shop_id: null }).eq("id", data.user.id);
   if (upErr) throw new Error("Account created, but could not make it Zypher staff: " + upErr.message);
+  await supabase.rpc("log_setup_event", { p_shop_id: null, p_action: "zypher_member_invited", p_detail: { email } });
   return { link: `${await siteOrigin()}/welcome?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=invite` };
 }
 
@@ -123,4 +124,5 @@ export async function setZypherMemberActive(userId: string, active: boolean) {
   }
   const { error } = await createAdminClient().from("profiles").update({ is_active: active }).eq("id", userId);
   if (error) throw new Error(error.message);
+  await supabase.rpc("log_setup_event", { p_shop_id: null, p_action: active ? "zypher_member_enabled" : "zypher_member_disabled", p_detail: { user_id: userId } });
 }

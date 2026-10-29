@@ -25,14 +25,14 @@ interface Branch {
 interface Profile {
   id: string;
   full_name: string;
-  role: "super_admin" | "manager" | "owner" | "staff";
+  role: "super_admin" | "manager" | "owner" | "staff" | "support";
   branch_id: string | null;
   is_active: boolean;
   email?: string;
   pending?: boolean;
 }
 
-const SHOP_ROLES = ["owner", "manager", "staff"] as const;
+const SHOP_ROLES = ["owner", "manager", "staff", "support"] as const;
 
 export function StaffManagement() {
   const { profile, shop } = useAuth();

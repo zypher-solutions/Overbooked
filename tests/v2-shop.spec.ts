@@ -32,14 +32,14 @@ test("a bridal owner gets the TRENDZ menu", async ({ page }) => {
   await expect(page.getByText("Staff logins are set up by the Zypher team.")).toBeVisible();
 });
 
-test("Zypher opens a bridal shop and gets its admin menu", async ({ page }) => {
+test("Zypher opens a bridal shop for setup only: no bookings, customers or money", async ({ page }) => {
   await signIn(page, "zypher@overbooked.test");
   await page.getByRole("link", { name: "Shops", exact: true }).click();
   await page.getByRole("link", { name: "Kalyani Bridal" }).click();
   const open = page.getByRole("button", { name: "Open shop" });
   if (await open.isVisible()) await open.click(); // the demo data may already have it open
   else await page.getByRole("link", { name: "Go to shop" }).click();
-  await page.waitForURL((u) => u.pathname === "/", { timeout: 15_000 });
+  await page.waitForURL((u) => u.pathname === "/branches", { timeout: 15_000 });
   const nav = page.getByLabel("Main navigation");
   for (const item of ["Branch Management", "Staff Management", "Stock Locations"]) {
     await expect(nav.getByRole("link", { name: item, exact: true })).toBeVisible();
@@ -208,4 +208,30 @@ test("bridal: Add New Product makes every size and colour with its pieces", asyn
   await page.getByRole("button", { name: "Save product" }).first().click();
   await expect(page.getByText("Saved, with 3 new pieces")).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveURL(/\/catalog\/[0-9a-f-]{36}$/);
+});
+
+test("Zypher's setup view hides the shop's business screens, and a support login sees only its own shop", async ({ page, context }) => {
+  await signIn(page, "zypher@overbooked.test");
+  await page.goto("/branches");
+  const nav = page.getByLabel("Main navigation");
+  for (const item of ["Dashboard", "Finance", "Bookings", "Customers", "All Products"]) {
+    await expect(nav.getByRole("link", { name: item, exact: true })).toHaveCount(0);
+  }
+  // typing the address of a business screen sends Zypher back to setup
+  await page.goto("/customers");
+  await page.waitForURL((u) => u.pathname === "/branches", { timeout: 15_000 });
+  await page.goto("/stock-locations");
+  await expect(page.getByText("counts only")).toBeVisible();
+
+  // the support login of Kalyani works inside Kalyani like an owner, with Stock Locations, but no console
+  await context.clearCookies();
+  await signIn(page, "support@bridal.test");
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  const nav2 = page.getByLabel("Main navigation");
+  await expect(nav2.getByText("Kalyani Bridal")).toBeVisible();
+  await expect(nav2.getByText("Zypher support").first()).toBeVisible();
+  await expect(nav2.getByRole("link", { name: "Stock Locations", exact: true })).toBeVisible();
+  await expect(nav2.getByRole("link", { name: "Branch Management", exact: true })).toHaveCount(0);
+  await page.goto("/zypher");
+  await expect(page).not.toHaveURL(/\/zypher$/);
 });

@@ -835,6 +835,9 @@ isOneToOne: false
 "_require_role":
 { Args: { "p_allowed"?: (string)[] }; Returns: string
                            },
+"_require_setup":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
 "_require_zypher":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
@@ -944,6 +947,12 @@ isOneToOne: false
 "is_platform_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"is_support":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"log_setup_event":
+{ Args: { "p_action": string,"p_detail"?: Json,"p_shop_id": string }; Returns: undefined
+                           },
 "mark_reminder_sent":
 { Args: { "p_kind": string,"p_rental_id": string }; Returns: undefined
                            },
@@ -1002,6 +1011,14 @@ isOneToOne: false
                            },
 "set_unit_status":
 { Args: { "p_reason"?: string,"p_status": string,"p_unit_id": string }; Returns: Json
+                           },
+"setup_branch_stock":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "available": number,"branch_id": string,"lost": number,"maintenance": number,"pieces": number
+            }[]
+                           },
+"setup_shop_id":
+{ Args: Record<PropertyKey, never>; Returns: string
                            },
 "shop_detail":
 { Args: { "p_shop_id": string }; Returns: Json

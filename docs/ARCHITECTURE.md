@@ -20,13 +20,16 @@ their shop, role and branch. The screens only make it pleasant; the database has
 - Every business row carries `shop_id`. A restrictive rule on every table keeps a person inside
   `current_shop_id()`: their own shop, or for Zypher staff the shop they opened.
 - Composite foreign keys (`shop_id, x_id`) make it impossible to link rows of two shops.
+- `current_shop_id()` (business data) is NULL for Zypher admins; `setup_shop_id()` (the shop opened for setup) reaches only
+  `branches` and `staff_invites`. Billing, shops and business types can only be changed through functions, and setup changes are written to `audit_log`.
 - Shop functions run as the role `app_rpc`, which the same rules bind, so even a bug inside one cannot
   reach another shop. Zypher functions (console) run as the owner and check `is_platform_admin()`.
 
 ## Roles
 | Role | Who | Can |
 | --- | --- | --- |
-| super_admin | Zypher staff | The console; open any shop and act as its owner; the only role that adds branches, invites staff and changes roles |
+| super_admin | Zypher staff | The console: setup and billing only. Opens a shop for **setup** (branches, staff and roles, stock location counts) and never sees its bookings, customers, money, products or photos: the database gives it no shop for business data |
+| support | Zypher's login for ONE shop | Works inside that shop like its owner, to find and fix a problem. No money corrections or deletions, does not use the shop's login limit, every setup change is audited. One credential exposes one shop |
 | owner | Shop owner | Runs the shop: all branches, bookings, products, money, corrections, shop settings (branches and staff are set up by Zypher) |
 | manager | Branch manager | Own branch: bookings, catalog and units there, money reports for the branch |
 | staff | Counter staff | Own branch: bookings, handovers, returns, customers; no money reports |

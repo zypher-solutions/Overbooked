@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint src",
     "format": "prettier --write .",
-    "types": "supabase gen types typescript --local > src/lib/database.types.ts"
+    "types": "npx supabase gen types typescript --local > src/lib/database.types.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
