@@ -16,7 +16,7 @@ BEGIN
   RETURN p_shop_id;
 END $$;
 
--- ---- branches, with how many pieces each holds (counts only, never bookings or customers) ----------------------------
+-- ---- branches (a branch is also the shop's stock location; what it holds is the shop's own business, not Zypher's) -----
 CREATE OR REPLACE FUNCTION public.setup_branches(p_shop_id uuid)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_catalog AS $$
 BEGIN
@@ -25,11 +25,7 @@ BEGIN
     SELECT jsonb_agg(jsonb_build_object(
              'id', b.id, 'name', b.name, 'address', b.address, 'phone', b.phone, 'email', b.email,
              'is_active', b.is_active, 'created_at', b.created_at,
-             'people', (SELECT count(*) FROM public.profiles p WHERE p.branch_id = b.id),
-             'pieces', (SELECT count(*) FROM public.units u WHERE u.branch_id = b.id AND u.status <> 'retired'),
-             'available', (SELECT count(*) FROM public.units u WHERE u.branch_id = b.id AND u.status = 'available'),
-             'maintenance', (SELECT count(*) FROM public.units u WHERE u.branch_id = b.id AND u.status = 'maintenance'),
-             'lost', (SELECT count(*) FROM public.units u WHERE u.branch_id = b.id AND u.status = 'lost'))
+             'people', (SELECT count(*) FROM public.profiles p WHERE p.branch_id = b.id))
            ORDER BY b.created_at, b.name)
     FROM public.branches b WHERE b.shop_id = p_shop_id), '[]'::jsonb);
 END $$;
@@ -198,4 +194,47 @@ REVOKE ALL ON FUNCTION public._require_setup_shop(uuid), public.setup_branches(u
 GRANT EXECUTE ON FUNCTION public._require_setup_shop(uuid), public.setup_branches(uuid), public.setup_save_branch(uuid, uuid, jsonb),
   public.setup_delete_branch(uuid, uuid), public.setup_people(uuid), public.setup_set_person(uuid, uuid, jsonb),
   public.setup_check_invite(uuid, text, uuid), public.setup_check_person(uuid, uuid) TO authenticated;
+NOTIFY pgrst, 'reload schema';
+
+-- the shop page's branch list no longer carries what each branch holds (same function as before, without 'units' per branch)
+CREATE OR REPLACE FUNCTION public.shop_detail(p_shop_id uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, auth, pg_catalog AS $$
+DECLARE
+  v_shop public.shops;
+BEGIN
+  PERFORM public._require_zypher();
+  SELECT * INTO v_shop FROM public.shops WHERE id = p_shop_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Shop not found';
+  END IF;
+
+  RETURN jsonb_build_object(
+    'shop', to_jsonb(v_shop),
+    'branches', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', b.id, 'name', b.name, 'is_active', b.is_active,
+                   'phone', b.phone, 'address', b.address) ORDER BY b.created_at), '[]')
+                 FROM public.branches b WHERE b.shop_id = p_shop_id),
+    'people', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', p.id, 'full_name', p.full_name, 'role', p.role,
+                 'branch', b.name, 'is_active', p.is_active, 'email', u.email, 'last_sign_in_at', u.last_sign_in_at)
+                 ORDER BY (p.role = 'owner') DESC, p.full_name), '[]')
+               FROM public.profiles p JOIN auth.users u ON u.id = p.id LEFT JOIN public.branches b ON b.id = p.branch_id
+               WHERE p.shop_id = p_shop_id),
+    'invites', (SELECT COALESCE(jsonb_agg(jsonb_build_object('email', i.email, 'role', i.role, 'branch', b.name,
+                  'created_at', i.created_at) ORDER BY i.created_at DESC), '[]')
+                FROM public.staff_invites i LEFT JOIN public.branches b ON b.id = i.branch_id
+                WHERE i.shop_id = p_shop_id AND i.accepted_at IS NULL),
+    'usage', jsonb_build_object(
+      'products', (SELECT count(*) FROM public.products WHERE shop_id = p_shop_id AND is_active),
+      'units', (SELECT count(*) FROM public.units WHERE shop_id = p_shop_id AND status <> 'retired'),
+      'customers', (SELECT count(*) FROM public.customers WHERE shop_id = p_shop_id),
+      'rentals', (SELECT count(*) FROM public.rentals WHERE shop_id = p_shop_id),
+      'rentals_30d', (SELECT count(*) FROM public.rentals WHERE shop_id = p_shop_id AND created_at > now() - interval '30 days'),
+      'open_rentals', (SELECT count(*) FROM public.rentals WHERE shop_id = p_shop_id AND status IN ('reserved', 'active')),
+      'last_rental_at', (SELECT max(created_at) FROM public.rentals WHERE shop_id = p_shop_id)),
+    'payments', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', sp.id, 'receipt_no', sp.receipt_no, 'kind', sp.kind, 'amount', sp.amount, 'paid_on', sp.paid_on,
+                   'period_to', sp.period_to, 'method', sp.method, 'note', sp.note) ORDER BY sp.paid_on DESC, sp.created_at DESC), '[]')
+                 FROM public.shop_payments sp WHERE sp.shop_id = p_shop_id),
+    'features', (SELECT COALESCE(jsonb_object_agg(f.key, public.shop_feature(p_shop_id, f.key)), '{}')
+                 FROM (SELECT DISTINCT jsonb_object_keys(t.features) AS key FROM public.business_templates t
+                       WHERE t.key = ANY (v_shop.business_types)) f));
+END $$;
 NOTIFY pgrst, 'reload schema';

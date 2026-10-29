@@ -14,13 +14,12 @@ import { PageHeader, tableWrap, theadClass } from "@/components/zypher/kit";
 
 interface BranchRow {
   id: string; name: string; address: string | null; phone: string | null; email: string | null; is_active: boolean;
-  people: number; pieces: number; available: number; maintenance: number; lost: number;
+  people: number;
 }
 
 const EMPTY = { name: "", phone: "", email: "", address: "" };
 
-// A shop's branches and where its pieces are kept: one list, because they are the same places.
-// Counts only; Zypher never sees which bookings or customers are behind them.
+// A shop's branches. A branch is also its stock location; what it holds is the shop's own business, so none of that is shown here.
 export default function ShopBranches() {
   const { id } = useParams<{ id: string }>();
   const [rows, setRows] = useState<BranchRow[] | null>(null);
@@ -65,21 +64,18 @@ export default function ShopBranches() {
     void run(createClient().rpc("setup_save_branch", { p_shop_id: id, p_branch_id: b.id, p: { is_active: !b.is_active } }),
       b.is_active ? `${b.name} closed` : `${b.name} reopened`);
 
-  const totalPieces = rows?.reduce((n, b) => n + Number(b.pieces), 0) ?? 0;
 
   return (
     <>
-      <PageHeader title="Branches and stock" subtitle={`${shopName ? shopName + ": " : ""}where the shop works and keeps its pieces (counts only)`}
+      <PageHeader title="Branches" subtitle={`${shopName ? shopName + ": " : ""}the shop's branches, which are also its stock locations`}
         actions={<button className={goldButtonClass} onClick={() => setEdit({ branch: null, form: EMPTY })}><Plus className="h-4 w-4" /> Add branch</button>} />
 
       {rows === null ? <p className="py-10 text-center text-muted-foreground">Loading branches...</p> : (
         <div className={tableWrap}>
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[560px] text-left text-sm">
             <thead className={theadClass}>
               <tr>
                 <th className="px-4 py-3">Branch</th><th className="px-4 py-3">Contact</th>
-                <th className="px-4 py-3 text-right">Pieces</th><th className="px-4 py-3 text-right">Free</th>
-                <th className="px-4 py-3 text-right">In service</th><th className="px-4 py-3 text-right">Lost</th>
                 <th className="px-4 py-3 text-right">People</th><th className="px-4 py-3">Status</th><th className="px-4 py-3" />
               </tr>
             </thead>
@@ -93,10 +89,6 @@ export default function ShopBranches() {
                     {b.address ? <span className="block max-w-[14rem] truncate" title={b.address}>{b.address}</span> : null}
                     {!b.phone && !b.email && !b.address ? "—" : null}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono">{b.pieces}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-emerald">{b.available || ""}</td>
-                  <td className="px-4 py-2.5 text-right font-mono">{b.maintenance || ""}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-rust">{b.lost || ""}</td>
                   <td className="px-4 py-2.5 text-right font-mono">{b.people}</td>
                   <td className="px-4 py-2.5">
                     <button type="button" disabled={busy} onClick={() => toggle(b)} aria-label={(b.is_active ? "Close " : "Reopen ") + b.name}
@@ -124,7 +116,7 @@ export default function ShopBranches() {
         </div>
       )}
       <p className="mt-2 text-xs text-muted-foreground">
-        {rows ? `${totalPieces} pieces in all. ` : ""}Pieces are added by the shop in its own catalog. A branch with pieces or bookings can be closed but not deleted.
+        A branch that has people, pieces or bookings can be closed but not deleted.
       </p>
 
       <AlertDialog open={edit !== null} onOpenChange={(o) => { if (!o) setEdit(null); }}>

@@ -48,7 +48,7 @@ SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id = 'rental_photos
 
 -- setup works by naming the shop: any shop, through functions, never through the tables
 SELECT cmp_ok(jsonb_array_length(public.setup_branches(:kalyani)), '>', 0, 'lists the branches of a shop it names');
-SELECT cmp_ok((SELECT sum((b ->> 'pieces')::int) FROM jsonb_array_elements(public.setup_branches(:kalyani)) b), '>', 0::bigint, 'with piece counts per branch');
+SELECT is((public.setup_branches(:kalyani) -> 0) ? 'pieces', false, 'and says nothing about what a branch holds');
 SELECT cmp_ok(jsonb_array_length(public.setup_people(:kalyani)), '>', 0, 'lists the logins of a shop it names');
 SELECT is((SELECT count(*) FROM branches), 0::bigint, 'but reads no branch table directly');
 SELECT is((SELECT count(*) FROM profiles WHERE shop_id IS NOT NULL), 0::bigint, 'nor any shop''s people directly');

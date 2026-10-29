@@ -91,7 +91,7 @@ working at once, 62 KB per screen on average.
   | Kochi Drive Cars | Car rental | Starter |
   | Munnar Bike Rentals | Bike rental (payment overdue) | Starter |
 - **Zypher admin:** signs in to the console at `/zypher`: shops, plans and fees, feature switches, bank
-  payments, pausing a shop, new shops from business types, and, on each shop's page, Branches and stock and Staff tabs to set it up. Zypher never sees a shop's bookings, customers or money; `support@bridal.test` is the support login of Kalyani Bridal.
+  payments, pausing a shop, new shops from business types, and, on each shop's page, Branches and Staff tabs to set it up. Zypher never sees a shop's bookings, customers or money; `support@bridal.test` is the support login of Kalyani Bridal.
 - **Owners:** invite staff from **Staff**. They get a one-hour link to send on WhatsApp; the person opens
   it and chooses a password. The same screen makes a new link for a forgotten password.
 - `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` is needed for invites (server only; value from `npx supabase status`).

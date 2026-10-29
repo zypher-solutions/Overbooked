@@ -14,7 +14,7 @@ export default function ShopLayout({ children }: { children: ReactNode }) {
   const base = `/zypher/shops/${id}`;
   const tabs = [
     { href: base, label: "Overview" },
-    { href: `${base}/branches`, label: "Branches and stock" },
+    { href: `${base}/branches`, label: "Branches" },
     { href: `${base}/staff`, label: "Staff" },
   ];
   return (

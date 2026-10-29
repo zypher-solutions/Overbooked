@@ -24,7 +24,7 @@ interface Detail {
     status: "active" | "suspended"; monthly_fee: number; paid_until: string | null; phone: string | null;
     email: string | null; address: string | null; notes: string | null; settings: Record<string, any>; created_at: string;
   };
-  branches: { id: string; name: string; is_active: boolean; phone: string | null; address: string | null; units: number }[];
+  branches: { id: string; name: string; is_active: boolean; phone: string | null; address: string | null }[];
   people: { id: string; full_name: string; role: string; branch: string | null; is_active: boolean; email: string; last_sign_in_at: string | null }[];
   invites: { email: string; role: string; branch: string | null; created_at: string }[];
   usage: { products: number; units: number; customers: number; rentals: number; rentals_30d: number; open_rentals: number; last_rental_at: string | null };
@@ -189,13 +189,12 @@ export default function ShopDetail() {
                   <span className="block text-xs text-muted-foreground">{[b.address, b.phone].filter(Boolean).join(" · ") || "No contact details"}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">{b.units} units</span>
                   {b.is_active ? null : <StatusBadge>Closed</StatusBadge>}
                 </div>
               </li>
             ))}
           </ul>
-          <Link href={`/zypher/shops/${s.id}/branches`} className="mt-3 inline-block text-xs text-gold hover:underline">Manage branches and stock</Link>
+          <Link href={`/zypher/shops/${s.id}/branches`} className="mt-3 inline-block text-xs text-gold hover:underline">Manage branches</Link>
         </Panel>
 
         <Panel title="People" actions={<Link href={`/zypher/shops/${s.id}/staff`} className="text-xs text-gold hover:underline">Manage staff</Link>}>

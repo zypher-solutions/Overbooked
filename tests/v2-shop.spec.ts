@@ -36,17 +36,17 @@ test("a bridal owner gets the TRENDZ menu", async ({ page }) => {
   }
 });
 
-test("Zypher sets a bridal shop up from the console: branches with stock, and staff, without opening the shop", async ({ page }) => {
+test("Zypher sets a bridal shop up from the console: branches and staff, without opening the shop", async ({ page }) => {
   await signIn(page, "zypher@overbooked.test");
   await page.getByRole("link", { name: "Shops", exact: true }).click();
   await page.getByRole("link", { name: "Kalyani Bridal" }).click();
   await expect(page.getByRole("button", { name: /open shop/i })).toHaveCount(0);
 
-  // branches and stock are one list
-  await page.getByRole("link", { name: "Branches and stock", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Branches and stock" })).toBeVisible();
+  // branches are also the stock locations: one list, with no stock figures
+  await page.getByRole("link", { name: "Branches", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Branches", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "MG Road", exact: true })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Pieces" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Pieces" })).toHaveCount(0); // what a branch holds is the shop's business
   await page.getByRole("button", { name: "Add branch" }).click();
   await page.getByLabel("Branch name").fill("QA-Branch");
   await page.getByLabel("Phone").fill("9000099999");

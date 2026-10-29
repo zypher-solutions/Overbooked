@@ -53,7 +53,7 @@ says "Check-in" and asks for guests, a car shop asks for odometer, fuel and lice
 | Customers | Search, history, what they owe, ID and licence, block |
 | Catalog | Items by category with prices per rate type, units per branch and their status, extras, categories, CSV import |
 | Money and reports | Money in by method, booked value, owed, deposits held, every money record (CSV), stock right now |
-| Branches (with stock counts), Staff | Zypher only, on the shop's page in the console (Branches and stock, Staff tabs): branches, invite links, roles |
+| Branches (also the stock locations), Staff | Zypher only, on the shop's page in the console (Branches, Staff tabs); it never shows what a branch holds: branches, invite links, roles |
 | Settings | Owner: shop rules (grace time, check-in/out times, licence rule) |
 
 ### Bridal and groom shops: the TRENDZ screens
