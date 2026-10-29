@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted || !profileData) return;
       const shopId = profileData.role === "super_admin" ? profileData.active_shop_id : profileData.shop_id;
       const { data: shopData } = shopId
-        ? await supabase.from("shops").select("*").eq("id", shopId).maybeSingle()
+        ? await supabase.from("shops").select("id, name, slug, token_prefix, business_types, phone, email, address, gstin, logo_url, timezone, plan, status, paid_until, monthly_fee, settings, created_at").eq("id", shopId).maybeSingle()
         : { data: null };
       if (!mounted) return;
       // a suspended shop locks out its people; Zypher staff can still open it

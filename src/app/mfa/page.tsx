@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -17,6 +17,7 @@ export default function MfaPage() {
   const [setup, setSetup] = useState<Setup | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const started = useRef(false); // development mode runs effects twice; setting up an authenticator must happen once
 
   const done = async () => {
     await supabase.auth.refreshSession(); // the new session carries the second step
@@ -25,6 +26,8 @@ export default function MfaPage() {
   };
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
     void (async () => {
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aal?.currentLevel === "aal2") return void (window.location.href = "/");

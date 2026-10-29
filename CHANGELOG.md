@@ -51,9 +51,15 @@
   the basics (now a Content Security Policy)
 - Code structure: clothing-only code moved to `src/modules/clothing`; lint rules stop modules importing each other and stop client code importing
   the service-role key; menus per module (`nav.ts`); GitHub templates, CODEOWNERS, dependabot, docs/BRANCHING.md; local `development` branch
-- 276 database tests, 13 browser tests
+- Also found and fixed by attack testing: a shop could read Zypher's private notes about it; Zypher's audit view showed money corrections
+  (now setup and billing changes only); `npm audit` reported Next.js (critical), sharp and source-map-js: updated within their ranges, unused
+  `zod` removed, now 0 vulnerabilities; password change now needs a recent sign-in (`secure_password_change`)
+- A smoke crawl (tests/smoke.spec.ts) opens every main screen for a clothing owner, resort owner, car staff and Zypher and fails on any page
+  error, React warning or failed data request
+- 280 database tests, 18 browser tests
 
 ### Database
+- `20261101000020_shop_notes_private.sql`: `shops.notes` unreadable by shop people; Zypher audit view limited to setup and billing. NOT APPLIED to any hosted database
 - `20261101000019_storage_limits.sql`: photo buckets accept only jpeg/png/webp, 5 MB (products) and 10 MB (handover photos). NOT APPLIED to any hosted database
 - `20261101000018_least_privilege.sql`: signed-out role loses all table rights; signed-in role loses TRUNCATE/TRIGGER/REFERENCES and write rights where no write rule exists. NOT APPLIED to any hosted database
 - `20261101000017_two_factor.sql`: `platform_settings.require_mfa` (default on), `mfa_required()`, privileged roles need aal2. NOT APPLIED to any hosted database

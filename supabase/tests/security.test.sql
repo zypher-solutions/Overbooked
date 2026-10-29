@@ -3,7 +3,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(52);
+SELECT plan(56);
 
 \set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
@@ -119,6 +119,21 @@ SELECT is((SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.reln
              AND has_table_privilege('authenticated', c.oid, 'INSERT')
              AND NOT EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid AND p.polpermissive AND p.polcmd IN ('a', '*'))), 0::bigint,
           'no table is writable without a rule that allows writing');
+
+-- ===== Zypher's private notes =====
+SELECT pg_temp.act_as(:bridal_owner);
+SELECT throws_ok($$ SELECT notes FROM shops $$, '42501', NULL, 'a shop cannot read Zypher''s notes about it');
+SELECT lives_ok($$ SELECT id, name, plan, monthly_fee, settings FROM shops $$, 'but can read its own shop details');
+SELECT pg_temp.as_postgres();
+
+-- ===== Zypher's audit view =====
+SELECT pg_temp.as_postgres();
+INSERT INTO audit_log (shop_id, via, action, table_name, reason, old_data, new_data) VALUES ('5a000000-0000-0000-0000-000000000001', 'app', 'update', 'payments', 'QA correction', '{"amount": 100}', '{"amount": 90}');
+INSERT INTO audit_log (shop_id, via, action, table_name) VALUES ('5a000000-0000-0000-0000-000000000001', 'app', 'setup_update', 'branches');
+SELECT pg_temp.act_as(:zypher);
+SELECT is((SELECT count(*) FROM audit_log WHERE table_name = 'payments'), 0::bigint, 'Zypher''s audit view hides money corrections');
+SELECT cmp_ok((SELECT count(*) FROM audit_log WHERE table_name = 'branches'), '>', 0::bigint, 'but shows setup changes');
+SELECT pg_temp.as_postgres();
 
 -- ===== two-step sign-in =====
 UPDATE platform_settings SET require_mfa = true;
