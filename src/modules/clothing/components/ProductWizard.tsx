@@ -190,36 +190,15 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
           variations: sent.map((r, i) => ({
             id: r.id, name: r.name.trim() || autoName(r.attributes), sku: skus[i], attributes: r.attributes,
             rates: { day: String(num(r.rate || basic.rate)) }, is_enabled: r.enabled,
+            stock: Object.fromEntries(activeBranches.map((b) => [b.id, Math.max(0, Math.floor(num(r.stock[b.id])))])),
           })),
         },
       });
-      // the new pieces, numbered after the ones each variation already has
-      const supabase = createClient();
-      const { data: vars, error: vErr } = await supabase.from("product_variations").select("id, sku").eq("product_id", id);
-      if (vErr) throw vErr;
-      const { data: existing } = await supabase.from("units").select("code").eq("product_id", id).limit(5000);
-      const used = new Set((existing ?? []).map((u) => u.code));
-      const units: { shop_id: string; product_id: string; variation_id: string; branch_id: string; code: string; attributes: Record<string, string> }[] = [];
-      sent.forEach((r, i) => {
-        const v = (vars ?? []).find((x) => x.sku === skus[i]);
-        if (!v || !r.enabled) return;
-        for (const b of activeBranches) {
-          const add = Math.max(0, Math.floor(num(r.stock[b.id])) - (r.id ? counts[`${r.id}:${b.id}`] ?? 0 : 0));
-          for (let n = 1, made = 0; made < add; n++) {
-            const code = `${v.sku}-${n}`;
-            if (used.has(code)) continue;
-            used.add(code);
-            units.push({ shop_id: shop.id, product_id: id, variation_id: v.id, branch_id: b.id, code, attributes: r.attributes });
-            made++;
-          }
-        }
-      });
-      if (units.length) {
-        const { error } = await supabase.from("units").insert(units);
-        if (error) throw new Error(error.code === "23505" ? "A piece code is already used. Save again to number them after it." : errorText(error));
-      }
+      // the pieces were made by the database in the same step, numbered after the ones each variation already has
+      const made = sent.reduce((n, r) => n + (r.enabled ? activeBranches.reduce((m, b) =>
+        m + Math.max(0, Math.floor(num(r.stock[b.id])) - (r.id ? counts[`${r.id}:${b.id}`] ?? 0 : 0)), 0) : 0), 0);
       try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
-      toast.success(units.length ? `Saved, with ${units.length} new piece${units.length === 1 ? "" : "s"}` : "Saved");
+      toast.success(made ? `Saved, with ${made} new piece${made === 1 ? "" : "s"}` : "Saved");
       if (!product) router.replace(`/catalog/${id}`);
       else onSaved?.();
     } catch (e) {

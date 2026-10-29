@@ -63,7 +63,7 @@ admin panel Overbooked grew from. Cars, bikes and resorts keep the screens above
 | Menu | Screen | What it does |
 | --- | --- | --- |
 | | Dashboard (`/`) | Pickups today / Returns due today / Overdue cards that pick the list below (Hand over, Return, WhatsApp); To collect; all rentals out, sortable and filtered |
-| | Finance | Earned, collected, outstanding, deposits held (vs the previous period); daily close per payment method; by branch; ledger CSV |
+| | Finance | Earned, collected, outstanding, deposits held (vs the previous period); Expenses and Profit (earned minus expenses) with an Expenses list; daily close per payment method; by branch; ledger CSV |
 | Rentals | Bookings | Cards by upcoming pickup; pickups today / tomorrow / a date; status, branch, search incl. SKU; pieces kept |
 | | Inventory Search (`/scan`) | Scan a tag (camera or USB scanner) or type a name, SKU, piece code or booking no. Find and book: stock per branch (Total / Avail / Rented), Add to Cart. Receive back: a scanned piece opens its return with that piece ticked |
 | | All Rentals | Products with stock per branch; tap for Add to Cart per size and branch, and who has it out |

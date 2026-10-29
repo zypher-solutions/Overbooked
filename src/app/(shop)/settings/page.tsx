@@ -19,6 +19,7 @@ export default function Settings() {
     require_licence: setting("require_licence", true),
     gst_percent: String(setting("gst_percent", 0)),
     receipt_note: setting("receipt_note", ""),
+    sac_code: setting("sac_code", ""),
   });
   const [busy, setBusy] = useState(false);
   const features = Array.from(new Set(templates.flatMap((t) => Object.keys(t.features))));
@@ -36,7 +37,7 @@ export default function Settings() {
         p: {
           phone: f.phone.trim(), email: f.email.trim(), address: f.address.trim(), gstin: f.gstin.trim().toUpperCase(),
           settings: { grace_minutes: grace, check_in_time: f.check_in_time, check_out_time: f.check_out_time, require_licence: f.require_licence,
-            gst_percent: gst, receipt_note: f.receipt_note.trim() },
+            gst_percent: gst, receipt_note: f.receipt_note.trim(), sac_code: f.sac_code.trim() },
         },
       });
       toast.success("Saved");
@@ -80,8 +81,11 @@ export default function Settings() {
         </Panel>
         <Panel title="Receipts">
           <div className="grid gap-3">
-            <Field label="GST included in prices (%)" hint="With a GSTIN and a rate above 0, receipts print as tax invoices with CGST and SGST. Use 0 for plain receipts.">
+            <Field label="GST included in prices (%)" hint="With a GSTIN and a rate above 0, a rental gets a tax invoice (own number and date, CGST and SGST) once it is returned; until then, and without these, a plain receipt prints.">
               <input className={monoInputClass} inputMode="decimal" value={f.gst_percent} onChange={(e) => setF({ ...f, gst_percent: e.target.value })} />
+            </Field>
+            <Field label="SAC code on tax invoices (optional)" hint="The service code your accountant gives you for renting out clothes. Leave empty to print none.">
+              <input className={monoInputClass} value={f.sac_code} maxLength={8} onChange={(e) => setF({ ...f, sac_code: e.target.value })} />
             </Field>
             <Field label="Note printed on every receipt" hint="Terms: deposit, late returns, damage">
               <textarea className={inputClass} rows={3} value={f.receipt_note} onChange={(e) => setF({ ...f, receipt_note: e.target.value })} />

@@ -213,6 +213,38 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"expenses": {
+                  Row: {
+                    "amount": number,"branch_id": string,"category": string,"created_at": string,"created_by": string | null,"id": string,"note": string | null,"shop_id": string,"spent_on": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"branch_id": string,"category": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"note"?: string | null,"shop_id": string,"spent_on": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "amount"?: number,"branch_id"?: string,"category"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"note"?: string | null,"shop_id"?: string,"spent_on"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "expenses_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "expenses_shop_branch_fkey"
+      columns: ["shop_id","branch_id"]
+isOneToOne: false
+      referencedRelation: "branches"
+      referencedColumns: ["shop_id","id"]
+    },{
+      foreignKeyName: "expenses_shop_id_fkey"
+      columns: ["shop_id"]
+isOneToOne: false
+      referencedRelation: "shops"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"payments": {
                   Row: {
                     "amount": number,"created_at": string,"id": string,"kind": string,"method": string | null,"note": string | null,"paid_at": string,"recorded_by": string | null,"rental_id": string,"shop_id": string
@@ -258,6 +290,38 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"price_changes": {
+                  Row: {
+                    "amount": number,"created_at": string,"created_by": string | null,"id": string,"kind": string,"line_id": string | null,"previous": number,"rental_id": string,"shop_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"kind": string,"line_id"?: string | null,"previous"?: number,"rental_id": string,"shop_id": string
+                  }
+                  Update: {
+                    "amount"?: number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"kind"?: string,"line_id"?: string | null,"previous"?: number,"rental_id"?: string,"shop_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "price_changes_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "price_changes_shop_id_fkey"
+      columns: ["shop_id"]
+isOneToOne: false
+      referencedRelation: "shops"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "price_changes_shop_rental_fkey"
+      columns: ["shop_id","rental_id"]
+isOneToOne: false
+      referencedRelation: "rentals"
+      referencedColumns: ["shop_id","id"]
+    }
                   ]
                 },"product_variations": {
                   Row: {
@@ -517,14 +581,14 @@ isOneToOne: false
                   ]
                 },"rentals": {
                   Row: {
-                    "actual_end_at": string | null,"actual_start_at": string | null,"add_ons_total": number,"adults": number,"branch_id": string,"cancel_reason": string | null,"cancellation_fee": number,"cancelled_at": string | null,"cancelled_by": string | null,"charges_total": number,"children": number,"cleaning_days": number | null,"created_at": string,"created_by": string | null,"customer_id": string,"deposit_agreed": number,"deposit_applied": number,"deposit_received": number,"deposit_refunded": number,"discount": number,"end_at": string,"id": string,"id_verified_at": string | null,"id_verified_by": string | null,"items_total": number,"notes": string | null,"paid": number,"shop_id": string,"start_at": string,"status": string,"token": string,"total": number | null,"updated_at": string,"whole_property": boolean,"with_driver": boolean
+                    "actual_end_at": string | null,"actual_start_at": string | null,"add_ons_total": number,"adults": number,"branch_id": string,"cancel_reason": string | null,"cancellation_fee": number,"cancelled_at": string | null,"cancelled_by": string | null,"charges_total": number,"children": number,"cleaning_days": number | null,"created_at": string,"created_by": string | null,"customer_id": string,"deposit_agreed": number,"deposit_applied": number,"deposit_received": number,"deposit_refunded": number,"discount": number,"end_at": string,"id": string,"id_verified_at": string | null,"id_verified_by": string | null,"invoice_date": string | null,"invoice_no": string | null,"items_total": number,"notes": string | null,"paid": number,"shop_id": string,"start_at": string,"status": string,"token": string,"total": number | null,"updated_at": string,"whole_property": boolean,"with_driver": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id": string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id": string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at": string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id": string,"start_at": string,"status"?: string,"token": string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
+                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id": string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id": string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at": string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"invoice_date"?: string | null,"invoice_no"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id": string,"start_at": string,"status"?: string,"token": string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
                   }
                   Update: {
-                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id"?: string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at"?: string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id"?: string,"start_at"?: string,"status"?: string,"token"?: string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
+                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id"?: string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at"?: string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"invoice_date"?: string | null,"invoice_no"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id"?: string,"start_at"?: string,"status"?: string,"token"?: string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
                   }
                   Relationships: [
                     {
@@ -645,14 +709,14 @@ isOneToOne: false
                   ]
                 },"shops": {
                   Row: {
-                    "address": string | null,"business_types": (string)[],"created_at": string,"email": string | null,"gstin": string | null,"id": string,"logo_url": string | null,"monthly_fee": number,"name": string,"notes": string | null,"paid_until": string | null,"phone": string | null,"plan": string,"settings": NonNullable<Json>,"slug": string,"status": string,"timezone": string,"token_prefix": string
+                    "address": string | null,"business_types": (string)[],"created_at": string,"email": string | null,"gstin": string | null,"id": string,"logo_url": string | null,"monthly_fee": number,"name": string,"notes": string | null,"paid_until": string | null,"phone": string | null,"plan": string,"settings": NonNullable<Json>,"slug": string,"status": string,"timezone": string,"token_prefix": string,"trial_ends": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"business_types": (string)[],"created_at"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: string,"logo_url"?: string | null,"monthly_fee"?: number,"name": string,"notes"?: string | null,"paid_until"?: string | null,"phone"?: string | null,"plan"?: string,"settings"?: NonNullable<Json>,"slug": string,"status"?: string,"timezone"?: string,"token_prefix": string
+                    "address"?: string | null,"business_types": (string)[],"created_at"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: string,"logo_url"?: string | null,"monthly_fee"?: number,"name": string,"notes"?: string | null,"paid_until"?: string | null,"phone"?: string | null,"plan"?: string,"settings"?: NonNullable<Json>,"slug": string,"status"?: string,"timezone"?: string,"token_prefix": string,"trial_ends"?: string | null
                   }
                   Update: {
-                    "address"?: string | null,"business_types"?: (string)[],"created_at"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: string,"logo_url"?: string | null,"monthly_fee"?: number,"name"?: string,"notes"?: string | null,"paid_until"?: string | null,"phone"?: string | null,"plan"?: string,"settings"?: NonNullable<Json>,"slug"?: string,"status"?: string,"timezone"?: string,"token_prefix"?: string
+                    "address"?: string | null,"business_types"?: (string)[],"created_at"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: string,"logo_url"?: string | null,"monthly_fee"?: number,"name"?: string,"notes"?: string | null,"paid_until"?: string | null,"phone"?: string | null,"plan"?: string,"settings"?: NonNullable<Json>,"slug"?: string,"status"?: string,"timezone"?: string,"token_prefix"?: string,"trial_ends"?: string | null
                   }
                   Relationships: [
                     
@@ -800,6 +864,9 @@ isOneToOne: false
             "_audit":
 { Args: { "p_id": string,"p_new": Json,"p_old": Json,"p_reason": string,"p_table": string }; Returns: undefined
                            },
+"_complete_rental_core":
+{ Args: { "p"?: Json,"p_rental_id": string }; Returns: Json
+                           },
 "_insert_lines":
 { Args: { "p_branch": string,"p_end": string,"p_prefer"?: (string)[],"p_quote": Json,"p_rental_id": string,"p_start": string }; Returns: undefined
                            },
@@ -841,8 +908,17 @@ isOneToOne: false
 "_reserve_line":
 { Args: { "p_branch": string,"p_end": string,"p_line": Json,"p_line_id": string,"p_prefer"?: (string)[],"p_rental_id": string,"p_start": string }; Returns: undefined
                            },
+"_save_product_core":
+{ Args: { "p": Json }; Returns: string
+                           },
 "_shop_tz":
 { Args: Record<PropertyKey, never>; Returns: string
+                           },
+"_unit_kept_late":
+{ Args: { "p_unit_id": string }; Returns: boolean
+                           },
+"add_expense":
+{ Args: { "p": Json }; Returns: string
                            },
 "add_rental_charge":
 { Args: { "p_amount": number,"p_note"?: string,"p_rental_id": string,"p_type": string }; Returns: Json
@@ -904,8 +980,14 @@ isOneToOne: false
 "dashboard_summary":
 { Args: { "p_branch_id"?: string,"p_from": string,"p_to": string }; Returns: Json
                            },
+"delete_expense":
+{ Args: { "p_expense_id": string,"p_reason": string }; Returns: undefined
+                           },
 "delete_or_deactivate_product":
 { Args: { "p_product_id": string }; Returns: Json
+                           },
+"expense_summary":
+{ Args: { "p_branch_id"?: string,"p_from": string,"p_to": string }; Returns: Json
                            },
 "extend_rental":
 { Args: { "p_new_end": string,"p_payment"?: Json,"p_rental_id": string }; Returns: Json
@@ -938,6 +1020,9 @@ isOneToOne: false
                            },
 "is_support":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"issue_invoice":
+{ Args: { "p_rental_id": string }; Returns: Json
                            },
 "log_setup_event":
 { Args: { "p_action": string,"p_detail"?: Json,"p_shop_id": string }; Returns: undefined
@@ -1033,6 +1118,9 @@ isOneToOne: false
                            },
 "swap_unit":
 { Args: { "p_new_unit_id": string,"p_old_unit_id": string,"p_rental_id": string }; Returns: undefined
+                           },
+"update_expense":
+{ Args: { "p": Json,"p_expense_id": string,"p_reason": string }; Returns: undefined
                            },
 "update_my_shop":
 { Args: { "p": Json }; Returns: undefined

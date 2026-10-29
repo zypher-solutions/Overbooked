@@ -1,6 +1,6 @@
 # Handover for the next session
 
-Read this first, then `CLAUDE.md`, then `docs/ARCHITECTURE.md`. Written 29 Oct 2026.
+Read this first, then `CLAUDE.md`, then `docs/ARCHITECTURE.md`. Written 29 Oct 2026, updated the same evening with the pre-launch work (`docs/LAUNCH_PLAN.md`).
 
 ## The goal
 Overbooked is Zypher's multi-client rental software. It grew from TRENDZ, the owner's uncle's admin panel
@@ -19,11 +19,17 @@ aside until this is right.
 - Windows 11, no Python. Use the Edit tool for exact edits; shell heredocs with backticks or `$$` get mangled.
 
 ## Where things stand
-- Branch **`feature/trendz-screens`** (pushed to GitHub `zypher-solutions/Overbooked`), two commits on top of
-  `main` (`263842e`). **Not merged.** Open a PR when the owner says so.
-- Checks at last run (30 Oct 2026): `npx tsc --noEmit` clean, `npm run lint` 2 old warnings, `npm run build` ok,
-  181 database tests, 9 browser tests, all passing. Migrations `...12` and `...13` are applied to local only.
-  Changes since the two commits (booking form, SKU rules, cleaning days) are not committed yet.
+- Branch **`feature/safe-foundations`** (same commits as `development`), local only until the owner says to push. `main` on GitHub
+  holds PR #1 (the TRENDZ screens). The pre-launch work of 29 Oct (migrations 22 to 25, expenses, invoices, route guards, phone app) is in
+  one local commit on top. Nothing has been deployed; staging and production do not exist yet.
+- Checks at last run (29 Oct 2026, evening): `npx tsc --noEmit` clean, `npm run lint` clean, `npm run build` ok,
+  353 database tests, 23 browser tests, all passing.
+- The full plan, with decisions and costs: `docs/LAUNCH_PLAN.md`. Parked on purpose: our own backups beyond Supabase's 7 days
+  (the owner will decide with the partner), and business and pricing talk.
+- Open for the owner: the GitHub handle for `.github/CODEOWNERS` (still a placeholder); push and branch clean-up (delete the merged
+  `multi-shop`, `v2-engine`, `feature/trendz-screens`); the late-return rule (a piece still out is unavailable for any future date until it
+  comes back; confirm); whether the late fee should use the agreed price instead of the catalogue day rate; tax invoice timing
+  (issued after the return) and the SAC code, to be confirmed with an accountant.
 - Local demo data and logins are in `supabase/seed.sql`; the demo password is the default in
   `tests/v2-shop.spec.ts`. `owner@bridal.test` opens the bridal shop, `zypher@overbooked.test` the console.
 

@@ -16,6 +16,11 @@ from zero; `npx supabase test db` then runs the database tests in `supabase/test
 | `20261101000008_console.sql` | Zypher console reads: overview numbers and the shop page |
 | `20261101000009_app.sql` | Shop app helpers: free counts for the booking picker, saving a product in one go |
 | `20261101000010_operations.sql` | Changing a booking, sets, reminders log, Zypher company details and receipts, automatic pause, measurement fields |
+| `20261101000011` to `...21` | Zypher-only setup, cleaning days per booking, SKU format for clothes, reactivating a product, one clothing template, setup-only console with a support role, two-step sign-in, least privilege, storage limits, private shop notes, setup in the console |
+| `20261101000022_launch_rules.sql` | Pieces kept late are not offered again, deposit refund rule, backdated returns, trial, settings allow-list, unblock rule, price-change log, indexes, `create_shop` fix for clothing shops |
+| `20261101000023_expenses.sql` | Expenses and their totals for Finance |
+| `20261101000024_save_product_with_pieces.sql` | A product and its pieces saved in one step |
+| `20261101000025_invoice_numbers.sql` | Tax invoice number and date, fixed when issued |
 
 ## Business types are data
 A **template** (`business_templates`) describes a type of business: its kind (`wearable` by day,

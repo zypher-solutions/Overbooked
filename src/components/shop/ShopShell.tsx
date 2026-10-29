@@ -1,9 +1,9 @@
 "use client";
 
 import { PasswordField, passwordIsStrong } from "@/components/overbooked/PasswordField";
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   BarChart3, Boxes, Building2, Calendar, CalendarClock, CalendarDays, CalendarPlus, ChevronDown, ClipboardList, Home, KeyRound, LayoutGrid, LineChart,
@@ -23,8 +23,19 @@ import { standardNav, type NavGroup } from "@/lib/shop/nav";
 
 export function ShopShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { profile, signOut } = useAuth();
   const { shop, role, isSupport, isOwner, canManage, branches, myBranchId, word, feature, trendz, loading } = useShop();
+
+  // Each kind of shop has its own screens. Typing the address of the other kind's screen goes to the right one,
+  // so a bridal shop never lands on the old lists and a car shop never lands on the clothing screens.
+  useEffect(() => {
+    if (loading) return;
+    const to = trendz
+      ? pathname === "/rentals" ? "/bookings" : pathname === "/dashboard" ? (canManage ? "/finance" : "/") : null
+      : ["/finance", "/bookings", "/all-rentals", "/scan"].includes(pathname) ? "/" : null;
+    if (to) router.replace(to);
+  }, [loading, trendz, canManage, pathname, router]);
   const cart = useCart();
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);

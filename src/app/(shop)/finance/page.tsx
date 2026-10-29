@@ -8,7 +8,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
-import { RENTAL_BASE_COLUMNS, attachListDetails, loadRental, type RentalDetail } from "@/lib/shop/api";
+import { RENTAL_BASE_COLUMNS, attachListDetails, call, loadRental, type RentalDetail } from "@/lib/shop/api";
+import { ExpensesPanel } from "@/components/shop/ExpensesPanel";
 import { METHOD_LABELS, PAYMENT_LABELS, STATUS_LABELS, addDays, dayRange, errorText, fmtDate, fmtDateTime, rupees, todayLocal } from "@/lib/shop/format";
 import { searchRentalIds } from "@/lib/shop/searchRentals";
 import type { Payment } from "@/lib/shop/types";
@@ -135,6 +136,18 @@ export default function Finance() {
     }
   }, [canManage, from, to, f.to, branch, f.status, matchIds, tz]);
   useEffect(() => { void loadLedger(); }, [loadLedger]);
+
+  // expenses in the same dates and branch, for the Expenses and Profit cards
+  const [expenses, setExpenses] = useState<number | null>(null);
+  const [expVersion, setExpVersion] = useState(0);
+  useEffect(() => {
+    if (!canManage || (from && to < from)) return;
+    let live = true;
+    call<{ total: number }>("expense_summary", { p_from: from || "2000-01-01", p_to: to, p_branch_id: branch || null })
+      .then((r) => { if (live) setExpenses(Number(r.total)); })
+      .catch((e) => { if (live) { setExpenses(0); toast.error("Could not load the expenses: " + errorText(e)); } });
+    return () => { live = false; };
+  }, [canManage, from, to, branch, expVersion]);
 
   const local = useCallback((iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(iso)), [tz]);
   const inRange = (d: string, a: string, b: string) => (!a || d >= a) && d <= b;
@@ -263,6 +276,12 @@ export default function Finance() {
           hint={ready ? `owed on ${calc.owing(branch).length} rental${calc.owing(branch).length === 1 ? "" : "s"}` : undefined} />
         <SummaryCard label="Deposits held now" value={ready ? rupees(calc.deposits(branch)) : "…"} hint="to be refunded or kept on return" />
       </div>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+        <SummaryCard label={`Expenses · ${rangeText}`} value={ready && expenses !== null ? rupees(expenses) : "…"} tone="rust"
+          hint="rent, salaries, cleaning, tailoring (see Expenses below)" />
+        <SummaryCard label={`Profit · ${rangeText}`} value={ready && expenses !== null ? signed(r2(earnedNow - expenses)) : "…"}
+          tone={ready && expenses !== null && earnedNow - expenses < 0 ? "rust" : "gold"} hint="earned minus expenses" />
+      </div>
       <p className="mt-3 text-xs text-muted-foreground">
         Earned counts rentals by pickup date and cancellation fees by cancellation date. Collected counts money on the day it was received.
         Date and branch filters apply here; status and payment filters only change the records list.
@@ -331,6 +350,8 @@ export default function Finance() {
           )}
         </section>
       </div>
+
+      <ExpensesPanel from={from} to={to} branch={branch} onChanged={() => setExpVersion((v) => v + 1)} />
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">

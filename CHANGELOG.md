@@ -1,6 +1,22 @@
 # Changelog
 
 ## 0.3.0 (unreleased): v2 rental engine
+- Pre-launch rules (migrations 22 to 25, 29 Oct 2026), each with database tests (supabase/tests/launch, expenses, products,
+  invoice) and browser tests (tests/launch.spec.ts):
+  - a piece still out past its return date is no longer offered to new bookings (free counts, piece picker, chosen pieces, swaps)
+  - the deposit is given back at return or cancellation; only the owner can hand it back while the piece is out
+  - a return time more than 2 hours in the past needs a manager or the owner and is written to the audit log
+  - 14-day free trial for new shops (`shops.trial_ends`); a shop in its trial is not paused for a missing payment
+  - `update_my_shop` accepts only known settings; only a manager or the owner unblocks a customer
+  - price changes (discount, agreed price) are logged with who made them (`price_changes`, owner and manager read)
+  - bug fixed: creating a clothing shop from the Zypher console failed (its first category had no base SKU); it now starts with CL
+  - expenses and profit: `expenses` table, `add_expense` (owner, manager), `update_expense` and `delete_expense` (owner, with a reason, audited),
+    `expense_summary`; Finance shows Expenses and Profit (earned minus expenses) and an Expenses list with CSV
+  - `save_product` makes the pieces in the same step (variation `stock` per branch), so a product is never left without its pieces
+  - tax invoices: own number (PREFIX/YYMM-style financial year/NNNN) and date, fixed when issued after the return (`issue_invoice`);
+    a shop without GSTIN prints a plain receipt; a cancelled booking prints a cancellation receipt; optional SAC code in Shop settings
+  - each kind of shop is sent to its own screens (bridal shops never land on the old lists, car shops never on the clothing screens)
+  - the app can be added to a phone's home screen (web app manifest and icons)
 - New database designed from scratch for bridal, groom, resort, car and bike rentals; the inherited TRENDZ
   migrations and QA history are removed
 - One rental record from booking to return, time ranges, double booking blocked by the database, business
