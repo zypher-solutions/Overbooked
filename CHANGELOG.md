@@ -31,9 +31,13 @@
   per booking
 - SKUs of bridal and groom shops follow TRENDZ: category base SKU (2 to 6 capital letters), product `BR-001` numbered for
   you (not typable), variation `BR-001-GOLD-M`; checked in the forms, the CSV import and the database. Demo SKUs renamed
-- 181 database tests, 9 browser tests
+- Dashboard and Finance of bridal and groom shops completed to match TRENDZ: Filter panel with chips, Completed Rentals,
+  Ledger Records with Record payment, Export PDF and Records CSV, search in place, phone cards. Audit in docs/TRENDZ_PARITY.md
+- Bookings (Buffer, Available, Completed Bookings) and All Products (stock filter, Delete, Reactivate, phone cards) match TRENDZ
+- 187 database tests, 9 browser tests
 
 ### Database
+- `20261101000014_reactivate_product.sql`: `reactivate_product(uuid)` for owners and managers. APPLIED to local only
 - `20261101000012_cleaning_days_per_booking.sql`: `rentals.cleaning_days`; optional `p_cleaning_days` on `branch_availability`
   and `find_available_units` (old calls unchanged); create, change, return and extend use it. APPLIED to local only
 - `20261101000013_sku_format_clothes.sql`: SKU format triggers for clothes shops, checked when a SKU is added or changed.

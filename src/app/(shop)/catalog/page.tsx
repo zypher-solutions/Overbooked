@@ -3,11 +3,13 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Plus, QrCode, Search, Upload } from "lucide-react";
+import { Plus, QrCode, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
+import { call } from "@/lib/shop/api";
+import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { BASIS_LABELS, errorText, num, rupees } from "@/lib/shop/format";
 import { headlinePrice, useCatalog, variationLabel } from "@/lib/shop/useCatalog";
 import type { AddOn, AddOnBasis, Category, Product, Unit } from "@/lib/shop/types";
@@ -53,10 +55,11 @@ function Catalog() {
 
 function Items() {
   const { categories, branches, templateOf, word, trendz } = useShop();
-  const { products } = useCatalog({ includeInactive: true });
+  const { products, reload } = useCatalog({ includeInactive: true });
   const [units, setUnits] = useState<Pick<Unit, "variation_id" | "branch_id" | "status">[]>([]);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
+  const [stockFilter, setStockFilter] = useState<"" | "in" | "out">("");
   const [showInactive, setShowInactive] = useState(false);
 
   useEffect(() => {
@@ -87,7 +90,9 @@ function Items() {
   }, [units]);
 
   const term = q.trim().toLowerCase();
-  const list = (products ?? []).filter((p) => (showInactive || p.is_active) && (!cat || p.category_id === cat)
+  const stockOf = (p: Product) => (p.product_variations ?? []).filter((v) => v.is_enabled).reduce((s, v) => s + (count.get(v.id)?.total ?? 0), 0);
+  const list = (products ?? []).filter((p) => (showInactive || p.is_active || trendz) && (!cat || p.category_id === cat)
+    && (!stockFilter || p.is_set || (stockFilter === "in") === (stockOf(p) > 0))
     && (!term || `${p.name} ${p.sku} ${(p.product_variations ?? []).map((v) => `${v.name} ${v.sku}`).join(" ")}`.toLowerCase().includes(term)));
 
   return (
@@ -103,11 +108,17 @@ function Items() {
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         ) : null}
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /> Show switched-off
-        </label>
+        {trendz ? (
+          <select className={cn(inputClass, "w-auto")} aria-label="Stock status" value={stockFilter} onChange={(e) => setStockFilter(e.target.value as typeof stockFilter)}>
+            <option value="">Filter by stock status</option><option value="in">In stock</option><option value="out">Out of stock</option>
+          </select>
+        ) : (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /> Show switched-off
+          </label>
+        )}
       </div>
-      {trendz ? <ProductTable list={list} units={units} loading={products === null} /> : (
+      {trendz ? <ProductTable list={list} units={units} loading={products === null} reload={reload} /> : (
       <div className={tableWrap}>
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className={theadClass}>
@@ -151,8 +162,30 @@ function Items() {
 }
 
 // All Products, as in TRENDZ: one row per product with its variations, rate, stock and branches
-function ProductTable({ list, units, loading }: { list: Product[]; units: Pick<Unit, "variation_id" | "branch_id" | "status">[]; loading: boolean }) {
-  const { categories, activeBranches, canManage } = useShop();
+function ProductTable({ list, units, loading, reload }: { list: Product[]; units: Pick<Unit, "variation_id" | "branch_id" | "status">[]; loading: boolean; reload: () => Promise<void> }) {
+  const { categories, activeBranches, canManage, isOwner } = useShop();
+  const [deleting, setDeleting] = useState<Product | null>(null);
+  const reactivate = async (p: Product) => {
+    try {
+      await call("reactivate_product", { p_product_id: p.id });
+      toast.success(`${p.name} is active again`);
+      await reload();
+    } catch (e) { toast.error(errorText(e)); }
+  };
+  const remove = async (p: Product) => {
+    try {
+      const res = await call<{ result: string }>("delete_or_deactivate_product", { p_product_id: p.id });
+      toast.success(res.result === "deleted" ? "Deleted" : "Switched off (it has rental history)");
+      await reload();
+    } catch (e) { toast.error(errorText(e)); }
+  };
+  const actions = (p: Product, full = false) => (
+    <span className={cn("flex flex-wrap items-center gap-2", full ? "mt-auto border-t border-border/50 pt-2" : "justify-end")}>
+      <Link href={`/catalog/${p.id}`} className={cn(ghostButtonClass, full && "flex-1")}>{canManage ? "Edit" : "View"}</Link>
+      {canManage && !p.is_active ? <button className={ghostButtonClass} onClick={() => void reactivate(p)}>Reactivate</button> : null}
+      {isOwner ? <button className={dangerIconClass} title="Delete product" aria-label={`Delete ${p.name}`} onClick={() => setDeleting(p)}><Trash2 className="h-4 w-4" /></button> : null}
+    </span>
+  );
   const byVariation = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     for (const u of units) {
@@ -165,8 +198,15 @@ function ProductTable({ list, units, loading }: { list: Product[]; units: Pick<U
   }, [units]);
   const perBranch = (p: Product, branchId: string) => (p.product_variations ?? []).reduce((s, v) => s + (byVariation.get(v.id)?.get(branchId) ?? 0), 0);
 
+  const rateText = (p: Product) => {
+    const rates = (p.product_variations ?? []).filter((v) => v.is_enabled).map((v) => headlinePrice(v)?.amount).filter((x): x is number => x !== undefined);
+    if (!rates.length) return <span className="text-rust">No price</span>;
+    return Math.min(...rates) === Math.max(...rates) ? rupees(rates[0]) : `${rupees(Math.min(...rates))} – ${rupees(Math.max(...rates))}`;
+  };
+
   return (
-    <div className={tableWrap}>
+    <>
+    <div className={cn(tableWrap, "hidden xl:block")}>
       <table className="w-full min-w-[860px] text-left text-sm">
         <thead className={theadClass}>
           <tr>
@@ -199,15 +239,54 @@ function ProductTable({ list, units, loading }: { list: Product[]; units: Pick<U
                     </span>
                   </td>
                   <td className="px-4 py-2"><StatusBadge tone={p.is_active ? "emerald" : "rust"}>{p.is_active ? "Active" : "Inactive"}</StatusBadge></td>
-                  <td className="px-4 py-2 text-right"><Link href={`/catalog/${p.id}`} className={ghostButtonClass}>{canManage ? "Edit" : "View"}</Link></td>
+                  <td className="px-4 py-2 text-right">{actions(p)}</td>
                 </tr>
               );
             })}
         </tbody>
       </table>
     </div>
+
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:hidden">
+      {loading ? <p className="col-span-full py-6 text-center text-sm text-muted-foreground">Loading...</p>
+        : list.length === 0 ? <div className="col-span-full"><Empty>No products yet. Add one with Add New Product.</Empty></div>
+        : list.map((p) => {
+          const total = activeBranches.reduce((s, b) => s + perBranch(p, b.id), 0);
+          return (
+            <div key={p.id} className="glass flex flex-col rounded-xl p-4">
+              <div className="mb-3 flex gap-4">
+                {p.image_url ? <img src={p.image_url} alt="" className="h-16 w-16 shrink-0 rounded-md border border-border object-cover" /> : <span className="h-16 w-16 shrink-0 rounded-md border border-border bg-muted/60" />}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="truncate font-semibold">{p.name}</h3>
+                    <StatusBadge tone={p.is_active ? "emerald" : "rust"}>{p.is_active ? "Active" : "Inactive"}</StatusBadge>
+                  </div>
+                  <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{p.sku}</p>
+                  <p className="mt-1 font-mono text-sm font-medium text-gold">{rateText(p)}</p>
+                </div>
+              </div>
+              <div className="mb-3 grid grid-cols-2 gap-2 rounded-lg bg-muted/70 p-2.5 text-xs">
+                <div><p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Category</p><p className="font-medium text-gold">{categories.find((c) => c.id === p.category_id)?.name ?? "Uncategorized"}</p></div>
+                <div className="text-right"><p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Stock</p><p className={cn("font-medium", total > 0 ? "text-emerald" : "text-rust")}>{p.is_set ? "Set" : total > 0 ? `${total} units` : "Out of stock"}</p></div>
+                <div className="col-span-2 flex items-start justify-between border-t border-border pt-2">
+                  <div className="flex flex-wrap gap-1">
+                    {activeBranches.map((b) => <span key={b.id} className="rounded-md border border-border px-1.5 py-0.5 text-[10px]">{b.name} {perBranch(p, b.id)}</span>)}
+                  </div>
+                  <span className="text-muted-foreground">{p.is_set ? "" : `${(p.product_variations ?? []).filter((v) => v.is_enabled).length} variations`}</span>
+                </div>
+              </div>
+              {actions(p, true)}
+            </div>
+          );
+        })}
+    </div>
+    <ConfirmDialog open={!!deleting} message={`Delete ${deleting?.name}?\n\nIf it has rental or booking history it will be switched off instead of deleted.`}
+      onCancel={() => setDeleting(null)} onConfirm={() => { if (deleting) void remove(deleting); setDeleting(null); }} />
+    </>
   );
 }
+
+const dangerIconClass = "inline-flex items-center justify-center rounded-md border border-rust/40 bg-rust/10 p-2 text-rust transition-colors hover:bg-rust/15";
 
 function Extras() {
   const { shop, addOns, templates, canManage, refresh } = useShop();

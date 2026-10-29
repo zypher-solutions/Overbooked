@@ -812,6 +812,9 @@ isOneToOne: false
 "_insert_payment":
 { Args: { "p_amount": number,"p_kind": string,"p_method": string,"p_note"?: string,"p_rental_id": string }; Returns: undefined
                            },
+"_is_clothes_shop":
+{ Args: { "p_shop_id": string }; Returns: boolean
+                           },
 "_money":
 { Args: { "p": Json,"p_key": string }; Returns: number
                            },
@@ -966,6 +969,9 @@ isOneToOne: false
                            },
 "quote_rental":
 { Args: { "p": Json }; Returns: Json
+                           },
+"reactivate_product":
+{ Args: { "p_product_id": string }; Returns: undefined
                            },
 "recompute_rental_money":
 { Args: { "p_rental_id": string }; Returns: undefined
