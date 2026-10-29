@@ -18,10 +18,10 @@ their shop, role and branch. The screens only make it pleasant; the database has
 
 ## Many shops in one database
 - Every business row carries `shop_id`. A restrictive rule on every table keeps a person inside
-  `current_shop_id()`: their own shop, or for Zypher staff the shop they opened.
+  `current_shop_id()`: their own shop. Zypher admins have none.
 - Composite foreign keys (`shop_id, x_id`) make it impossible to link rows of two shops.
-- `current_shop_id()` (business data) is NULL for Zypher admins; `setup_shop_id()` (the shop opened for setup) reaches only
-  `branches` and `staff_invites`. Billing, shops and business types can only be changed through functions, and setup changes are written to `audit_log`.
+- `current_shop_id()` is NULL for Zypher admins, so no table is open to them. Setup (branches, stock counts, staff) goes through functions that
+  name the shop each time (`setup_branches(shop_id)`, `setup_people`, `setup_save_branch`, `setup_set_person`...) and check the caller again. There is no "open shop" state. Billing, shops and business types change only through functions, and setup changes are written to `audit_log`.
 - Shop functions run as the role `app_rpc`, which the same rules bind, so even a bug inside one cannot
   reach another shop. Zypher functions (console) run as the owner and check `is_platform_admin()`.
 
@@ -53,7 +53,7 @@ says "Check-in" and asks for guests, a car shop asks for odometer, fuel and lice
 | Customers | Search, history, what they owe, ID and licence, block |
 | Catalog | Items by category with prices per rate type, units per branch and their status, extras, categories, CSV import |
 | Money and reports | Money in by method, booked value, owed, deposits held, every money record (CSV), stock right now |
-| Branches, Staff | Zypher only (Open shop from the console): branches, invite links, roles |
+| Branches (with stock counts), Staff | Zypher only, on the shop's page in the console (Branches and stock, Staff tabs): branches, invite links, roles |
 | Settings | Owner: shop rules (grace time, check-in/out times, licence rule) |
 
 ### Bridal and groom shops: the TRENDZ screens

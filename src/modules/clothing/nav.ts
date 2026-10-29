@@ -21,7 +21,7 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
     { href: "/catalog?tab=categories", label: "Categories", icon: Tag, show: c.canManage },
     { href: "/catalog/import", label: "CSV Import", icon: Upload, show: c.canManage },
   ] },
-  // branches and staff are set up by Zypher; where stock is kept shows for a Zypher support login
+  // branches and staff are set up by Zypher in its console; where stock is kept shows for a Zypher support login
   { title: "Admin", items: [
     { href: "/stock-locations", label: "Stock Locations", icon: Boxes, show: c.isSupport },
     { href: "/settings", label: "Shop settings", icon: Settings, show: c.isOwner },

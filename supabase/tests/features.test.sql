@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(36);
+SELECT plan(35);
 
 \set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
@@ -56,9 +56,7 @@ SELECT lives_ok($$ SELECT public.record_shop_payment('5a000000-0000-0000-0000-00
 SELECT lives_ok($$ SELECT public.update_shop('5a000000-0000-0000-0000-000000000005', '{"status": "active"}') $$, 'and resumes the shop');
 SELECT is((SELECT array[status, paid_until::text, array_to_string(business_types, ',')] FROM platform_overview() WHERE slug = 'munnar-bikes'),
           array['active', (CURRENT_DATE + 30)::text, 'bike'], 'active again, paid until extended, business types kept');
-SELECT lives_ok($$ SELECT public.switch_shop('5a000000-0000-0000-0000-000000000003') $$, 'Zypher opens another shop');
-SELECT is((SELECT array_agg(token) FROM rentals), (SELECT array_agg(token) FROM rentals WHERE token LIKE 'GVR-%'),
-          'Zypher now sees only that shop''s rentals');
+SELECT is((SELECT count(*) FROM rentals), 0::bigint, 'Zypher sees no rentals in any shop');
 
 -- ===========================================================================
 -- Resort: whole property, no-show
@@ -152,18 +150,17 @@ SELECT is((public.admin_delete_payment((SELECT p.id FROM payments p JOIN rentals
 -- Staff management, invites, login limit
 -- ===========================================================================
 -- branches and staff are Zypher's job: the shop's own owner is refused
-SELECT throws_like($$ SELECT public.get_staff_emails() $$, 'Only Zypher can do this', 'an owner cannot list the logins');
-SELECT throws_like($$ SELECT public.set_staff_branch('aaaaaaaa-0000-0000-0000-000000000013', 'b0000000-0000-0000-0000-000000000002') $$,
+SELECT throws_like($$ SELECT public.setup_people('5a000000-0000-0000-0000-000000000001') $$, 'Only Zypher can do this', 'an owner cannot list the logins');
+SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000013', '{"branch_id":"b0000000-0000-0000-0000-000000000002"}') $$,
   'Only Zypher can do this', 'an owner cannot move staff between branches');
 SELECT throws_ok($$ INSERT INTO branches (shop_id, name, slug) VALUES ('5a000000-0000-0000-0000-000000000001', 'Third', 'third') $$,
   '42501', NULL, 'an owner cannot add a branch');
--- Zypher opens the shop from the console and does it
+-- Zypher does it from the shop's page in the console, naming the shop
 SELECT pg_temp.act_as(:zypher);
-SELECT public.switch_shop('5a000000-0000-0000-0000-000000000001');
-SELECT is((SELECT count(*) FROM public.get_staff_emails()), 4::bigint, 'Zypher sees the shop''s 4 logins (one is the support login)');
-SELECT throws_like($$ SELECT public.admin_set_staff_status('aaaaaaaa-0000-0000-0000-000000000001', false, 'owner') $$,
+SELECT is(jsonb_array_length(public.setup_people('5a000000-0000-0000-0000-000000000001')), 4, 'Zypher sees the shop''s 4 logins (one is the support login)');
+SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', '{"is_active":false}') $$,
   'You cannot change your own role or active status', 'Zypher cannot change their own login');
-SELECT throws_like($$ SELECT public.set_staff_branch('aaaaaaaa-0000-0000-0000-000000000013', 'b0000000-0000-0000-0000-000000000003') $$,
+SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000013', '{"branch_id":"b0000000-0000-0000-0000-000000000003"}') $$,
   'Branch not found in this shop', 'cannot move staff to another shop''s branch');
 SELECT pg_temp.as_postgres();
 INSERT INTO staff_invites (shop_id, email, role, branch_id) VALUES

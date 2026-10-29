@@ -107,7 +107,7 @@ export async function inviteZypherMember(input: { fullName: string; email: strin
     throw new Error(/registered|exists/i.test(error?.message ?? "") ? "This email already has an Overbooked account." : "Could not create the invite: " + (error?.message ?? "unknown error"));
   }
   // the new account starts inactive with no shop; make it Zypher staff
-  const { error: upErr } = await admin.from("profiles").update({ role: "super_admin", is_active: true, shop_id: null, branch_id: null, active_shop_id: null }).eq("id", data.user.id);
+  const { error: upErr } = await admin.from("profiles").update({ role: "super_admin", is_active: true, shop_id: null, branch_id: null }).eq("id", data.user.id);
   if (upErr) throw new Error("Account created, but could not make it Zypher staff: " + upErr.message);
   await supabase.rpc("log_setup_event", { p_shop_id: null, p_action: "zypher_member_invited", p_detail: { email } });
   return { link: `${await siteOrigin()}/welcome?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=invite` };

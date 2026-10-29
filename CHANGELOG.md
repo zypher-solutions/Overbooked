@@ -36,6 +36,7 @@
 - Bookings (Buffer, Available, Completed Bookings) and All Products (stock filter, Delete, Reactivate, phone cards) match TRENDZ
 - One "Clothing rental" business type replaces Bridal wear and Groom wear (they were identical); Colour and Size attributes offer
   clickable suggestions, the attribute name is a dropdown with Custom, the "Can be booked" tick box is removed (Delete and Reactivate in All Products cover it)
+- **Setup lives in the console**: each shop's page has Branches and stock (one list: Branch Management and Stock Locations were the same places) and Staff tabs. The "Open shop" step is gone; every setup action names the shop, so two tabs can work on two shops and nothing stays switched on after sign-out. Zypher admins no longer reach any shop screen (they are sent back to the console)
 - **Zypher is setup and billing only**: the console and Open shop can no longer read or change a shop's bookings, customers, money,
   products or photos (the database refuses, not just the menu). A per-shop Zypher login (role `support`) works inside one shop for
   debugging, without money corrections. Closed: a recovery link could be made for any user; billing, shops and business types could be
@@ -56,9 +57,10 @@
   `zod` removed, now 0 vulnerabilities; password change now needs a recent sign-in (`secure_password_change`)
 - A smoke crawl (tests/smoke.spec.ts) opens every main screen for a clothing owner, resort owner, car staff and Zypher and fails on any page
   error, React warning or failed data request
-- 280 database tests, 18 browser tests
+- 287 database tests, 19 browser tests
 
 ### Database
+- `20261101000021_setup_in_console.sql`: setup by shop id (`setup_branches`, `setup_save_branch`, `setup_delete_branch`, `setup_people`, `setup_set_person`, `setup_check_invite`, `setup_check_person`); drops `switch_shop`, `setup_shop_id`, `profiles.active_shop_id` and the old staff functions; Zypher reads no shop table directly. NOT APPLIED to any hosted database
 - `20261101000020_shop_notes_private.sql`: `shops.notes` unreadable by shop people; Zypher audit view limited to setup and billing. NOT APPLIED to any hosted database
 - `20261101000019_storage_limits.sql`: photo buckets accept only jpeg/png/webp, 5 MB (products) and 10 MB (handover photos). NOT APPLIED to any hosted database
 - `20261101000018_least_privilege.sql`: signed-out role loses all table rights; signed-in role loses TRUNCATE/TRIGGER/REFERENCES and write rights where no write rule exists. NOT APPLIED to any hosted database

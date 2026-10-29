@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,52 +12,12 @@ import { PageHeader, Panel, StatusBadge, ghostButtonClass, tableWrap, theadClass
 // Stock Locations, as in TRENDZ: each branch with its contact details and how many pieces it holds,
 // free, out, in service or lost; open a branch to see the count of every item there.
 export default function StockLocationsPage() {
-  const { role } = useShop();
-  return role === "super_admin" ? <SetupStockLocations /> : <StockLocations />;
+  return <StockLocations />;
 }
 
-// Zypher's setup view: how many pieces each branch holds. Counts only, no bookings, customers or prices.
-function SetupStockLocations() {
-  const { branches } = useShop();
-  const [counts, setCounts] = useState<Map<string, { pieces: number; available: number; maintenance: number; lost: number }> | null>(null);
-  useEffect(() => {
-    void createClient().rpc("setup_branch_stock").then(({ data }) => {
-      setCounts(new Map(((data ?? []) as { branch_id: string; pieces: number; available: number; maintenance: number; lost: number }[]).map((r) => [r.branch_id, { pieces: Number(r.pieces), available: Number(r.available), maintenance: Number(r.maintenance), lost: Number(r.lost) }])));
-    });
-  }, []);
-  return (
-    <>
-      <PageHeader title="Stock Locations" subtitle="Where this shop keeps its pieces (counts only)"
-        actions={<Link href="/branches" className={ghostButtonClass}>Edit branches</Link>} />
-      <div className={tableWrap}>
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className={theadClass}>
-            <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Phone</th><th className="px-4 py-3 text-right">Pieces</th>
-              <th className="px-4 py-3 text-right">In service</th><th className="px-4 py-3 text-right">Lost</th><th className="px-4 py-3">Enabled</th></tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {branches.map((b) => {
-              const c = counts?.get(b.id);
-              return (
-                <tr key={b.id}>
-                  <td className="px-4 py-2 font-medium">{b.name}</td>
-                  <td className="px-4 py-2 font-mono text-xs">{b.phone ?? "—"}</td>
-                  <td className="px-4 py-2 text-right font-mono">{counts ? c?.pieces ?? 0 : "…"}</td>
-                  <td className="px-4 py-2 text-right font-mono">{c?.maintenance || ""}</td>
-                  <td className="px-4 py-2 text-right font-mono text-rust">{c?.lost || ""}</td>
-                  <td className="px-4 py-2"><StatusBadge tone={b.is_active ? "emerald" : "rust"}>{b.is_active ? "Active" : "Inactive"}</StatusBadge></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
 
 function StockLocations() {
-  const { role, isSupport, branches } = useShop();
+  const { isSupport, branches } = useShop();
   const { stock } = useStock();
   const { products } = useCatalog({ includeInactive: true });
   const [openId, setOpenId] = useState<string | null>(null);
@@ -80,7 +39,6 @@ function StockLocations() {
       <PageHeader title="Stock Locations" subtitle="Where every piece is kept"
         actions={<>
           <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link>
-          <Link href="/branches" className={ghostButtonClass}>Edit branches</Link>
         </>} />
       <div className={tableWrap}>
         <table className="w-full min-w-[820px] text-left text-sm">

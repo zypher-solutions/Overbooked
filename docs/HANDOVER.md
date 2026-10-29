@@ -43,7 +43,7 @@ A shop whose business types are all clothes gets the TRENDZ screens; other shops
 - **Dashboard** (`TrendzDashboard.tsx`), **Finance** (`/finance`), **Bookings** (`/bookings`),
   **All Rentals** (`/all-rentals`), **All Products** table, **Stock Locations**, **Add New Product** as a
   3-step wizard that also creates the pieces (`ProductWizard.tsx`).
-- **Zypher-only admin** (migration `20261101000011`): only Zypher, inside an opened shop, writes branches,
+- **Zypher-only admin** (migration `20261101000011`): only Zypher, from the shop's page in the console, writes branches,
   invites staff, changes roles. Enforced in the database, not just the menu.
 - Fixed on the way: paged lists use a unique order; CSV exports escape formulas.
 - Full screen list: `docs/ARCHITECTURE.md` ("Bridal and groom shops: the TRENDZ screens").

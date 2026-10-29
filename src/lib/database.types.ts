@@ -313,23 +313,17 @@ isOneToOne: false
                   ]
                 },"profiles": {
                   Row: {
-                    "active_shop_id": string | null,"avatar_url": string | null,"branch_id": string | null,"created_at": string,"full_name": string,"id": string,"is_active": boolean,"role": string,"shop_id": string | null
+                    "avatar_url": string | null,"branch_id": string | null,"created_at": string,"full_name": string,"id": string,"is_active": boolean,"role": string,"shop_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "active_shop_id"?: string | null,"avatar_url"?: string | null,"branch_id"?: string | null,"created_at"?: string,"full_name": string,"id": string,"is_active"?: boolean,"role"?: string,"shop_id"?: string | null
+                    "avatar_url"?: string | null,"branch_id"?: string | null,"created_at"?: string,"full_name": string,"id": string,"is_active"?: boolean,"role"?: string,"shop_id"?: string | null
                   }
                   Update: {
-                    "active_shop_id"?: string | null,"avatar_url"?: string | null,"branch_id"?: string | null,"created_at"?: string,"full_name"?: string,"id"?: string,"is_active"?: boolean,"role"?: string,"shop_id"?: string | null
+                    "avatar_url"?: string | null,"branch_id"?: string | null,"created_at"?: string,"full_name"?: string,"id"?: string,"is_active"?: boolean,"role"?: string,"shop_id"?: string | null
                   }
                   Relationships: [
                     {
-      foreignKeyName: "profiles_active_shop_id_fkey"
-      columns: ["active_shop_id"]
-isOneToOne: false
-      referencedRelation: "shops"
-      referencedColumns: ["id"]
-    },{
       foreignKeyName: "profiles_shop_branch_fkey"
       columns: ["shop_id","branch_id"]
 isOneToOne: false
@@ -838,8 +832,8 @@ isOneToOne: false
 "_require_role":
 { Args: { "p_allowed"?: (string)[] }; Returns: string
                            },
-"_require_setup":
-{ Args: Record<PropertyKey, never>; Returns: string
+"_require_setup_shop":
+{ Args: { "p_shop_id": string }; Returns: string
                            },
 "_require_zypher":
 { Args: Record<PropertyKey, never>; Returns: undefined
@@ -867,9 +861,6 @@ isOneToOne: false
                            },
 "admin_set_line_amount":
 { Args: { "p_amount": number,"p_line_id": string,"p_reason": string }; Returns: Json
-                           },
-"admin_set_staff_status":
-{ Args: { "p_is_active": boolean,"p_role": string,"p_user_id": string }; Returns: undefined
                            },
 "admin_update_payment":
 { Args: { "p_amount": number,"p_method": string,"p_payment_id": string,"p_reason": string }; Returns: Json
@@ -933,11 +924,6 @@ isOneToOne: false
                            },
 "get_my_role":
 { Args: Record<PropertyKey, never>; Returns: string
-                           },
-"get_staff_emails":
-{ Args: Record<PropertyKey, never>; Returns: {
-              "email": string,"id": string,"last_sign_in_at": string
-            }[]
                            },
 "import_catalog":
 { Args: { "p": Json }; Returns: Json
@@ -1012,19 +998,29 @@ isOneToOne: false
 "save_set_items":
 { Args: { "p_items": Json,"p_product_id": string }; Returns: undefined
                            },
-"set_staff_branch":
-{ Args: { "p_branch_id": string,"p_user_id": string }; Returns: undefined
-                           },
 "set_unit_status":
 { Args: { "p_reason"?: string,"p_status": string,"p_unit_id": string }; Returns: Json
                            },
-"setup_branch_stock":
-{ Args: Record<PropertyKey, never>; Returns: {
-              "available": number,"branch_id": string,"lost": number,"maintenance": number,"pieces": number
-            }[]
+"setup_branches":
+{ Args: { "p_shop_id": string }; Returns: Json
                            },
-"setup_shop_id":
-{ Args: Record<PropertyKey, never>; Returns: string
+"setup_check_invite":
+{ Args: { "p_branch_id": string,"p_role": string,"p_shop_id": string }; Returns: undefined
+                           },
+"setup_check_person":
+{ Args: { "p_shop_id": string,"p_user_id": string }; Returns: string
+                           },
+"setup_delete_branch":
+{ Args: { "p_branch_id": string,"p_shop_id": string }; Returns: undefined
+                           },
+"setup_people":
+{ Args: { "p_shop_id": string }; Returns: Json
+                           },
+"setup_save_branch":
+{ Args: { "p": Json,"p_branch_id": string,"p_shop_id": string }; Returns: string
+                           },
+"setup_set_person":
+{ Args: { "p": Json,"p_shop_id": string,"p_user_id": string }; Returns: undefined
                            },
 "shop_detail":
 { Args: { "p_shop_id": string }; Returns: Json
@@ -1037,9 +1033,6 @@ isOneToOne: false
                            },
 "swap_unit":
 { Args: { "p_new_unit_id": string,"p_old_unit_id": string,"p_rental_id": string }; Returns: undefined
-                           },
-"switch_shop":
-{ Args: { "p_shop_id": string }; Returns: undefined
                            },
 "update_my_shop":
 { Args: { "p": Json }; Returns: undefined

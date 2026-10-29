@@ -22,7 +22,6 @@ interface Profile {
   branch_id: string | null;
   is_active: boolean;
   shop_id: string | null;
-  active_shop_id: string | null;
 }
 
 export interface Shop {
@@ -49,12 +48,10 @@ interface AuthContextValue {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
-  /** The shop being worked in: the user's own shop, or for Zypher staff the shop they switched into. */
+  /** The signed-in person's shop (none for Zypher admins, who work in the console). */
   shop: Shop | null;
   isLoading: boolean;
   signOut: () => Promise<void>;
-  /** Zypher staff only: work inside another shop (null = no shop). Reloads the app. */
-  switchShop: (shopId: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -92,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("id", userId)
         .single();
       if (!mounted || !profileData) return;
-      const shopId = profileData.role === "super_admin" ? profileData.active_shop_id : profileData.shop_id;
+      const shopId = profileData.role === "super_admin" ? null : profileData.shop_id;
       const { data: shopData } = shopId
         ? await supabase.from("shops").select("id, name, slug, token_prefix, business_types, phone, email, address, gstin, logo_url, timezone, plan, status, paid_until, monthly_fee, settings, created_at").eq("id", shopId).maybeSingle()
         : { data: null };
@@ -195,20 +192,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/login";
   };
 
-  const switchShop = async (shopId: string | null) => {
-    const { error } = await supabase.rpc("switch_shop", { p_shop_id: shopId });
-    if (error) {
-      toast.error(error.message || "Could not switch shop.");
-      return;
-    }
-    // half-filled bookings belong to the shop being left
-    clearBookingDrafts();
-    // opening a shop is for setup only: branches, staff, stock locations
-    window.location.href = shopId ? "/branches" : "/zypher";
-  };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, shop, isLoading, signOut, switchShop }}>
+    <AuthContext.Provider value={{ session, user, profile, shop, isLoading, signOut }}>
       {checking || notice === "deactivated" || notice === "paused" ? null : children}
       <AlertDialog open={notice !== null}>
         <AlertDialogContent>

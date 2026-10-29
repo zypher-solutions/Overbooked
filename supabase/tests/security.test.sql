@@ -56,8 +56,8 @@ SELECT is((SELECT count(*) FROM products WHERE name = 'hacked'), 0::bigint, '...
 SELECT pg_temp.act_as(:bridal_owner);
 SELECT throws_like($$ SELECT public.update_shop('5a000000-0000-0000-0000-000000000001', '{"plan":"business"}') $$, 'Only Zypher can do this', 'an owner cannot change their own plan');
 SELECT throws_like($$ SELECT public.record_shop_payment('5a000000-0000-0000-0000-000000000001', 1, CURRENT_DATE, CURRENT_DATE, 'cash', 'x', 'subscription') $$, 'Only Zypher can do this', 'an owner cannot record Zypher billing');
-SELECT throws_like($$ SELECT public.switch_shop('5a000000-0000-0000-0000-000000000002') $$, 'Only Zypher can do this', 'an owner cannot open another shop');
-SELECT throws_like($$ SELECT public.admin_set_staff_status('aaaaaaaa-0000-0000-0000-000000000013', true, 'owner') $$, 'Only Zypher can do this', 'an owner cannot promote staff');
+SELECT throws_like($$ SELECT public.setup_branches('5a000000-0000-0000-0000-000000000002') $$, 'Only Zypher can do this', 'an owner cannot read another shop''s setup');
+SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000013', '{"role":"owner"}') $$, 'Only Zypher can do this', 'an owner cannot promote staff');
 SELECT throws_ok($$ UPDATE shops SET plan = 'business' WHERE id = '5a000000-0000-0000-0000-000000000001' $$, '42501', NULL, 'nor edit the shop row directly');
 SELECT throws_ok($$ INSERT INTO staff_invites (shop_id, email, role) VALUES ('5a000000-0000-0000-0000-000000000001', 'x@x.test', 'owner') $$, '42501', NULL, 'nor invite people');
 SELECT throws_ok($$ UPDATE profiles SET role = 'super_admin', shop_id = NULL WHERE id = 'aaaaaaaa-0000-0000-0000-000000000011' $$, '42501', NULL, 'nor make themselves Zypher');

@@ -77,8 +77,7 @@ SELECT gen_random_uuid(), u.id, u.id::text,
 FROM auth.users u
 WHERE u.email LIKE '%.test';
 
-UPDATE public.profiles SET role = 'super_admin', is_active = true, shop_id = NULL,
-       active_shop_id = '5a000000-0000-0000-0000-000000000001'
+UPDATE public.profiles SET role = 'super_admin', is_active = true, shop_id = NULL
 WHERE id = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 UPDATE public.profiles p SET role = v.role, shop_id = v.shop_id, branch_id = v.branch_id, is_active = true

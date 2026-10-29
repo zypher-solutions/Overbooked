@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(37);
+SELECT plan(45);
 
 \set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
@@ -27,10 +27,9 @@ BEGIN
 END $$;
 GRANT EXECUTE ON FUNCTION pg_temp.act_as(uuid), pg_temp.as_postgres() TO authenticated;
 
--- ===== Zypher admin, with Kalyani opened for setup: business data is invisible =====
+-- ===== Zypher admin: business data is invisible =====
 SELECT pg_temp.act_as(:zypher);
 SELECT is(public.current_shop_id(), NULL::uuid, 'a Zypher admin has no business shop');
-SELECT is(public.setup_shop_id(), :kalyani::uuid, 'but has the shop opened for setup');
 SELECT is((SELECT count(*) FROM customers), 0::bigint, 'cannot read customers');
 SELECT is((SELECT count(*) FROM rentals), 0::bigint, 'cannot read rentals');
 SELECT is((SELECT count(*) FROM payments), 0::bigint, 'cannot read payments');
@@ -47,12 +46,12 @@ SELECT throws_like($$ SELECT public.record_rental_payment('00000000-0000-0000-00
 SELECT throws_like($$ SELECT public.dashboard_summary(CURRENT_DATE, CURRENT_DATE) $$, 'Your account is not active in a shop', 'cannot read the shop dashboard');
 SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id = 'rental_photos'), 0::bigint, 'cannot read handover or ID photos');
 
--- setup still works: branches and invites of the opened shop, never another shop
-SELECT cmp_ok((SELECT count(*) FROM branches), '>', 0::bigint, 'sees the branches of the setup shop');
-SELECT is((SELECT count(*) FROM branches WHERE shop_id <> :kalyani), 0::bigint, 'and no other shop''s branches');
-SELECT is((SELECT count(*) FROM profiles WHERE shop_id IS NOT NULL AND shop_id <> :kalyani), 0::bigint, 'sees only that shop''s people, not every shop''s');
-SELECT lives_ok($$ SELECT * FROM public.get_staff_emails() $$, 'can list the setup shop''s logins');
-SELECT cmp_ok((SELECT count(*) FROM public.setup_branch_stock()), '>', 0::bigint, 'sees piece counts per branch');
+-- setup works by naming the shop: any shop, through functions, never through the tables
+SELECT cmp_ok(jsonb_array_length(public.setup_branches(:kalyani)), '>', 0, 'lists the branches of a shop it names');
+SELECT cmp_ok((SELECT sum((b ->> 'pieces')::int) FROM jsonb_array_elements(public.setup_branches(:kalyani)) b), '>', 0::bigint, 'with piece counts per branch');
+SELECT cmp_ok(jsonb_array_length(public.setup_people(:kalyani)), '>', 0, 'lists the logins of a shop it names');
+SELECT is((SELECT count(*) FROM branches), 0::bigint, 'but reads no branch table directly');
+SELECT is((SELECT count(*) FROM profiles WHERE shop_id IS NOT NULL), 0::bigint, 'nor any shop''s people directly');
 
 SELECT throws_ok($$ UPDATE shops SET monthly_fee = 1 WHERE id = '5a000000-0000-0000-0000-000000000001' $$, '42501', NULL, 'a free-form shop update is refused');
 SELECT isnt((SELECT monthly_fee FROM shops WHERE id = '5a000000-0000-0000-0000-000000000001'), 1::numeric, 'but changes nothing');
@@ -61,12 +60,26 @@ SELECT is((SELECT count(*) FROM shop_payments WHERE amount = 1), 0::bigint, 'but
 SELECT throws_ok($$ DELETE FROM business_templates WHERE key = 'resort' $$, '42501', NULL, 'a free-form type delete is refused');
 SELECT is((SELECT count(*) FROM business_templates WHERE key = 'resort'), 1::bigint, 'but the business type is still there');
 
--- an opened shop is logged
+-- branch and staff changes name the shop, are checked each time, and are logged
+SELECT throws_like($$ SELECT public.setup_save_branch('5a000000-0000-0000-0000-000000000002', NULL, '{"name":"Over the limit"}') $$, 'Your Starter plan allows 1%', 'the plan''s branch limit applies to Zypher too');
 SELECT pg_temp.as_postgres();
+UPDATE shops SET plan = 'business' WHERE id = '5a000000-0000-0000-0000-000000000002';
 SELECT pg_temp.act_as(:zypher);
-SELECT public.switch_shop(:raja);
-SELECT is(public.setup_shop_id(), :raja::uuid, 'Zypher can move to another shop for setup');
-SELECT cmp_ok((SELECT count(*) FROM audit_log WHERE action = 'setup_opened' AND shop_id = :raja), '>', 0::bigint, 'opening a shop for setup is in the audit log');
+SELECT lives_ok($$ SELECT public.setup_save_branch('5a000000-0000-0000-0000-000000000002', NULL, '{"name":"Zypher test branch","phone":"9000000000"}') $$, 'adds a branch to a shop');
+SELECT cmp_ok((SELECT count(*) FROM audit_log WHERE action = 'setup_insert' AND table_name = 'branches' AND shop_id = '5a000000-0000-0000-0000-000000000002'), '>', 0::bigint,
+  'the new branch is in the audit log');
+SELECT throws_like($$ SELECT public.setup_save_branch('5a000000-0000-0000-0000-000000000002', NULL, '{"name":"Zypher test branch"}') $$, '%already has a branch%',
+  'a second branch with the same name is refused');
+SELECT throws_like($$ SELECT public.setup_branches('00000000-0000-0000-0000-000000000000') $$, 'Shop not found', 'an unknown shop is refused');
+SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000011', '{"is_active":false}') $$,
+  'At least one active owner must remain%', 'the last active owner cannot be switched off');
+SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000013', '{"role":"owner"}') $$,
+  'Staff member not found in this shop', 'a person of another shop cannot be changed by naming the wrong shop');
+SELECT throws_like($$ SELECT public.setup_delete_branch('5a000000-0000-0000-0000-000000000001',
+  (SELECT (p ->> 'branch_id')::uuid FROM jsonb_array_elements(public.setup_people('5a000000-0000-0000-0000-000000000001')) p WHERE p ->> 'id' = 'aaaaaaaa-0000-0000-0000-000000000013')) $$,
+  'People are assigned to this branch%', 'a branch with people cannot be deleted');
+SELECT throws_like($$ SELECT public.setup_check_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001') $$,
+  'Use Change password%', 'no login link for oneself');
 
 -- ===== the per-shop support login =====
 SELECT pg_temp.act_as(:bridal_support);
@@ -76,6 +89,7 @@ SELECT is((SELECT count(*) FROM rentals WHERE shop_id <> :kalyani), 0::bigint, '
 SELECT throws_like($$ SELECT public.admin_delete_rental((SELECT id FROM rentals LIMIT 1), 'support cleanup') $$,
   'A Zypher support login cannot change or delete money records', 'support cannot delete money records');
 SELECT cmp_ok((SELECT count(*) FROM products), '>', 0::bigint, 'support can read the catalog');
+SELECT throws_like($$ SELECT public.setup_people('5a000000-0000-0000-0000-000000000001') $$, 'Only Zypher can do this', 'and a support login cannot use the setup functions');
 
 -- ===== the shop's own people are unchanged =====
 SELECT pg_temp.act_as(:bridal_owner);
@@ -83,6 +97,7 @@ SELECT is(public.current_shop_id(), :kalyani::uuid, 'an owner still works in the
 SELECT is((SELECT count(*) FROM profiles WHERE role = 'support' AND is_active) , 1::bigint, 'the owner can see that a support login exists');
 SELECT cmp_ok((SELECT count(*) FROM rentals), '>', 0::bigint, 'the shop has bookings the owner sees (so the zero counts above mean something)');
 SELECT cmp_ok((SELECT count(*) FROM customers), '>', 0::bigint, 'and customers');
+SELECT throws_like($$ SELECT public.setup_branches('5a000000-0000-0000-0000-000000000001') $$, 'Only Zypher can do this', 'but an owner cannot use the setup functions');
 
 SELECT * FROM finish();
 ROLLBACK;

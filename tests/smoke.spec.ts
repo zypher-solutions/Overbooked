@@ -57,11 +57,11 @@ test("a car shop's staff: their screens open cleanly", async ({ page }) => {
   await visit(page, problems, ["/", "/book", "/rentals", "/calendar", "/customers", "/catalog"]);
 });
 
-test("Zypher: the console and the setup pages open cleanly", async ({ page }) => {
+test("Zypher: the console, and a shop's branches and staff pages, open cleanly", async ({ page }) => {
   const problems = watch(page);
   await signIn(page, "zypher@overbooked.test");
   await visit(page, problems, ["/zypher", "/zypher/shops", "/zypher/billing", "/zypher/templates", "/zypher/audit", "/zypher/team", "/zypher/settings",
-    "/branches", "/staff", "/stock-locations"]);
+    "/zypher/shops/5a000000-0000-0000-0000-000000000001/branches", "/zypher/shops/5a000000-0000-0000-0000-000000000001/staff"]);
 });
 
 test("Zypher: a shop's page shows its private notes, and the shop's own owner cannot read them", async ({ page }) => {

@@ -18,7 +18,7 @@ import { OfflineBanner } from "@/components/overbooked/OfflineBanner";
 import { Field, Modal, goldButtonClass, ghostButtonClass, inputClass } from "./ui";
 import { SubscriptionBanner } from "./Subscription";
 import { clothingNav } from "@/modules/clothing/nav";
-import { setupNav, standardNav, type NavGroup, type NavItem } from "@/lib/shop/nav";
+import { standardNav, type NavGroup } from "@/lib/shop/nav";
 
 
 export function ShopShell({ children }: { children: ReactNode }) {
@@ -29,10 +29,9 @@ export function ShopShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
-  const isZypher = role === "super_admin";
 
-  const navCtx = { isOwner, canManage, isSupport, isZypher, feature, word };
-  const groups: NavGroup[] = loading ? [] : isZypher ? setupNav() : trendz ? clothingNav(navCtx) : standardNav(navCtx);
+  const navCtx = { isOwner, canManage, isSupport, feature, word };
+  const groups: NavGroup[] = loading ? [] : trendz ? clothingNav(navCtx) : standardNav(navCtx);
   const visible = groups.map((g) => ({ ...g, items: g.items.filter((n) => n.show) })).filter((g) => g.items.length);
 
   const myBranch = branches.find((b) => b.id === myBranchId)?.name;
@@ -53,16 +52,11 @@ export function ShopShell({ children }: { children: ReactNode }) {
         <div className="flex items-start justify-between px-5 pb-4 pt-6">
           <div className="min-w-0">
             <p className="truncate font-display text-xl font-semibold text-foreground">{shop.name}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-gold">{role === "super_admin" ? "Zypher setup" : isSupport ? "Zypher support" : trendz ? "Rental Studio" : "Overbooked"}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-gold">{isSupport ? "Zypher support" : trendz ? "Rental Studio" : "Overbooked"}</p>
           </div>
           <button aria-label="Close menu" onClick={() => setOpen(false)} className="rounded-md p-2 hover:bg-black/5 lg:hidden"><X className="h-4 w-4" /></button>
         </div>
         <nav className="flex-1 px-3 pb-4">
-          {role === "super_admin" ? (
-            <a href="/zypher" className="mb-2 flex items-center gap-3 rounded-md border border-gold/30 bg-gold/5 px-3 py-2 text-sm text-foreground hover:bg-gold/10">
-              <Store className="h-4 w-4 text-gold" /> Zypher console
-            </a>
-          ) : null}
           {/* which item is active depends on ?tab= too (Categories), so it reads the address in its own boundary */}
           <Suspense fallback={<NavGroups groups={visible} pathname={pathname} tab={null} onPick={() => setOpen(false)} />}>
             <NavWithTab groups={visible} pathname={pathname} onPick={() => setOpen(false)} />
@@ -71,7 +65,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
         <div className="space-y-2 border-t border-border p-4 text-xs">
           <div>
             <p className="truncate font-medium text-foreground">{profile?.full_name}</p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-gold">{role === "super_admin" ? "Zypher" : isSupport ? "Zypher support" : role}</p>
+            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-gold">{isSupport ? "Zypher support" : role}</p>
             <p className="text-muted-foreground">{myBranch ?? "All branches"}</p>
           </div>
           <div className="flex flex-wrap gap-3">
