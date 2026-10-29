@@ -22,7 +22,7 @@ export default function ShopLayout({ children }: { children: ReactNode }) {
       <Link href="/zypher/shops" className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
         <ChevronLeft className="h-3.5 w-3.5" /> Shops
       </Link>
-      <nav aria-label="Shop sections" className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
+      <nav aria-label="Shop sections" className="mb-6 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border">
         {tabs.map((t) => {
           const on = pathname === t.href;
           return (
