@@ -22,13 +22,20 @@ test("a bridal owner gets the TRENDZ menu", async ({ page }) => {
   const nav = page.getByLabel("Main navigation");
   await expect(nav.getByText("Kalyani Bridal")).toBeVisible();
   for (const item of ["Dashboard", "Finance", "Bookings", "Inventory Search", "All Rentals", "Calendar", "Customers", "All Products",
-    "Add New Product", "Categories", "CSV Import", "Shop settings"]) {
+    "Add New Product", "Categories", "Extras", "CSV Import", "Shop settings"]) {
     await expect(nav.getByRole("link", { name: item, exact: true })).toBeVisible();
   }
   // branches, staff and stock locations are set up by Zypher, not by the shop
   for (const item of ["Branch Management", "Staff Management", "Stock Locations"]) {
     await expect(nav.getByRole("link", { name: item, exact: true })).toHaveCount(0);
   }
+  // All Products has no tabs (as in TRENDZ): Categories and Extras are their own menu items
+  await nav.getByRole("link", { name: "All Products", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "All Products" })).toBeVisible();
+  await expect(page.getByRole("tab")).toBeHidden();
+  await nav.getByRole("link", { name: "Extras", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Extras", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /add extra/i })).toBeVisible();
   // the setup screens live only in the Zypher console: the shop has no such addresses
   for (const path of ["/staff", "/branches"]) {
     const res = await page.goto(path);

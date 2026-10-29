@@ -32,8 +32,8 @@ function Catalog() {
   useEffect(() => { setTab(asked === "categories" || asked === "extras" ? asked : "items"); }, [asked]);
   return (
     <>
-      <PageHeader title={trendz ? (tab === "categories" ? "Categories" : "All Products") : word("items", "Catalog")}
-        actions={!canManage ? null : tab === "categories" ? (
+      <PageHeader title={trendz ? (tab === "categories" ? "Categories" : tab === "extras" ? "Extras" : "All Products") : word("items", "Catalog")}
+        actions={!canManage || tab === "extras" ? null : tab === "categories" ? (
           <button className={goldButtonClass} onClick={() => setAdding((n) => n + 1)}><Plus className="h-4 w-4" /> Add Category</button>
         ) : <>
           {tab === "items" ? <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link> : null}
@@ -43,7 +43,7 @@ function Catalog() {
           ) : null}
           <Link href="/catalog/new" className={goldButtonClass}><Plus className="h-4 w-4" /> Add {word("item").toLowerCase()}</Link>
         </>} />
-      <div className={cn("mb-4 flex gap-1.5", trendz && tab === "categories" && "hidden")} role="tablist">
+      <div className={cn("mb-4 flex gap-1.5", trendz && "hidden")} role="tablist">
         {([["items", word("items")], ["extras", "Extras"], ["categories", "Categories"]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
             className={cn("rounded-full border px-3 py-1 text-xs", tab === k ? "border-gold/60 bg-gold/10 font-medium" : "border-border text-muted-foreground")}>
