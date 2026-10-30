@@ -55,7 +55,7 @@
 - SKUs of bridal and groom shops follow TRENDZ: category base SKU (2 to 6 capital letters), product `BR-001` numbered for
   you (not typable), variation `BR-001-GOLD-M`; checked in the forms, the CSV import and the database. Demo SKUs renamed
 - Dashboard and Finance of bridal and groom shops completed to match TRENDZ: Filter panel with chips, Completed Rentals,
-  Ledger Records with Record payment, Export PDF and Records CSV, search in place, phone cards. Audit in docs/TRENDZ_PARITY.md
+  Ledger Records with Record payment, Export PDF and Records CSV, search in place, phone cards. Audit kept in the git history (docs/TRENDZ_PARITY.md, removed on 30 Oct 2026)
 - Bookings (Buffer, Available, Completed Bookings) and All Products (stock filter, Delete, Reactivate, phone cards) match TRENDZ
 - One "Clothing rental" business type replaces Bridal wear and Groom wear (they were identical); Colour and Size attributes offer
   clickable suggestions, the attribute name is a dropdown with Custom, the "Can be booked" tick box is removed (Delete and Reactivate in All Products cover it)

@@ -3,7 +3,7 @@
 **Starting a session? Read docs/HANDOVER.md first** (current state, open questions, next steps).
 
 Product built from the TRENDZ admin panel (forked 22 Oct 2026 from TRENDZ `main` @ 54a190e).
-Goal: turn it into a sellable product for many rental shops. See docs/ROADMAP.md.
+Goal: turn it into a sellable product for many rental shops. See docs/PROJECT_REPORT.md (Part 11: what is left).
 
 ## Hard rules
 - This repo has NOTHING to do with the TRENDZ production or test Supabase projects. Never connect to,
@@ -26,7 +26,7 @@ There is no Python in this project.
 - src/lib/overbooked/AuthContext.tsx: sign-in, profile, current shop
 - supabase/migrations: database schema v2, in order (see docs/DATABASE.md); supabase/tests: database tests
 - supabase/seed.sql: local demo data and logins
-- docs/: setup, architecture, database, roadmap, business
+- docs/: start with PROJECT_REPORT.md (see docs/README.md for the list of documents)
 
 ## Business model (negotiated deals)
 - Business types (bridal, groom, resort, car, bike) are templates; products have variations with their own rates; each physical unit is tracked.

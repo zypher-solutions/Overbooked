@@ -1,6 +1,6 @@
 # Handover for the next session
 
-Read this first, then `CLAUDE.md`, then `docs/ARCHITECTURE.md`. Written 29 Oct 2026, updated the same evening with the pre-launch work (`docs/LAUNCH_PLAN.md`).
+Read this first, then `CLAUDE.md`, then `docs/ARCHITECTURE.md`. Written 29 Oct 2026, updated the same evening with the pre-launch work. For the complete picture read `docs/PROJECT_REPORT.md` first.
 
 ## The goal
 Overbooked is Zypher's multi-client rental software. It grew from TRENDZ, the owner's uncle's admin panel
@@ -24,7 +24,7 @@ aside until this is right.
   one local commit on top. Nothing has been deployed; staging and production do not exist yet.
 - Checks at last run (29 Oct 2026, evening): `npx tsc --noEmit` clean, `npm run lint` clean, `npm run build` ok,
   358 database tests, 25 browser tests, all passing. Load test (6,000 bookings in one shop-year): 6 to 31 ms a screen.
-- The full plan, with decisions and costs: `docs/LAUNCH_PLAN.md`. Parked on purpose: our own backups beyond Supabase's 7 days
+- The full plan, decisions and costs are in `docs/PROJECT_REPORT.md` (Parts 9 to 12). Parked on purpose: our own backups beyond Supabase's 7 days
   (the owner will decide with the partner), and business and pricing talk.
 - Not done yet, on purpose: shop data export, voiding a wrong Zypher payment, usage page, announcements, offboarding, the per-shop
   customisation tidy-up (a shop stores only what differs; checked settings), code clean-up (typed queries, unused components, big files),
@@ -83,7 +83,7 @@ A shop whose business types are all clothes gets the TRENDZ screens; other shops
   `src/app/(shop)/finance/page.tsx`); move to a database function when a shop is large.
 - Then car, bike and resort in the same TRENDZ-style way, and the mobile app for the friend (see
   `docs/APP_CONTRACT.md`; the invite rules in it already say Zypher invites).
-- Business side lives in `docs/BUSINESS.md` (pricing: Starter 499, Pro 999, Business 1,999 a month).
+- Business side lives in `docs/PROJECT_REPORT.md` (Parts 9 and 10) and the sales sheet `docs/SALES_SHEET.md`.
 
 ## How to run and test
 ```bash

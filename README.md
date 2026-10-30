@@ -36,10 +36,14 @@ Full step-by-step guide: [docs/SETUP.md](docs/SETUP.md).
 ## Documentation
 | Doc | What's in it |
 | --- | --- |
-| [docs/HANDOVER.md](docs/HANDOVER.md) | Where the work stands, open questions, next steps (read first) |
+| [docs/PROJECT_REPORT.md](docs/PROJECT_REPORT.md) | **Start here.** The complete picture: every feature, every fault, the business plan, what is left (Word copy in `docs/word/`) |
+| [docs/HANDOVER.md](docs/HANDOVER.md) | The latest state for the next working session, open questions, next steps |
+| [docs/PARTNER_ONBOARDING.md](docs/PARTNER_ONBOARDING.md) | For a new partner or developer: what to read, access, setup, rules |
+| [docs/SALES_SHEET.md](docs/SALES_SHEET.md) | For the sales person: features, prices, call scripts, commission (Word copy in `docs/word/`) |
 | [docs/SETUP.md](docs/SETUP.md) | Install, run, reset, test, common errors |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the pieces fit, main flows, business rules |
 | [docs/DATABASE.md](docs/DATABASE.md) | Tables, database functions, migrations |
 | [docs/APP_CONTRACT.md](docs/APP_CONTRACT.md) | For the mobile app developer: how to connect, read, and call every function (contract v1) |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | From single shop to multi-shop product |
-| [docs/BUSINESS.md](docs/BUSINESS.md) | How low-price SaaS works, pricing notes |
+| [docs/RUNBOOKS.md](docs/RUNBOOKS.md) | Backups, Zypher access, answering a shop's problem |
+| [docs/BRANCHING.md](docs/BRANCHING.md) | How GitHub branches and releases work |
+| [docs/PARTIAL_RETURNS_DESIGN.md](docs/PARTIAL_RETURNS_DESIGN.md) | A proposal for part returns (not built) |
