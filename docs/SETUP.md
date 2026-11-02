@@ -59,10 +59,12 @@ npx supabase db reset                      # proves the whole chain still builds
 ```
 
 ## Tests
-Run them in this order. The database tests expect freshly reset demo data (they count bookings and
-check booking numbers), and the browser tests add bookings of their own:
+Run them in this order. A normal `db reset` gives EMPTY shops (only the logins, branches and categories).
+The tests need demo products, pieces and bookings, so `npm run test:reset` resets and then loads
+`supabase/test_fixtures.sql`. The database tests count bookings and check booking numbers, and the browser
+tests add bookings of their own:
 ```bash
-npx supabase db reset   # fresh demo data: one shop per business type + Zypher
+npm run test:reset      # reset + test fixtures (demo products, pieces, customers, one booking per shop)
 npx supabase test db    # engine, isolation, roles, money rules, console (supabase/tests)
 npx playwright test     # browser: menus per role, Zypher console, a full bridal booking (tests/)
 ```
