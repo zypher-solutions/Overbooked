@@ -5,8 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Overbooked design system — dark, ultra-premium, minimal.
- * Accent: warm gold. Warning: muted rust. Success: emerald.
+ * Overbooked design system: the Zypher palette (Ink, Mist, Neon Green, Slate, Dark Green).
+ * Accent: Dark Green. Highlight: Neon. Warning: amber. Danger: rust. Success: emerald.
  * All colors in oklch. Never hardcode colors in components.
  */
 
@@ -17,8 +17,8 @@
   --radius-xl: 16px;
   --radius-2xl: 20px;
 
-  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
   --color-background: var(--background);
@@ -44,6 +44,8 @@
 
   --color-gold: var(--gold);
   --color-gold-soft: var(--gold-soft);
+  --color-neon: var(--neon);
+  --color-amber: var(--amber);
   --color-rust: var(--rust);
   --color-emerald: var(--emerald);
   --color-indigo: var(--indigo);
@@ -65,48 +67,53 @@
 }
 
 :root {
-  --radius: 12px;
+  --radius: 20px;
 
-  --background: oklch(0.98 0.002 275);
-  --foreground: oklch(0.15 0.01 275);
+  /* Zypher palette: Ink #101715, Mist #F4F8F6, Neon #15C196, Slate #5C6B67, Dark Green #0F4743 */
+  --background: #f4f8f6;
+  --foreground: #101715;
 
-  --surface: oklch(1 0 0);
-  --surface-2: oklch(0.96 0.005 275);
+  --surface: #ffffff;
+  --surface-2: #eaf1ee;
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.01 275);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.01 275);
+  --card: #ffffff;
+  --card-foreground: #101715;
+  --popover: #ffffff;
+  --popover-foreground: #101715;
 
-  --gold: oklch(0.7 0.14 89);
-  --gold-soft: oklch(0.85 0.08 89);
+  /* "gold" is the accent name used all over the app; it is now Dark Green */
+  --gold: #0f4743;
+  --gold-soft: #bfe3d8;
+  /* Neon is a fill or glow with Ink on top, never text on white */
+  --neon: #15c196;
+  --amber: #8a5800;
   --rust: oklch(0.57 0.135 42);
-  --emerald: oklch(0.56 0.12 158);
+  --emerald: #157a55;
   --indigo: oklch(0.55 0.15 275);
 
-  --primary: oklch(0.7 0.14 89);
-  --primary-foreground: oklch(0.98 0.01 80);
-  --secondary: oklch(0.96 0.005 275);
-  --secondary-foreground: oklch(0.15 0.01 275);
-  --muted: oklch(0.94 0.005 275);
-  --muted-foreground: oklch(0.45 0.01 275);
-  --accent: oklch(0.92 0.008 275);
-  --accent-foreground: oklch(0.15 0.01 275);
+  --primary: #0f4743;
+  --primary-foreground: #ffffff;
+  --secondary: #eaf1ee;
+  --secondary-foreground: #101715;
+  --muted: #e8efec;
+  --muted-foreground: #5c6b67;
+  --accent: #e3ede9;
+  --accent-foreground: #101715;
   --destructive: oklch(0.57 0.135 42);
-  --destructive-foreground: oklch(0.98 0.01 85);
+  --destructive-foreground: #ffffff;
 
-  --border: oklch(0 0 0 / 8%);
-  --input: oklch(0 0 0 / 6%);
-  --ring: oklch(0.7 0.14 89 / 45%);
+  --border: rgb(16 23 21 / 11%);
+  --input: rgb(16 23 21 / 8%);
+  --ring: rgb(21 193 150 / 60%);
 
-  --sidebar: oklch(0.99 0 0);
-  --sidebar-foreground: oklch(0.2 0.01 275);
-  --sidebar-primary: oklch(0.7 0.14 89);
-  --sidebar-primary-foreground: oklch(0.98 0.01 80);
-  --sidebar-accent: oklch(0.95 0.005 275);
-  --sidebar-accent-foreground: oklch(0.15 0.01 275);
-  --sidebar-border: oklch(0 0 0 / 8%);
-  --sidebar-ring: oklch(0.7 0.14 89 / 40%);
+  --sidebar: #101715;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #15c196;
+  --sidebar-primary-foreground: #101715;
+  --sidebar-accent: #1d2724;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 10%);
+  --sidebar-ring: rgb(21 193 150 / 50%);
 }
 
 @layer base {
@@ -125,11 +132,12 @@
   h2,
   h3 {
     font-family: var(--font-display);
-    font-weight: 500;
+    font-weight: 600;
+    letter-spacing: -0.02em;
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--gold) 35%, transparent);
+    background: color-mix(in oklab, var(--neon) 30%, transparent);
   }
 
   input[type='number']::-webkit-inner-spin-button,
@@ -143,11 +151,12 @@
   }
 }
 
+/* a card: solid white, a very light edge and a soft shadow (no glass blur) */
 @utility glass {
-  background: color-mix(in oklab, var(--surface) 72%, transparent);
-  backdrop-filter: blur(18px) saturate(130%);
-  border: 1px solid var(--color-border);
+  background: var(--surface);
+  border: 1px solid rgb(16 23 21 / 6%);
   border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgb(16 23 21 / 4%), 0 8px 24px -12px rgb(16 23 21 / 10%);
 }
 
 @utility glass-strong {
@@ -212,5 +221,13 @@ body {
   button:not([data-compact]),
   [role="button"]:not([data-compact]) {
     min-height: 40px;
+  }
+}
+
+/* scrolls, but without a visible scrollbar (the sidebar) */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
   }
 }

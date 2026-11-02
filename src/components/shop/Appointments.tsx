@@ -1,5 +1,6 @@
 "use client";
 
+import { textLimitError } from "@/lib/validate";
 import { DateInput, DateTimeInput } from "@/components/shop/DateInput";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -56,10 +57,18 @@ export function AppointmentDialog({ open, onClose, onSaved, appointment, rental 
     return () => clearTimeout(t);
   }, [search]);
 
+  const [tried, setTried] = useState(false);
+  const errs = {
+    customer: rental?.customer_id ?? customer?.id ?? appointment ? null : "Choose the customer.",
+    when: when ? null : "Choose the date and time.",
+    notes: textLimitError(notes, "notes", 300),
+  };
+  const bad = Object.values(errs).some(Boolean);
   const save = async () => {
     const customerId = rental?.customer_id ?? customer?.id;
-    if (!customerId) return toast.error("Choose the customer.");
-    if (!when) return toast.error("Choose the date and time.");
+    setTried(true);
+    if (bad) return toast.error(Object.values(errs).find(Boolean)!);
+    if (!customerId && !appointment) return toast.error("Choose the customer.");
     setBusy(true);
     const row = { type, scheduled_at: zonedToIso(when, tz), branch_id: rental?.branch_id ?? branch, notes: notes.trim() || null };
     const supabase = createClient();
@@ -103,7 +112,7 @@ export function AppointmentDialog({ open, onClose, onSaved, appointment, rental 
         ))}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="When"><DateTimeInput value={when} onChange={(v) => setWhen(v)} /></Field>
+        <Field label="When" error={tried ? errs.when ?? undefined : undefined}><DateTimeInput value={when} onChange={(v) => setWhen(v)} /></Field>
         {!rental && activeBranches.length > 1 ? (
           <Field label="Branch">
             <select className={inputClass} value={branch} disabled={!!myBranchId} onChange={(e) => setBranch(e.target.value)}>
@@ -112,7 +121,7 @@ export function AppointmentDialog({ open, onClose, onSaved, appointment, rental 
           </Field>
         ) : null}
       </div>
-      <Field label="Notes"><textarea className={inputClass} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+      <Field label="Notes" error={errs.notes ?? undefined}><textarea className={inputClass} rows={2} maxLength={320} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
     </Modal>
   );
 }

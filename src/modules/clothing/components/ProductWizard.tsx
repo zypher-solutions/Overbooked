@@ -11,6 +11,7 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
 import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { useCatalog } from "@/lib/shop/useCatalog";
+import { businessNameError, moneyError, textLimitError } from "@/lib/validate";
 import { errorText, num, rupees } from "@/lib/shop/format";
 import type { Product, Template, Unit } from "@/lib/shop/types";
 import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "@/components/shop/ui";
@@ -188,7 +189,20 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     if (!on) setRows((rs) => rs.map((r) => ({ ...r, stock: Object.fromEntries(activeBranches.map((b) => [b.id, stockOf(r, b.id)])) })));
     setSameQty(on);
   };
+  // what is wrong on the first step; shown under a field once it has been left, and for all of them after Next is pressed
+  const [triedBasic, setTriedBasic] = useState(false);
+  const basicErr = {
+    category: basic.category_id ? null : "Choose a category.",
+    name: businessNameError(basic.name, "product name", 80),
+    rate: moneyError(basic.rate, { label: "price per day", required: true, positive: true, max: 1_000_000 }),
+    replacement: moneyError(basic.replacement_value, { label: "replacement value", max: 10_000_000 }),
+    description: textLimitError(basic.description, "description", 500),
+  };
+  const showBasic = (k: keyof typeof basicErr, typed: string) => (triedBasic || typed.trim() ? basicErr[k] ?? undefined : undefined);
   const validBasic = () => {
+    setTriedBasic(true);
+    const first = Object.values(basicErr).find(Boolean);
+    if (first) { toast.error(first); return false; }
     if (!basic.category_id) { toast.error("Choose a category."); return false; }
     if (!basic.name.trim()) { toast.error("Name the product."); return false; }
     if (!product && !prefix) { toast.error("This category has no base SKU yet. Set it on the Categories page first."); return false; }
@@ -310,7 +324,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
         <Panel>
           <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Product name"><input className={inputClass} autoFocus value={basic.name} onChange={(e) => setBasic({ ...basic, name: e.target.value })} placeholder="e.g. Kanjivaram silk saree" /></Field>
+              <Field label="Product name" error={showBasic("name", basic.name)}><input className={inputClass} autoFocus maxLength={80} value={basic.name} onChange={(e) => setBasic({ ...basic, name: e.target.value })} placeholder="e.g. Kanjivaram silk saree" /></Field>
               <Field label="Category">
                 <select className={inputClass} value={basic.category_id} onChange={(e) => setBasic({ ...basic, category_id: e.target.value })}>
                   {basic.category_id ? null : <option value="" disabled>Choose a category...</option>}
@@ -320,15 +334,15 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
               <Field label="Base SKU" hint={prefix || product ? "From the category and numbered for you" : "This category has no base SKU yet (Categories page)"}>
                 <input className={cn(monoInputClass, "cursor-default bg-muted/50 font-medium text-foreground")} value={productSku} readOnly aria-readonly="true" />
               </Field>
-              <Field label="Price per day (₹)" hint="Starting price for every size; agree any price per booking">
+              <Field label="Price per day (₹)" hint="Starting price for every size; agree any price per booking" error={showBasic("rate", basic.rate)}>
                 <input className={monoInputClass} inputMode="decimal" value={basic.rate}
                   // one price for every size and colour: changing it here changes it on every variation
                   onChange={(e) => { setBasic({ ...basic, rate: e.target.value }); setRows((rs) => rs.map((r) => ({ ...r, rate: e.target.value }))); }} />
               </Field>
-              <Field label="Replacement value (₹)" hint="Charged if it is lost">
+              <Field label="Replacement value (₹)" hint="Charged if it is lost" error={showBasic("replacement", basic.replacement_value)}>
                 <input className={monoInputClass} inputMode="decimal" value={basic.replacement_value} onChange={(e) => setBasic({ ...basic, replacement_value: e.target.value })} />
               </Field>
-              <Field label="Description" className="sm:col-span-2"><textarea className={inputClass} rows={2} value={basic.description} onChange={(e) => setBasic({ ...basic, description: e.target.value })} /></Field>
+              <Field label="Description" className="sm:col-span-2" error={showBasic("description", basic.description)}><textarea className={inputClass} rows={2} maxLength={520} value={basic.description} onChange={(e) => setBasic({ ...basic, description: e.target.value })} /></Field>
             </div>
             <div>
               <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Photo</span>

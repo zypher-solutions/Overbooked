@@ -1,6 +1,6 @@
 "use client";
 
-import { addressError, emailError, gstinError, normalizeEmail, normalizePhone, phoneError } from "@/lib/validate";
+import { addressError, emailError, gstinError, normalizeEmail, normalizePhone, phoneError, textLimitError } from "@/lib/validate";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useShop } from "@/lib/shop/ShopContext";
@@ -32,7 +32,10 @@ export default function Settings() {
     if (!Number.isInteger(grace) || grace < 0 || grace > 1440) return toast.error("Grace time is whole minutes, 0 to 1440.");
     const gst = Number(f.gst_percent || 0);
     if (!(gst >= 0 && gst <= 28)) return toast.error("GST is a percentage from 0 to 28.");
-    const bad = phoneError(f.phone) ?? emailError(f.email, false) ?? addressError(f.address) ?? gstinError(f.gstin);
+    const bad = phoneError(f.phone) ?? emailError(f.email, false) ?? addressError(f.address) ?? gstinError(f.gstin)
+      ?? textLimitError(f.receipt_note, "receipt note", 200)
+      ?? (f.sac_code.trim() && !/^d{4,8}$/.test(f.sac_code.trim()) ? "The SAC code is 4 to 8 digits." : null)
+      ?? (!f.check_in_time || !f.check_out_time ? "Enter the check-in and check-out times." : null);
     if (bad) return toast.error(bad);
     setBusy(true);
     try {

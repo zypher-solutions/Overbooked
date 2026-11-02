@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -16,11 +17,11 @@ import {
 import type { Customer, Method, Product, Quote, Template, Variation } from "@/lib/shop/types";
 import { CustomerPicker, emptyCustomer, type NewCustomer } from "@/components/shop/CustomerPicker";
 import { customerProblem } from "@/components/shop/CustomerForm";
-import { normalizeEmail, normalizePhone } from "@/lib/validate";
+import { moneyError, normalizeEmail, normalizePhone, textLimitError } from "@/lib/validate";
 import { DateInput, isoToDisplay } from "@/components/shop/DateInput";
+import { buildMessage, waLink } from "@/lib/shop/whatsapp";
 import {
-  Field, MethodPicker, Modal, MoneyRows, PageHeader, Panel, StatusBadge, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass,
-} from "@/components/shop/ui";
+  Field, MethodPicker, Modal, MoneyRows, PageHeader, Panel, StatusBadge, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass, PageSkeleton, Skeleton } from "@/components/shop/ui";
 
 type Line = CartLine;
 interface Draft {
@@ -48,8 +49,8 @@ interface Draft {
 export default function NewBookingPage() {
   // defaults (branch, times) come from the shop setup, so wait for it
   const { loading } = useShop();
-  if (loading) return <p className="py-10 text-center text-sm text-muted-foreground">Loading...</p>;
-  return <Suspense fallback={null}><NewBooking /></Suspense>;
+  if (loading) return <PageSkeleton columns={false} />;
+  return <Suspense fallback={<PageSkeleton columns={false} />}><NewBooking /></Suspense>;
 }
 
 function defaultPeriod(kind: Template["kind"] | undefined, tz: string, checkIn: string, checkOut: string) {
@@ -203,6 +204,10 @@ function NewBooking() {
   const hasVehicle = kinds.has("vehicle");
   const roomShop = templates.some((t) => t.kind === "room");
 
+  // the first check of each kind goes out at once; only later changes (typing a date) wait a moment
+  const firstCheck = useRef({ avail: true, pieces: true, quote: true });
+  const wait = (k: "avail" | "pieces" | "quote", ms: number) => { const w = firstCheck.current[k] ? 0 : ms; firstCheck.current[k] = false; return w; };
+
   // ---- availability for the period ----
   const [avail, setAvail] = useState<Record<string, { free: number; total: number }>>({});
   useEffect(() => {
@@ -220,7 +225,7 @@ function NewBooking() {
       } catch (e) {
         toast.error(errorText(e));
       }
-    }, 250);
+    }, wait("avail", 250));
     return () => clearTimeout(t);
   }, [branchId, startIso, endIso, periodOk, editing, cleaning]);
 
@@ -252,7 +257,7 @@ function NewBooking() {
       } catch (e) {
         if (live) { setPieces({}); toast.error(errorText(e)); }
       }
-    }, 250);
+    }, wait("pieces", 250));
     return () => { live = false; clearTimeout(t); };
   }, [trendz, periodOk, branchId, pieceKey, startIso, endIso, cleaning, editing]);
 
@@ -310,7 +315,7 @@ function NewBooking() {
         setQuote(null);
         setQuoteError(errorText(e));
       }
-    }, 350);
+    }, wait("quote", 350));
     return () => clearTimeout(t);
   }, [quoteInput, periodOk, branchId, lines.length, d.wholeProperty]);
 
@@ -327,9 +332,28 @@ function NewBooking() {
 
   // ---- submit ----
   const [busy, setBusy] = useState(false);
+  // changing a booking can also take money (the balance is the new total less what was paid)
+  const [editPay, setEditPay] = useState<{ amount: string; method: Method | "" }>({ amount: "", method: "" });
   const total = Math.max(0, (quote?.total_before_discount ?? 0) - num(d.discount));
 
+  // what is wrong with the money fields; shown under a field once something is typed in it, and for all of them after a try to confirm
+  const [tried, setTried] = useState(false);
+  const money_ = {
+    discount: moneyError(d.discount, { label: "discount", max: quote?.total_before_discount ?? 0, maxText: `the rental total (${rupees(quote?.total_before_discount ?? 0)})` }),
+    advance: moneyError(d.advance, { label: "advance", max: total, maxText: `the total (${rupees(total)})` }),
+    deposit: moneyError(d.deposit, { label: "deposit", max: 1_000_000 }),
+    advanceMethod: num(d.advance) > 0 && !d.advanceMethod ? "Choose how the advance was paid." : null,
+    depositMethod: num(d.deposit) > 0 && !d.depositMethod ? "Choose how the deposit was paid." : null,
+    notes: textLimitError(d.notes, "notes", 500),
+    editPay: editing ? moneyError(editPay.amount, { label: "payment", positive: true, max: Math.max(0, total - money(editing).paid), maxText: `the balance after this change (${rupees(Math.max(0, total - money(editing).paid))})` }) : null,
+    editPayMethod: editing && num(editPay.amount) > 0 && !editPay.method ? "Choose how the payment was made." : null,
+  };
+  const shown = (k: keyof typeof money_, typed: string) => (tried || typed.trim() ? money_[k] ?? undefined : undefined);
+
   const submit = async () => {
+    setTried(true);
+    const moneyBad = Object.values(money_).find(Boolean);
+    if (moneyBad) return toast.error(moneyBad);
     if (!periodOk) return toast.error(`The ${word("end").toLowerCase()} must be after the ${word("start").toLowerCase()}.`);
     if (!quote) return toast.error(quoteError ?? "Add at least one item.");
     if (cleaningBad) return toast.error("Cleaning days cannot be negative.");
@@ -354,6 +378,9 @@ function NewBooking() {
           p_rental_id: editing.id,
           p: { ...change, discount: num(d.discount), deposit_agreed: num(d.depositAgreed), notes: d.notes },
         });
+        if (num(editPay.amount) > 0) {
+          await call("record_rental_payment", { p_rental_id: editing.id, p_kind: "payment", p_amount: num(editPay.amount), p_method: editPay.method, p_note: null });
+        }
         toast.success(`${editing.token} changed`);
         router.push(`/rentals/${editing.id}`);
         return;
@@ -366,10 +393,17 @@ function NewBooking() {
         }).eq("id", customer.id);
         if (error) throw error;
       }
+      // the same person is not saved twice: a saved customer with this phone and name is used as it is
+      let reuseId: string | null = null;
+      if (!customer) {
+        const { data: same } = await supabase.from("customers").select("id, full_name").eq("phone", normalizePhone(d.customer.phone)).limit(5);
+        const wanted = d.customer.full_name.trim().replace(/\s+/g, " ").toLowerCase();
+        reuseId = (same ?? []).find((c) => c.full_name.trim().replace(/\s+/g, " ").toLowerCase() === wanted)?.id ?? null;
+      }
       const res = await call<{ rental_id: string; token: string }>("create_rental", {
         p: {
           ...quoteInput,
-          customer: customer ? { id: customer.id } : {
+          customer: customer ? { id: customer.id } : reuseId ? { id: reuseId } : {
             ...Object.fromEntries(Object.entries(d.customer).map(([k, v]) => [k, v.trim()])),
             full_name: d.customer.full_name.trim().replace(/\s+/g, " "), phone: normalizePhone(d.customer.phone), email: normalizeEmail(d.customer.email),
           },
@@ -382,6 +416,20 @@ function NewBooking() {
       });
       try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
       cart.clear();
+      if (trendz) {
+        // bridal and groom: back to the Bookings list; the message to the customer is one tap on the notice
+        const rental = await loadRental(res.rental_id).catch(() => null);
+        const br = rental ? activeBranches.find((x) => x.id === rental.branch_id) : undefined;
+        const wa = rental ? waLink(rental.customers.phone, buildMessage("confirmation", rental, {
+          shopName: shop.name, branchName: br?.name, branchPhone: br?.phone ?? shop.phone, tz, startWord: word("start"), endWord: word("end"),
+        })) : "";
+        toast.success(`Booked: ${res.token}`, {
+          duration: 12_000,
+          action: rental ? { label: "WhatsApp", onClick: () => { window.open(wa, "_blank", "noopener"); void call("mark_reminder_sent", { p_rental_id: rental.id, p_kind: "confirmation" }).catch(() => undefined); } } : undefined,
+        });
+        router.push("/bookings");
+        return;
+      }
       toast.success(`Booked: ${res.token}`);
       router.push(`/rentals/${res.rental_id}?new=1`);
     } catch (e) {
@@ -403,6 +451,9 @@ function NewBooking() {
   const visibleAddOns = addOns.filter((a) => a.is_active
     && (a.template_keys.length === 0 || a.template_keys.some((k) => cartTemplates.some((t) => t.key === k))));
   const quoteLineFor = (variationId: string) => quote?.lines.find((l) => l.variation_id === variationId && l.reserve);
+
+  // changing a booking: nothing half-drawn until the booking has loaded
+  if (editId && !editing) return <PageSkeleton columns={false} />;
 
   // ---- bridal and groom: the TRENDZ "Create Booking" pop-up (one column, dates first) ----
   if (trendz) {
@@ -432,7 +483,7 @@ function NewBooking() {
     const balance = Math.max(0, total - num(d.advance));
     return (
       <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Create Booking">
-        <div className="my-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-4 shadow-xl sm:p-6">
+        <div className="my-0 w-full max-w-2xl glass p-4 shadow-xl sm:p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h1 className="font-display text-2xl font-semibold text-foreground">{editing ? `Change booking ${editing.token}` : "Create Booking"}</h1>
@@ -492,7 +543,11 @@ function NewBooking() {
               {allFree ? <span className="inline-flex items-center gap-1 rounded-full border border-emerald/30 bg-emerald/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald"><Check className="h-3.5 w-3.5" /> All Items In Stock</span> : null}
             </div>
             {lines.length === 0 ? (
-              <div className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">The cart is empty. Add items below.</div>
+              <div className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">
+                The cart is empty. Pick items from{" "}
+                <Link href="/all-rentals" className="font-medium text-gold hover:underline">All Rentals</Link> or{" "}
+                <Link href="/scan" className="font-medium text-gold hover:underline">Inventory Search</Link> and press Rent.
+              </div>
             ) : !periodOk ? (
               <div className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">Please select a <strong>Return Date</strong> above to check real-time stock availability.</div>
             ) : checkingStock ? (
@@ -540,18 +595,13 @@ function NewBooking() {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2 border-t border-border/40 pt-3 text-xs">
-                    <span className="text-muted-foreground">Agreed price for this line (₹)</span>
-                    <input className={cn(monoInputClass, "ml-auto w-28 py-1 text-xs")} inputMode="decimal" placeholder="Optional" aria-label="Agreed price for this line"
-                      value={l.amount_override} onChange={(e) => updateLine(l.variation_id, { amount_override: e.target.value })} />
-                  </div>
                   {pieceLines.includes(l) && periodOk ? (
                     <div className="mt-3 space-y-2.5 border-t border-border/40 pt-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[11px] font-bold uppercase tracking-wider text-gold">Assign Physical Piece(s) (Mandatory)</span>
                         <span className="font-mono text-[10px] text-muted-foreground">{list ? `${list.length} Available for dates` : ""}</span>
                       </div>
-                      {!list ? <p className="animate-pulse text-xs text-muted-foreground">Loading pieces...</p>
+                      {!list ? <Skeleton className="h-10 w-full" />
                         : list.length === 0 ? <p className="rounded border border-rust/30 bg-rust/10 p-2 text-xs font-medium text-rust">No pieces available for {info?.variation.sku} on the requested dates. Choose another date or variation.</p>
                         : Array.from({ length: l.qty }, (_, i) => {
                           const val = l.unit_ids[i] ?? "";
@@ -617,17 +667,19 @@ function NewBooking() {
               </div>
             ) : null}
 
-            <details open={lines.length === 0} className="rounded-xl border border-dashed border-border">
-              <summary className="cursor-pointer px-3 py-2 text-sm font-medium">Add more items</summary>
-              <div className="p-2">
-                <ItemPicker products={products} categories={categories} templateOf={templateOf} avail={avail} periodOk={periodOk}
-                  inCart={Object.fromEntries(lines.map((l) => [l.variation_id, l.qty]))} onAdd={addLine} />
-              </div>
-            </details>
           </section>
 
           {/* 2. customer and payment: open once every item is free */}
-          {!detailsOpen ? (
+          {checkingStock && !detailsOpen ? (
+            <section aria-label="Checking stock" className="mt-4 space-y-4 rounded-xl border border-border p-4 sm:p-5">
+              <Skeleton className="h-3 w-56" />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
+              <Skeleton className="h-28" />
+              <Skeleton className="h-12" />
+            </section>
+          ) : !detailsOpen ? (
             <section className="mt-4 space-y-2 rounded-xl border border-dashed border-border/80 p-6 text-center">
               <h2 className="text-sm font-semibold">Customer &amp; Payment Details</h2>
               <p className="mx-auto max-w-md text-xs text-muted-foreground">
@@ -648,28 +700,34 @@ function NewBooking() {
               )}
               {!editing ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Advance Paid (₹)" hint="Amount collected upfront from customer">
-                    <input className={monoInputClass} inputMode="decimal" value={d.advance} onChange={(e) => set({ advance: e.target.value })} />
+                  <Field label="Advance Paid (₹)" hint="Amount collected upfront from customer" error={shown("advance", d.advance)}>
+                    <input className={monoInputClass} inputMode="decimal" maxLength={10} value={d.advance} onChange={(e) => set({ advance: e.target.value })} />
                   </Field>
-                  <Field label="Advance Payment Method">{methodSelect(d.advanceMethod, (m) => set({ advanceMethod: m }), "Advance payment method")}</Field>
+                  <Field label="Advance Payment Method" error={shown("advanceMethod", d.advance)}>{methodSelect(d.advanceMethod, (m) => set({ advanceMethod: m }), "Advance payment method")}</Field>
                 </div>
               ) : null}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Discount (₹)" hint="Negotiated reduction on the rental charge">
-                  <input className={monoInputClass} inputMode="decimal" value={d.discount} onChange={(e) => set({ discount: e.target.value })} />
+                <Field label="Discount (₹)" hint="Negotiated reduction on the rental charge" error={shown("discount", d.discount)}>
+                  <input className={monoInputClass} inputMode="decimal" maxLength={10} value={d.discount} onChange={(e) => set({ discount: e.target.value })} />
                 </Field>
-                <Field label="Security Deposit agreed (₹)" hint="Tracked separately from rental charge">
-                  <input className={monoInputClass} inputMode="decimal" value={d.depositAgreed} onChange={(e) => set({ depositAgreed: e.target.value })} />
+                {/* one deposit: what is agreed is what is taken now (a change to an unpicked booking changes the agreed amount) */}
+                <Field label="Security Deposit (₹)" hint="Tracked separately from rental charge"
+                  error={editing ? moneyError(d.depositAgreed, { label: "deposit", max: 1_000_000 }) ?? undefined : shown("deposit", d.deposit)}>
+                  {editing
+                    ? <input className={monoInputClass} inputMode="decimal" maxLength={10} value={d.depositAgreed} onChange={(e) => set({ depositAgreed: e.target.value })} />
+                    : <input className={monoInputClass} inputMode="decimal" maxLength={10} value={d.deposit} onChange={(e) => set({ deposit: e.target.value, depositAgreed: e.target.value })} />}
                 </Field>
-                {!editing ? (
-                  <>
-                    <Field label="Deposit received now (₹)" hint={num(d.depositAgreed) ? `Agreed ${rupees(num(d.depositAgreed))}; the rest can be taken at pickup` : undefined}>
-                      <input className={monoInputClass} inputMode="decimal" value={d.deposit} onChange={(e) => set({ deposit: e.target.value })} />
-                    </Field>
-                    <Field label="Deposit Payment Method">{methodSelect(d.depositMethod, (m) => set({ depositMethod: m }), "Deposit payment method")}</Field>
-                  </>
-                ) : null}
+                {!editing ? <Field label="Deposit Payment Method" error={shown("depositMethod", d.deposit)}>{methodSelect(d.depositMethod, (m) => set({ depositMethod: m }), "Deposit payment method")}</Field> : null}
               </div>
+
+              {editing ? (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Take a payment now (₹)" hint="Optional" error={shown("editPay", editPay.amount)}>
+                    <input className={monoInputClass} inputMode="decimal" maxLength={10} value={editPay.amount} onChange={(e) => setEditPay({ ...editPay, amount: e.target.value })} />
+                  </Field>
+                  <Field label="Payment Method" error={shown("editPayMethod", editPay.amount)}>{methodSelect(editPay.method, (m) => setEditPay({ ...editPay, method: m }), "Payment method")}</Field>
+                </div>
+              ) : null}
 
               <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
                 <p className="text-[11px] font-bold uppercase tracking-widest text-gold">Payment Summary</p>
@@ -678,7 +736,7 @@ function NewBooking() {
                   {editing ? (
                     <>
                       <div className="flex items-center justify-between"><span className="font-sans text-muted-foreground">Paid so far</span><strong className="text-emerald">{rupees(money(editing).paid)}</strong></div>
-                      <div className="flex items-center justify-between border-t border-border/40 pt-3"><span className="font-sans font-semibold">Balance after this</span><strong className="text-base text-gold">{rupees(Math.max(0, total - money(editing).paid))}</strong></div>
+                      <div className="flex items-center justify-between border-t border-border/40 pt-3"><span className="font-sans font-semibold">Balance after this</span><strong className="text-base text-gold">{rupees(Math.max(0, total - money(editing).paid - num(editPay.amount)))}</strong></div>
                     </>
                   ) : (
                     <>
@@ -691,7 +749,7 @@ function NewBooking() {
                 {editing && total < money(editing).paid ? <p className="text-xs text-rust">The new total is less than what was paid. Record a refund on the booking first.</p> : null}
               </div>
 
-              <Field label="Notes"><textarea rows={2} className={inputClass} placeholder="Anything staff should remember…" value={d.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
+              <Field label="Notes" error={shown("notes", d.notes)}><textarea rows={2} maxLength={600} className={inputClass} placeholder="Anything staff should remember…" value={d.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
 
               <button className={cn(goldButtonClass, "mt-1 w-full")} disabled={busy || !quote} onClick={submit}>
                 {busy ? "Processing Booking..." : editing ? "Save change" : `Confirm Booking (${rupees(total)})`}

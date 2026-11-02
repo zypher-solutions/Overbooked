@@ -27,6 +27,12 @@ export function ShopShell({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth();
   const { shop, role, isSupport, isOwner, canManage, branches, myBranchId, word, feature, trendz, loading } = useShop();
 
+  // An error or warning is about the page it came from: it is cleared when the person moves to another page
+  // (otherwise "Enter the product name." follows them to Inventory Search). Confirmations stay.
+  useEffect(() => {
+    for (const t of toast.getToasts()) if ("type" in t && (t.type === "error" || t.type === "warning")) toast.dismiss(t.id);
+  }, [pathname]);
+
   // Each kind of shop has its own screens. Typing the address of the other kind's screen goes to the right one,
   // so a bridal shop never lands on the old lists and a car shop never lands on the clothing screens.
   useEffect(() => {
@@ -58,14 +64,14 @@ export function ShopShell({ children }: { children: ReactNode }) {
       </div>
       {open ? <div className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)} /> : null}
 
-      <aside className={cn("fixed inset-y-0 left-0 z-40 flex w-64 max-w-[85vw] flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar transition-transform lg:translate-x-0",
+      <aside className={cn("fixed inset-y-0 left-0 z-40 flex w-64 max-w-[85vw] flex-col overflow-y-auto no-scrollbar border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform lg:translate-x-0",
         open ? "translate-x-0 shadow-2xl" : "-translate-x-full")} aria-label="Main navigation">
         <div className="flex items-start justify-between px-5 pb-4 pt-6">
           <div className="min-w-0">
-            <p className="truncate font-display text-xl font-semibold text-foreground">{shop.name}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-gold">{isSupport ? "Zypher support" : trendz ? "Rental Studio" : "Overbooked"}</p>
+            <p className="truncate font-display text-xl font-semibold text-white">{shop.name}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-neon">{isSupport ? "Zypher support" : trendz ? "Rental Studio" : "Overbooked"}</p>
           </div>
-          <button aria-label="Close menu" onClick={() => setOpen(false)} className="rounded-md p-2 hover:bg-black/5 lg:hidden"><X className="h-4 w-4" /></button>
+          <button aria-label="Close menu" onClick={() => setOpen(false)} className="rounded-md p-2 hover:bg-white/10 lg:hidden"><X className="h-4 w-4" /></button>
         </div>
         <nav className="flex-1 px-3 pb-4">
           {/* which item is active depends on ?tab= too (Categories), so it reads the address in its own boundary */}
@@ -73,21 +79,21 @@ export function ShopShell({ children }: { children: ReactNode }) {
             <NavWithTab groups={visible} pathname={pathname} onPick={() => setOpen(false)} />
           </Suspense>
         </nav>
-        <div className="space-y-2 border-t border-border p-4 text-xs">
+        <div className="space-y-2 border-t border-white/10 p-4 text-xs">
           <div>
-            <p className="truncate font-medium text-foreground">{profile?.full_name}</p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-gold">{isSupport ? "Zypher support" : role}</p>
-            <p className="text-muted-foreground">{myBranch ?? "All branches"}</p>
+            <p className="truncate font-medium text-white">{profile?.full_name}</p>
+            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-neon">{isSupport ? "Zypher support" : role}</p>
+            <p className="text-white/65">{myBranch ?? "All branches"}</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => setPwOpen(true)} className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
+            <button onClick={() => setPwOpen(true)} className="inline-flex items-center gap-1.5 text-white/65 hover:text-white">
               <KeyRound className="h-3.5 w-3.5" /> Change password
             </button>
-            <button onClick={leave} className="inline-flex items-center gap-1.5 text-rust hover:text-rust/80">
+            <button onClick={leave} className="inline-flex items-center gap-1.5 text-orange-300 hover:text-orange-200">
               <LogOut className="h-3.5 w-3.5" /> Sign out
             </button>
           </div>
-          {trendz ? <p className="font-mono text-[10px] text-muted-foreground/70">Staff panel v2.0</p> : null}
+          {trendz ? <p className="font-mono text-[10px] text-white/45">Staff panel v2.0</p> : null}
         </div>
       </aside>
 
@@ -142,7 +148,7 @@ function NavGroups({ groups, pathname, tab, onPick }: { groups: NavGroup[]; path
         <div key={g.title ?? gi}>
           {g.title ? (
             <button type="button" onClick={() => setClosed((c) => ({ ...c, [g.title!]: !c[g.title!] }))} aria-expanded={!closed[g.title]}
-              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
+              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/55 hover:text-white">
               {g.title}
               <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !closed[g.title] && "rotate-180")} />
             </button>
@@ -154,10 +160,9 @@ function NavGroups({ groups, pathname, tab, onPick }: { groups: NavGroup[]; path
                 return (
                   <li key={n.href}>
                     <Link href={n.href} onClick={onPick} aria-current={on ? "page" : undefined}
-                      className={cn("relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors lg:py-2",
-                        on ? "bg-gold/10 font-medium text-foreground" : "text-muted-foreground hover:bg-black/5 hover:text-foreground")}>
-                      <span className={cn("absolute bottom-1.5 left-0 top-1.5 w-[2px] rounded-full", on ? "bg-gold" : "bg-transparent")} />
-                      <n.icon className={cn("h-4 w-4", on && "text-gold")} />
+                      className={cn("relative flex items-center gap-3 rounded-full px-4 py-2.5 text-sm transition-colors lg:py-2",
+                        on ? "bg-neon font-semibold text-[#101715]" : "text-white/75 hover:bg-white/10 hover:text-white")}>
+                      <n.icon className="h-4 w-4" />
                       {n.label}
                     </Link>
                   </li>

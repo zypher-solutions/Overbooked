@@ -14,14 +14,14 @@ import { RemindersPanel } from "@/components/shop/RemindersPanel";
 import { TrendzDashboard } from "@/modules/clothing/components/TrendzDashboard";
 import { APPOINTMENT_COLUMNS, AppointmentDialog, AppointmentList } from "@/components/shop/Appointments";
 import type { Appointment } from "@/lib/shop/types";
-import { PageHeader, Panel, StatusBadge, SummaryCard, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
+import { PageHeader, Panel, StatusBadge, SummaryCard, ghostButtonClass, goldButtonClass, inputClass, PageSkeleton } from "@/components/shop/ui";
 
 interface Board { pickups: ListRental[]; returns: ListRental[]; upcoming: ListRental[]; outNow: number }
 
 export default function Home() {
   // bridal and groom shops open on the TRENDZ dashboard; other businesses on Today
   const { trendz, loading } = useShop();
-  if (loading) return <p className="py-10 text-center text-sm text-muted-foreground">Loading...</p>;
+  if (loading) return <PageSkeleton columns={false} />;
   return trendz ? <TrendzDashboard /> : <Today />;
 }
 

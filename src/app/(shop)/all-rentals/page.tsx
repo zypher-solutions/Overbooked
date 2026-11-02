@@ -12,7 +12,8 @@ import { headlinePrice, useCatalog } from "@/lib/shop/useCatalog";
 import type { Product } from "@/lib/shop/types";
 import { StockCard, stockTotals, useStock } from "@/modules/clothing/components/StockCard";
 import type { ListRental } from "@/components/shop/RentalList";
-import { Empty, Modal, PageHeader, StatusBadge, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { PageHeader, StatusBadge, ghostButtonClass, goldButtonClass, inputClass, ListSkeleton } from "@/components/shop/ui";
 
 // All Rentals, as in TRENDZ: every product with its stock in each branch. Tapping one shows each size /
 // colour per branch (Total / Avail / Rented) with Add to Cart, and who has it out now.
@@ -81,7 +82,7 @@ export default function AllRentals() {
         </div>
       </div>
 
-      {products === null ? <p className="py-10 text-center text-sm text-muted-foreground">Loading...</p> : list.length === 0 ? (
+      {products === null ? <ListSkeleton /> : list.length === 0 ? (
         <div className="flex min-h-[240px] items-center justify-center rounded-lg border border-dashed border-border"><p className="text-sm text-muted-foreground">No products match your filters.</p></div>
       ) : view === "grid" ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">
@@ -128,16 +129,17 @@ export default function AllRentals() {
         </ul>
       )}
 
-      <Modal open={open !== null} onClose={() => setOpen(null)} wide title={open?.name ?? ""} description="Add a size or colour to the cart from the branch it will go out from.">
-        {open ? <>
-          <StockCard product={open} stock={stock} />
-          <OutNow product={open} tz={tz} branchName={(id) => branches.find((b) => b.id === id)?.name ?? ""} />
-          <div className="flex justify-end gap-2">
-            <Link href={`/catalog/${open.id}`} className={ghostButtonClass}>Edit product</Link>
-            <button className={goldButtonClass} onClick={() => setOpen(null)}>Done</button>
-          </div>
-        </> : null}
-      </Modal>
+      {/* the product opened, as in TRENDZ: photo, name, code, price, then every size / colour with its stock per branch */}
+      <Dialog open={open !== null} onOpenChange={(o) => { if (!o) setOpen(null); }}>
+        <DialogContent className="max-h-[92dvh] gap-6 overflow-y-auto p-5 sm:max-w-4xl sm:rounded-2xl sm:p-8">
+          <DialogTitle className="sr-only">{open?.name ?? "Product"}</DialogTitle>
+          <DialogDescription className="sr-only">Stock of each size and colour in every branch. Rent adds it to the cart.</DialogDescription>
+          {open ? <>
+            <StockCard product={open} stock={stock} />
+            <OutNow product={open} tz={tz} branchName={(id) => branches.find((b) => b.id === id)?.name ?? ""} />
+          </> : null}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -154,10 +156,12 @@ function OutNow({ product, tz, branchName }: { product: Product; tz: string; bra
       setRows((data as unknown as ListRental[]) ?? []);
     })();
   }, [product.id]);
+  // shown only when someone has this product out, so an ordinary product opens as a clean stock table
+  if (!rows?.length) return null;
   return (
     <div>
       <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Active rentals</h3>
-      {rows === null ? <p className="text-sm text-muted-foreground">Loading...</p> : rows.length === 0 ? <Empty>None out right now.</Empty> : (
+      {(
         <ul className="space-y-2">
           {rows.map((r) => (
             <li key={r.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-3">

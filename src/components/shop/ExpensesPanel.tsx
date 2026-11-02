@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { moneyError, reasonError, textLimitError } from "@/lib/validate";
 import { DateInput } from "@/components/shop/DateInput";
 import Papa from "papaparse";
 import { Download, Pencil, Plus, Trash2 } from "lucide-react";
@@ -136,11 +137,19 @@ function ExpenseDialog({ expense, categories, today, branchChoices, defaultBranc
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const [tried, setTried] = useState(false);
+  const errs = {
+    date: !date ? "Choose the date." : date > today ? "The date cannot be in the future." : null,
+    amount: moneyError(amount, { required: true, positive: true, max: 10_000_000 }),
+    branch: branchId ? null : "Choose a branch.",
+    category: !category.trim() ? "Choose or type a category." : category.trim().length < 2 ? "The category is too short." : null,
+    note: textLimitError(note, "note", 200),
+    reason: expense ? reasonError(reason, "reason for the correction") : null,
+  };
+  const bad = Object.values(errs).some(Boolean);
   const save = async () => {
-    if (!branchId) return toast.error("Choose a branch.");
-    if (!category.trim()) return toast.error("Choose or type a category.");
-    if (!(num(amount) > 0)) return toast.error("Enter an amount above zero.");
-    if (expense && reason.trim().length < 3) return toast.error("Say why you are correcting it (at least 3 characters).");
+    setTried(true);
+    if (bad) return toast.error(Object.values(errs).find(Boolean)!);
     setBusy(true);
     try {
       const p = { branch_id: branchId, spent_on: date, category: category.trim(), amount: num(amount), note: note.trim() || null };
@@ -159,11 +168,11 @@ function ExpenseDialog({ expense, categories, today, branchChoices, defaultBranc
       description={expense ? "The change is kept in the audit log with your reason." : "Money that went out of the shop."}
       footer={<>
         <button type="button" className={ghostButtonClass} onClick={onClose}>Cancel</button>
-        <button type="button" className={goldButtonClass} disabled={busy} onClick={() => void save()}>{busy ? "Saving..." : expense ? "Save correction" : "Add expense"}</button>
+        <button type="button" className={goldButtonClass} disabled={busy || (tried && bad)} onClick={() => void save()}>{busy ? "Saving..." : expense ? "Save correction" : "Add expense"}</button>
       </>}>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Date"><DateInput value={date} max={today} onChange={(v) => setDate(v)} /></Field>
-        <Field label="Amount (₹)"><input inputMode="decimal" className={inputClass} value={amount} placeholder="0" onChange={(e) => setAmount(e.target.value)} /></Field>
+        <Field label="Date" error={tried || !date ? errs.date ?? undefined : undefined}><DateInput value={date} max={today} onChange={(v) => setDate(v)} /></Field>
+        <Field label="Amount (₹)" error={tried || amount.trim() ? errs.amount ?? undefined : undefined}><input inputMode="decimal" maxLength={10} className={inputClass} value={amount} placeholder="0" onChange={(e) => setAmount(e.target.value)} /></Field>
       </div>
       {branchChoices.length > 1 || (expense && isOwner) ? (
         <Field label="Branch">
@@ -172,12 +181,12 @@ function ExpenseDialog({ expense, categories, today, branchChoices, defaultBranc
           </select>
         </Field>
       ) : null}
-      <Field label="Category" hint="Pick one or type your own">
+      <Field label="Category" hint="Pick one or type your own" error={tried ? errs.category ?? undefined : undefined}>
         <input className={inputClass} list="expense-categories" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Shop rent" maxLength={60} />
         <datalist id="expense-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
       </Field>
-      <Field label="Note (optional)"><input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. October rent, MG Road" /></Field>
-      {expense ? <Field label="Why are you correcting it?"><input className={inputClass} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. typed the wrong amount" /></Field> : null}
+      <Field label="Note (optional)" error={errs.note ?? undefined}><input className={inputClass} maxLength={220} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. October rent, MG Road" /></Field>
+      {expense ? <Field label="Why are you correcting it?" error={tried || reason.trim() ? errs.reason ?? undefined : undefined}><input className={inputClass} maxLength={320} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. typed the wrong amount" /></Field> : null}
     </Modal>
   );
 }
@@ -185,8 +194,11 @@ function ExpenseDialog({ expense, categories, today, branchChoices, defaultBranc
 function DeleteDialog({ expense, onClose, onDone }: { expense: Expense; onClose: () => void; onDone: () => void }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+  const reasonErr = reasonError(reason, "reason for deleting it");
   const remove = async () => {
-    if (reason.trim().length < 3) return toast.error("Say why you are deleting it (at least 3 characters).");
+    setTried(true);
+    if (reasonErr) return toast.error(reasonErr);
     setBusy(true);
     try {
       await call("delete_expense", { p_expense_id: expense.id, p_reason: reason.trim() });
@@ -201,9 +213,9 @@ function DeleteDialog({ expense, onClose, onDone }: { expense: Expense; onClose:
     <Modal open onClose={onClose} title="Delete expense" description={`${expense.category} · ${rupees(expense.amount)} on ${fmtDate(expense.spent_on)}. It stays in the audit log.`}
       footer={<>
         <button type="button" className={ghostButtonClass} onClick={onClose}>Keep it</button>
-        <button type="button" className={cn(dangerButtonClass)} disabled={busy} onClick={() => void remove()}>{busy ? "Deleting..." : "Delete"}</button>
+        <button type="button" className={cn(dangerButtonClass)} disabled={busy || (tried && !!reasonErr)} onClick={() => void remove()}>{busy ? "Deleting..." : "Delete"}</button>
       </>}>
-      <Field label="Why are you deleting it?"><input className={inputClass} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. entered twice" /></Field>
+      <Field label="Why are you deleting it?" error={tried || reason.trim() ? reasonErr ?? undefined : undefined}><input className={inputClass} maxLength={320} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. entered twice" /></Field>
     </Modal>
   );
 }

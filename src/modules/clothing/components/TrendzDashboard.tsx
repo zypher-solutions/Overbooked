@@ -4,11 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DateInput } from "@/components/shop/DateInput";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ArrowUpDown, Filter, MessageCircle, Plus, RefreshCw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Filter, MessageCircle, Plus, RefreshCw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
+import { useAuth } from "@/lib/overbooked/AuthContext";
 import { RENTAL_LIST_COLUMNS, call } from "@/lib/shop/api";
 import { dayRange, errorText, fmtDate, fmtDateTime, rupees, todayLocal } from "@/lib/shop/format";
 import { quickMessage, waLink, type QuickKind } from "@/lib/shop/whatsapp";
@@ -62,9 +63,42 @@ async function enrich(rows: ListRental[]): Promise<Row[]> {
   return rows.map((r) => ({ ...r, pieces: (pieces.get(r.id) ?? []).filter(Boolean).sort(), image: images.get(r.id) ?? null }));
 }
 
+const WEEK = ["M", "T", "W", "T", "F", "S", "S"];
+
+function MiniCalendar({ today, marks }: { today: string; marks: Set<string> }) {
+  const [anchor, setAnchor] = useState(today.slice(0, 7)); // YYYY-MM
+  const [y, m] = anchor.split("-").map(Number);
+  const first = new Date(Date.UTC(y, m - 1, 1));
+  const lead = (first.getUTCDay() + 6) % 7; // Monday first
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const shift = (by: number) => { const d = new Date(Date.UTC(y, m - 1 + by, 1)); setAnchor(d.toISOString().slice(0, 7)); };
+  const cells: (string | null)[] = [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => `${anchor}-${String(i + 1).padStart(2, "0")}`)];
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <p className="font-display text-base font-semibold">{first.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" })}</p>
+        <div className="flex gap-1">
+          <button type="button" aria-label="Previous month" onClick={() => shift(-1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-border hover:bg-accent"><ChevronLeft className="h-4 w-4" /></button>
+          <button type="button" aria-label="Next month" onClick={() => shift(1)} className="flex h-8 w-8 items-center justify-center rounded-full border border-border hover:bg-accent"><ChevronRight className="h-4 w-4" /></button>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-7 gap-y-1 text-center text-xs">
+        {WEEK.map((w, i) => <span key={i} className="pb-1 font-medium text-muted-foreground">{w}</span>)}
+        {cells.map((c, i) => c === null ? <span key={i} /> : (
+          <span key={c} className="flex flex-col items-center">
+            <span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-sm", c === today ? "bg-neon font-semibold text-[#101715]" : "text-foreground")}>{Number(c.slice(8))}</span>
+            <span className={cn("mt-0.5 h-1 w-1 rounded-full", marks.has(c) ? "bg-gold" : "bg-transparent")} />
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function TrendzDashboard() {
   const router = useRouter();
   const { shop, tz, branches, activeBranches, myBranchId, canManage } = useShop();
+  const { profile } = useAuth();
   const [pickups, setPickups] = useState<ListRental[] | null>(null);
   const [out, setOut] = useState<Row[] | null>(null);
   const [done, setDone] = useState<Row[] | null>(null);
@@ -173,11 +207,17 @@ export function TrendzDashboard() {
     [done, f.payment, matchIds]);
 
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "";
-  const cards: { key: Queue; label: string; count: number; tone: string }[] = [
-    { key: "pickups", label: "Pickups today", count: pickups?.length ?? 0, tone: "text-foreground" },
-    { key: "returns", label: "Returns due today", count: dueToday.length, tone: "text-gold" },
-    { key: "overdue", label: "Overdue", count: overdue.length, tone: "text-rust" },
+  const cards: { key: Queue; label: string; count: number; tone: string; box: string; label2: string }[] = [
+    { key: "pickups", label: "Pickups today", count: pickups?.length ?? 0, tone: "text-neon", box: "border-transparent bg-[#101715] text-white", label2: "text-white/70" },
+    { key: "returns", label: "Returns due today", count: dueToday.length, tone: "text-[#101715]", box: "border-transparent bg-neon text-[#101715]", label2: "text-[#101715]/75" },
+    { key: "overdue", label: "Overdue", count: overdue.length, tone: "text-rust", box: "border-border bg-surface", label2: "text-muted-foreground" },
   ];
+  // the calendar dots and the next few returns come from what is already loaded
+  const dueDays = useMemo(() => new Set((out ?? []).map((r) => dayOf(r.end_at))), [out, tz]); // eslint-disable-line react-hooks/exhaustive-deps
+  const upcoming = useMemo(() => queueOut.filter((r) => Date.parse(r.end_at) >= now).sort((a, b) => a.end_at.localeCompare(b.end_at)).slice(0, 5), [queueOut, now]);
+  const firstName = (profile?.full_name ?? "").trim().split(/\s+/)[0];
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   const chips: { label: string; clear: Partial<Filters> }[] = [];
   if (f.from) chips.push({ label: `From ${fmtDate(f.from)}`, clear: { from: "" } });
@@ -207,7 +247,7 @@ export function TrendzDashboard() {
         <div className="font-medium">{fmtDate(r.end_at, tz)}</div>
         {finished ? <div className="text-muted-foreground">{r.actual_end_at ? `Returned ${fmtDate(r.actual_end_at, tz)}` : "Returned"}</div>
           : late ? <span className="mt-0.5 inline-block rounded border border-rust/40 bg-rust/10 px-1.5 py-0.5 text-[10px] font-semibold text-rust">OVERDUE</span>
-          : <div className={daysLeft > 0 ? "text-muted-foreground" : "font-semibold text-gold"}>{daysLeft > 0 ? `${daysLeft}d left` : "Due today"}</div>}
+          : <div className={daysLeft > 0 ? "text-muted-foreground" : "font-semibold text-amber"}>{daysLeft > 0 ? `${daysLeft}d left` : "Due today"}</div>}
       </>
     );
   };
@@ -311,7 +351,10 @@ export function TrendzDashboard() {
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-semibold sm:text-3xl">Dashboard</h1>
+        <div>
+          <h1 className="font-display text-2xl font-bold sm:text-4xl">{greeting}{firstName ? `, ${firstName}` : ""}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{shop.name} · {new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: tz }).format(new Date())}</p>
+        </div>
         <Link href="/scan" className={goldButtonClass}><Plus className="h-4 w-4" /> New rental</Link>
       </div>
 
@@ -329,9 +372,9 @@ export function TrendzDashboard() {
       <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {cards.map((c) => (
           <button key={c.key} type="button" onClick={() => setPicked(c.key)} aria-pressed={queue === c.key}
-            className={cn("glass p-3 text-left transition-colors hover:border-gold/25 sm:p-4", queue === c.key && "border-gold/60 ring-1 ring-gold/30")}>
-            <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground sm:text-[11px]">{c.label}</p>
-            <p className={cn("mt-2 font-mono text-2xl font-semibold", c.count ? c.tone : "text-foreground")}>{pickups === null ? "—" : c.count}</p>
+            className={cn("rounded-[20px] border p-4 text-left shadow-[0_8px_24px_-12px_rgb(16_23_21/18%)] transition-shadow hover:shadow-lg sm:p-5", c.box, queue === c.key && "ring-2 ring-gold ring-offset-2 ring-offset-background")}>
+            <p className={cn("text-[11px] font-medium uppercase tracking-[0.12em]", c.label2)}>{c.label}</p>
+            <p className={cn("mt-3 font-display text-4xl font-bold sm:text-5xl", c.count || c.key === "pickups" || c.key === "returns" ? c.tone : "text-foreground")}>{pickups === null ? "—" : c.count}</p>
           </button>
         ))}
         {canManage
@@ -339,7 +382,8 @@ export function TrendzDashboard() {
           : <SummaryCard label="Items out" value={unitsOut} hint={`${out?.length ?? 0} rentals`} />}
       </div>
 
-      <section className="glass mt-4 rounded-xl p-3 sm:p-5" aria-label="Today's work">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
+      <section className="glass p-4 sm:p-6" aria-label="Today's work">
         <h2 className="text-sm font-semibold uppercase tracking-wide">{cards.find((c) => c.key === queue)?.label}</h2>
         {queueRows.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
@@ -374,6 +418,29 @@ export function TrendzDashboard() {
           </ul>
         )}
       </section>
+
+      <aside className="space-y-4" aria-label="Calendar and next returns">
+        <div className="glass p-4 sm:p-5">
+          <MiniCalendar today={today} marks={dueDays} />
+          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground"><span className="h-1.5 w-1.5 rounded-full bg-gold" /> a return is due · <Link href="/calendar" className="font-medium text-gold hover:underline">Open calendar</Link></p>
+        </div>
+        <div className="glass p-4 sm:p-5">
+          <h2 className="font-display text-base font-semibold">Next returns</h2>
+          {upcoming.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">Nothing is due back soon.</p> : (
+            <ul className="mt-3 divide-y divide-border">
+              {upcoming.map((r) => (
+                <li key={r.id}>
+                  <Link href={`/rentals/${r.id}`} className="flex items-center justify-between gap-3 py-2.5 hover:text-gold">
+                    <span className="min-w-0"><span className="block truncate text-sm font-medium">{r.customers?.full_name}</span><span className="block truncate font-mono text-[11px] text-muted-foreground">{r.token}</span></span>
+                    <span className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-xs font-medium">{fmtDate(r.end_at, tz)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </aside>
+      </div>
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">

@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 type Tone = "gold" | "emerald" | "rust" | "muted" | "indigo";
 
 const toneClasses: Record<Tone, string> = {
-  gold: "border-gold/35 bg-gold/10 text-gold",
+  gold: "border-amber/35 bg-amber/10 text-amber",
   emerald: "border-emerald/40 bg-emerald/12 text-emerald",
   rust: "border-rust/45 bg-rust/14 text-rust",
   muted: "border-border bg-white/5 text-muted-foreground",
@@ -53,7 +53,7 @@ export function SummaryCard({
           ? "text-emerald"
           : "text-foreground";
   return (
-    <div className="glass p-4 transition-colors duration-300 hover:border-gold/25">
+    <div className="glass p-5 transition-colors duration-300 hover:border-gold/25">
       <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
         {label}
       </p>
@@ -92,14 +92,14 @@ export function Field({
 }
 
 export const inputClass =
-  "w-full rounded-sm border border-input bg-white/[0.03] px-3 py-2.5 sm:py-2 text-sm text-foreground outline-none transition-all duration-200 placeholder:text-muted-foreground/60 focus:border-gold/50 focus:ring-2 focus:ring-ring disabled:opacity-60 read-only:text-muted-foreground";
+  "w-full rounded-xl border border-input bg-white px-3 py-2.5 sm:py-2 text-sm text-foreground outline-none transition-all duration-200 placeholder:text-muted-foreground/60 focus:border-neon focus:ring-2 focus:ring-ring disabled:opacity-60 read-only:text-muted-foreground";
 
 export const monoInputClass = cn(inputClass, "font-mono");
 
 export const labelClass = "mb-1.5 block text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase";
 
 export const goldButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-md bg-gold px-4 py-2.5 sm:py-2 text-sm font-semibold text-primary-foreground transition-all duration-200 hover:brightness-110 hover:shadow-glow-gold disabled:opacity-50 disabled:hover:shadow-none";
+  "inline-flex items-center justify-center gap-2 rounded-full bg-[#101715] px-5 py-2.5 sm:py-2 text-sm font-semibold text-white transition-all duration-200 hover:bg-gold hover:shadow-lg disabled:opacity-50 disabled:hover:shadow-none";
 
 export const ghostButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-md border border-border bg-white/[0.03] px-3 py-2 sm:py-1.5 text-xs font-medium text-foreground transition-colors duration-200 hover:border-gold/30 hover:bg-white/[0.07]";
+  "inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2 sm:py-1.5 text-xs font-medium text-foreground transition-colors duration-200 hover:border-gold/40 hover:bg-accent";

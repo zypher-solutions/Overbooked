@@ -35,7 +35,7 @@ test("bridal owner: an expense shows in Expenses and lowers Profit, a correction
   await row.getByRole("button", { name: "Correct expense" }).click();
   await page.getByRole("dialog").getByLabel("Amount (₹)").fill("1300");
   await page.getByRole("dialog").getByRole("button", { name: "Save correction" }).click();
-  await expect(page.getByText(/Say why you are correcting it/)).toBeVisible();
+  await expect(page.getByText(/Write the reason for the correction/)).toBeVisible();
   await page.getByRole("dialog").getByLabel("Why are you correcting it?").fill("typed the wrong amount");
   await page.getByRole("dialog").getByRole("button", { name: "Save correction" }).click();
   await expect(page.getByText("Expense corrected")).toBeVisible();
@@ -44,7 +44,7 @@ test("bridal owner: an expense shows in Expenses and lowers Profit, a correction
   // a delete asks for a reason too
   await page.getByRole("row", { name: /PW October rent/ }).getByRole("button", { name: "Delete expense" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
-  await expect(page.getByText(/Say why you are deleting it/)).toBeVisible();
+  await expect(page.getByText(/Write the reason for deleting it/)).toBeVisible();
   await page.getByRole("dialog").getByLabel("Why are you deleting it?").fill("entered twice");
   await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByText("Expense deleted")).toBeVisible();

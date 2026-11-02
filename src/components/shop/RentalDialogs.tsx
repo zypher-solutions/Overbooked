@@ -2,7 +2,7 @@
 
 import { DateInput, DateTimeInput } from "@/components/shop/DateInput";
 import { useEffect, useState } from "react";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useShop } from "@/lib/shop/ShopContext";
@@ -12,6 +12,8 @@ import {
 } from "@/lib/shop/format";
 import { MESSAGE_LABELS, buildMessage, waLink, type MessageKind } from "@/lib/shop/whatsapp";
 import type { ChargeType, Method, PaymentKind } from "@/lib/shop/types";
+import { moneyError, reasonError, textLimitError } from "@/lib/validate";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Field, MethodPicker, Modal, MoneyRows, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "./ui";
 
 interface DialogProps { rental: RentalDetail; open: boolean; onClose: () => void; onDone: () => void }
@@ -53,9 +55,22 @@ export function PaymentDialog({ rental, open, onClose, onDone }: DialogProps) {
   const kinds: PaymentKind[] = rental.status === "cancelled" || rental.status === "no_show"
     ? ["deposit_refund"] : ["payment", "deposit", ...(refundNow ? ["deposit_refund" as const] : []), "deposit_applied"];
 
+  // limits the database enforces, shown before the button is pressed
+  const limit = kind === "payment" ? { max: m.balance, maxText: `the balance (${rupees(m.balance)})` }
+    : kind === "deposit" ? { max: 1_000_000 }
+    : kind === "deposit_applied" ? { max: Math.min(m.depositHeld, m.balance), maxText: `what can be kept (${rupees(Math.min(m.depositHeld, m.balance))})` }
+    : { max: m.depositHeld, maxText: `the deposit held (${rupees(m.depositHeld)})` };
+  const [tried, setTried] = useState(false);
+  useEffect(() => { if (open) setTried(false); }, [open]);
+  const errs = {
+    amount: moneyError(amount, { required: true, positive: true, ...limit }),
+    method: kind !== "deposit_applied" && !method ? "Choose how the money moved." : null,
+    note: textLimitError(note, "note", 200),
+  };
+  const bad = Object.values(errs).some(Boolean);
   const save = () => run(async () => {
-    if (!(num(amount) > 0)) throw new Error("Enter an amount above zero.");
-    if (kind !== "deposit_applied" && !method) throw new Error("Choose how the money moved.");
+    setTried(true);
+    if (bad) throw new Error(Object.values(errs).find(Boolean)!);
     await call("record_rental_payment", { p_rental_id: rental.id, p_kind: kind, p_amount: num(amount), p_method: kind === "deposit_applied" ? null : method, p_note: note || null });
     toast.success(`${PAYMENT_LABELS[kind]} recorded`);
     onDone();
@@ -64,7 +79,7 @@ export function PaymentDialog({ rental, open, onClose, onDone }: DialogProps) {
 
   return (
     <Modal open={open} onClose={onClose} title="Record money" description={`Balance ${rupees(m.balance)} · deposit held ${rupees(m.depositHeld)}`}
-      footer={<><button className={ghostButtonClass} onClick={onClose}>Cancel</button><button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Record"}</button></>}>
+      footer={<><button className={ghostButtonClass} onClick={onClose}>Cancel</button><button className={goldButtonClass} disabled={busy || (tried && bad)} onClick={save}>{busy ? "Saving..." : "Record"}</button></>}>
       <div className="flex flex-wrap gap-1.5">
         {kinds.map((k) => (
           <button key={k} type="button" aria-pressed={kind === k} onClick={() => { setKind(k); const s = suggest(k); setAmount(s > 0 ? String(s) : ""); }}
@@ -73,9 +88,11 @@ export function PaymentDialog({ rental, open, onClose, onDone }: DialogProps) {
           </button>
         ))}
       </div>
-      <Field label="Amount"><input className={monoInputClass} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
-      {kind !== "deposit_applied" ? <MethodPicker value={method} onChange={setMethod} /> : null}
-      <Field label="Note"><input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+      <Field label="Amount" error={tried || amount.trim() ? errs.amount ?? undefined : undefined}>
+        <input className={monoInputClass} inputMode="decimal" maxLength={10} value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </Field>
+      {kind !== "deposit_applied" ? <MethodPicker value={method} onChange={setMethod} error={tried ? errs.method ?? undefined : undefined} /> : null}
+      <Field label="Note" error={errs.note ?? undefined}><input className={inputClass} maxLength={220} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
     </Modal>
   );
 }
@@ -88,7 +105,16 @@ export function ChargeDialog({ rental, open, onClose, onDone }: DialogProps) {
   const { busy, run } = useBusy();
   useEffect(() => { if (open) { setType(rental.status === "completed" ? "challan" : "damage"); setAmount(""); setNote(""); } }, [open, rental.status]);
 
+  const [tried, setTried] = useState(false);
+  useEffect(() => { if (open) setTried(false); }, [open]);
+  const errs = {
+    amount: moneyError(amount, { required: true, positive: true, max: 1_000_000 }),
+    note: textLimitError(note, "note", 200),
+  };
+  const bad = Object.values(errs).some(Boolean);
   const save = () => run(async () => {
+    setTried(true);
+    if (bad) throw new Error(Object.values(errs).find(Boolean)!);
     await call("add_rental_charge", { p_rental_id: rental.id, p_type: type, p_amount: num(amount), p_note: note || null });
     toast.success("Charge added");
     onDone();
@@ -97,14 +123,16 @@ export function ChargeDialog({ rental, open, onClose, onDone }: DialogProps) {
 
   return (
     <Modal open={open} onClose={onClose} title="Add a charge" description="For example a traffic fine or toll that arrived after the return, or damage found later."
-      footer={<><button className={ghostButtonClass} onClick={onClose}>Cancel</button><button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Add charge"}</button></>}>
+      footer={<><button className={ghostButtonClass} onClick={onClose}>Cancel</button><button className={goldButtonClass} disabled={busy || (tried && bad)} onClick={save}>{busy ? "Saving..." : "Add charge"}</button></>}>
       <Field label="Type">
         <select className={inputClass} value={type} onChange={(e) => setType(e.target.value as ChargeType)}>
           {Object.entries(CHARGE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
       </Field>
-      <Field label="Amount"><input className={monoInputClass} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
-      <Field label="Note (challan no., what was damaged...)"><input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+      <Field label="Amount" error={tried || amount.trim() ? errs.amount ?? undefined : undefined}>
+        <input className={monoInputClass} inputMode="decimal" maxLength={10} value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </Field>
+      <Field label="Note (challan no., what was damaged...)" error={errs.note ?? undefined}><input className={inputClass} maxLength={220} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
     </Modal>
   );
 }
@@ -120,8 +148,17 @@ export function ExtendDialog({ rental, open, onClose, onDone }: DialogProps) {
     if (open) { setEnd(isoToZoned(new Date(Date.parse(rental.end_at) + 24 * 3600 * 1000).toISOString(), tz)); setAmount(""); setMethod(""); }
   }, [open, rental.end_at, tz]);
 
+  const [tried, setTried] = useState(false);
+  useEffect(() => { if (open) setTried(false); }, [open]);
+  const errs = {
+    end: !end ? "Choose the new date." : zonedToIso(end, tz) <= rental.end_at ? `The new ${word("end").toLowerCase()} must be after the current one.` : null,
+    amount: moneyError(amount, { label: "payment", max: 1_000_000 }),
+    method: num(amount) > 0 && !method ? "Choose how the payment was made." : null,
+  };
+  const bad = Object.values(errs).some(Boolean);
   const save = () => run(async () => {
-    if (num(amount) > 0 && !method) throw new Error("Choose how the payment was made.");
+    setTried(true);
+    if (bad) throw new Error(Object.values(errs).find(Boolean)!);
     const res = await call<{ total: number }>("extend_rental", {
       p_rental_id: rental.id, p_new_end: zonedToIso(end, tz),
       p_payment: num(amount) > 0 ? { amount: num(amount), method } : null,
@@ -134,10 +171,12 @@ export function ExtendDialog({ rental, open, onClose, onDone }: DialogProps) {
   return (
     <Modal open={open} onClose={onClose} title="Extend"
       description={`Now ${word("end").toLowerCase()} ${fmtDateTime(rental.end_at, tz)}. Items priced by rate are re-priced; agreed prices stay as they are.`}
-      footer={<><button className={ghostButtonClass} onClick={onClose}>Cancel</button><button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Extend"}</button></>}>
-      <Field label={`New ${word("end").toLowerCase()}`}><DateTimeInput value={end} onChange={(v) => setEnd(v)} /></Field>
-      <Field label="Payment now (optional)"><input className={monoInputClass} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
-      {num(amount) > 0 ? <MethodPicker value={method} onChange={setMethod} /> : null}
+      footer={<><button className={ghostButtonClass} onClick={onClose}>Cancel</button><button className={goldButtonClass} disabled={busy || (tried && bad)} onClick={save}>{busy ? "Saving..." : "Extend"}</button></>}>
+      <Field label={`New ${word("end").toLowerCase()}`} error={errs.end ?? undefined}><DateTimeInput value={end} onChange={(v) => setEnd(v)} /></Field>
+      <Field label="Payment now (optional)" error={amount.trim() ? errs.amount ?? undefined : undefined}>
+        <input className={monoInputClass} inputMode="decimal" maxLength={10} value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </Field>
+      {num(amount) > 0 ? <MethodPicker value={method} onChange={setMethod} error={tried ? errs.method ?? undefined : undefined} /> : null}
     </Modal>
   );
 }
@@ -147,34 +186,94 @@ export function CancelDialog({ rental, open, onClose, onDone }: DialogProps) {
   const m = money(rental);
   const started = Date.parse(rental.start_at) <= Date.now();
   const [fee, setFee] = useState("");
-  const [method, setMethod] = useState<Method | "">("");
+  const [method, setMethod] = useState<Method | "">("cash");
   const [reason, setReason] = useState("");
   const [noShow, setNoShow] = useState(false);
   const { busy, run } = useBusy();
-  useEffect(() => { if (open) { setFee(""); setMethod(""); setReason(""); setNoShow(false); } }, [open]);
+  useEffect(() => { if (open) { setFee(""); setMethod("cash"); setReason(""); setNoShow(false); } }, [open]);
 
-  const refund = Math.max(0, m.paid - num(fee));
+  // what goes back: what was paid less the fee kept, and the whole deposit
+  const advanceRefund = Math.max(0, Math.round((m.paid - num(fee)) * 100) / 100);
+  const depositRefund = m.depositHeld;
+  const outflow = advanceRefund + depositRefund;
+  const errs = {
+    fee: moneyError(fee, { label: "fee", max: m.paid, maxText: `what was paid (${rupees(m.paid)})` }),
+    method: outflow > 0 && !method ? "Choose how the money is given back." : null,
+    reason: textLimitError(reason, "reason", 300),
+  };
+  const bad = Object.values(errs).some(Boolean);
   const save = () => run(async () => {
-    if (num(fee) > m.paid) throw new Error(`The fee cannot be more than what was paid (${rupees(m.paid)}).`);
-    if ((refund > 0 || m.depositHeld > 0) && !method) throw new Error("Choose how the money is given back.");
-    await call("cancel_rental", { p_rental_id: rental.id, p_fee: num(fee), p_refund_method: method || null, p_reason: reason || null, p_no_show: noShow });
+    if (bad) throw new Error(Object.values(errs).find(Boolean)!);
+    await call("cancel_rental", { p_rental_id: rental.id, p_fee: num(fee), p_refund_method: outflow > 0 ? method || null : null, p_reason: reason.trim() || null, p_no_show: noShow });
     toast.success(noShow ? "Marked as no-show" : "Booking cancelled");
     onDone();
     onClose();
   });
 
   return (
-    <Modal open={open} onClose={onClose} title={`Cancel ${rental.token}`}
-      description="The booked units are freed at once. Any fee is kept from what was paid; the rest and the deposit are given back."
-      footer={<><button className={ghostButtonClass} onClick={onClose}>Keep booking</button><button className={dangerButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : noShow ? "Mark no-show" : "Cancel booking"}</button></>}>
-      <Field label="Cancellation fee kept" hint={`Paid so far ${rupees(m.paid)}`}><input className={monoInputClass} inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} /></Field>
-      <MoneyRows rows={[["Refund", rupees(refund)], ["Deposit returned", rupees(m.depositHeld)]]} />
-      {refund > 0 || m.depositHeld > 0 ? <MethodPicker value={method} onChange={setMethod} /> : null}
-      <Field label="Reason"><input className={inputClass} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
-      {started ? (
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={noShow} onChange={(e) => setNoShow(e.target.checked)} /> The customer did not come (no-show)</label>
-      ) : null}
-    </Modal>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto border-rust/40 p-5 sm:max-w-lg sm:rounded-2xl sm:p-6">
+        <div className="flex items-center gap-3 border-b border-border pb-4 pr-8">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rust/15 text-rust"><XCircle className="h-5 w-5" /></span>
+          <div className="min-w-0">
+            <DialogTitle className="font-display text-lg">Cancel Booking {rental.token}</DialogTitle>
+            <DialogDescription className="text-xs">Original records are kept. Set the cancellation fee and give the money back.</DialogDescription>
+          </div>
+        </div>
+
+        {/* what the booking holds now */}
+        <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-4">
+          {([["Rental charge", rupees(m.total), ""], ["Advance paid", rupees(m.paid), "text-emerald"], ["Sec. deposit", rupees(m.depositHeld), ""], ["Receivable", "→ ₹0 (Closed)", "text-gold"]] as const).map(([label, value, tone]) => (
+            <div key={label}>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+              <p className={cn("font-mono text-sm font-semibold", tone)}>{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <div className="mb-1.5 flex items-baseline justify-between gap-2">
+            <label htmlFor="cancel-fee" className="text-sm font-semibold">Retained Cancellation Fee (₹)</label>
+            <span className="text-[11px] text-muted-foreground">Max: {rupees(m.paid)}</span>
+          </div>
+          <input id="cancel-fee" className={cn(monoInputClass, errs.fee && fee.trim() ? "border-rust/60" : "")} inputMode="decimal" maxLength={10} placeholder="0" value={fee} onChange={(e) => setFee(e.target.value)} />
+          {fee.trim() && errs.fee ? <span className="mt-1 block text-xs text-rust">{errs.fee}</span> : <p className="mt-1 text-[11px] text-muted-foreground">Leave it empty for no fee. The fee is kept from the advance and counted once as earned.</p>}
+        </div>
+
+        {/* what goes back, worked out as the fee is typed */}
+        <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-3 font-mono text-sm">
+          <div className="flex items-center justify-between"><span className="font-sans text-muted-foreground">Advance Refund:</span><strong className="text-emerald">{rupees(advanceRefund)}</strong></div>
+          <div className="flex items-center justify-between"><span className="font-sans text-muted-foreground">Security Deposit Refund:</span><strong className="text-emerald">{rupees(depositRefund)}</strong></div>
+          <div className="flex items-center justify-between border-t border-border pt-2 text-base font-bold"><span className="font-sans">Total Refund Outflow:</span><span className="text-emerald">{rupees(outflow)}</span></div>
+          <p className="font-sans text-[11px] italic text-muted-foreground">The security deposit always goes back in full and is never counted as rental income.</p>
+        </div>
+
+        {outflow > 0 ? (
+          <div>
+            <p className="mb-1.5 text-sm font-semibold">Refund Payment Method <span className="text-rust">*</span></p>
+            <MethodPicker value={method} onChange={setMethod} error={errs.method ?? undefined} />
+          </div>
+        ) : null}
+
+        <div>
+          <label htmlFor="cancel-reason" className="mb-1.5 block text-sm font-semibold">Cancellation Reason / Notes <span className="font-normal text-muted-foreground">(optional)</span></label>
+          <textarea id="cancel-reason" className={inputClass} rows={2} maxLength={320} placeholder="e.g. Customer asked to cancel, date clash, illness"
+            value={reason} onChange={(e) => setReason(e.target.value)} />
+          {errs.reason ? <span className="mt-1 block text-xs text-rust">{errs.reason}</span> : null}
+        </div>
+
+        {started ? (
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={noShow} onChange={(e) => setNoShow(e.target.checked)} /> The customer did not come (no-show)</label>
+        ) : null}
+
+        <div className="flex gap-3 border-t border-border pt-4 max-sm:flex-col-reverse">
+          <button type="button" className={cn(ghostButtonClass, "min-h-11 flex-1")} onClick={onClose} disabled={busy}>Keep Booking</button>
+          <button type="button" className={cn(dangerButtonClass, "min-h-11 flex-1 bg-rust text-white hover:bg-rust/90")} disabled={busy || bad} onClick={save}>
+            {busy ? "Saving..." : noShow ? "Mark no-show & Release Dates" : "Confirm Cancellation & Release Dates"}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -238,10 +337,12 @@ export function CorrectionDialog({ rental, fix, onClose, onDone }: { rental: Ren
   const [value, setValue] = useState("");
   const [method, setMethod] = useState<Method | "">("");
   const [reason, setReason] = useState("");
+  const [tried, setTried] = useState(false);
   const { busy, run } = useBusy();
 
   useEffect(() => {
     if (!fix) return;
+    setTried(false);
     setReason("");
     setValue(fix.kind === "discount" ? String(rental.discount) : fix.kind === "line" || fix.kind === "payment" ? String(fix.amount) : "");
     setMethod(fix.kind === "payment" ? fix.method ?? "" : "");
@@ -254,8 +355,15 @@ export function CorrectionDialog({ rental, fix, onClose, onDone }: { rental: Ren
   }[fix.kind];
   const destructive = fix.kind.startsWith("delete");
 
+  const asksAmount = fix.kind === "discount" || fix.kind === "line" || fix.kind === "payment";
+  const errs = {
+    value: asksAmount ? moneyError(value, { required: true, positive: fix.kind !== "discount", max: 10_000_000 }) : null,
+    reason: reasonError(reason, "reason (it is kept in the audit log)"),
+  };
+  const bad = Object.values(errs).some(Boolean);
   const save = () => run(async () => {
-    if (reason.trim().length < 3) throw new Error("Write the reason (it is kept in the audit log).");
+    setTried(true);
+    if (bad) throw new Error(Object.values(errs).find(Boolean)!);
     if (fix.kind === "discount") await call("admin_set_discount", { p_rental_id: rental.id, p_discount: num(value), p_reason: reason });
     if (fix.kind === "line") await call("admin_set_line_amount", { p_line_id: fix.id, p_amount: num(value), p_reason: reason });
     if (fix.kind === "payment") await call("admin_update_payment", { p_payment_id: fix.id, p_amount: num(value), p_method: method || null, p_reason: reason });
@@ -271,13 +379,15 @@ export function CorrectionDialog({ rental, fix, onClose, onDone }: { rental: Ren
     <Modal open onClose={onClose} title={title}
       description={fix.kind === "delete_rental" ? "The booking, its items, charges and payments are removed. Only finished or cancelled bookings can be deleted." : "Owners only. The change and its reason are kept in the audit log."}
       footer={<><button className={ghostButtonClass} onClick={onClose}>Cancel</button>
-        <button className={destructive ? dangerButtonClass : goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : destructive ? "Delete" : "Save"}</button></>}>
+        <button className={destructive ? dangerButtonClass : goldButtonClass} disabled={busy || (tried && bad)} onClick={save}>{busy ? "Saving..." : destructive ? "Delete" : "Save"}</button></>}>
       {"label" in fix && destructive ? <p className="text-sm">{fix.label}</p> : null}
       {fix.kind === "discount" || fix.kind === "line" || fix.kind === "payment" ? (
-        <Field label="Amount"><input className={monoInputClass} inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} /></Field>
+        <Field label="Amount" error={tried || value.trim() ? errs.value ?? undefined : undefined}>
+          <input className={monoInputClass} inputMode="decimal" maxLength={10} value={value} onChange={(e) => setValue(e.target.value)} />
+        </Field>
       ) : null}
       {fix.kind === "payment" && fix.method ? <MethodPicker value={method} onChange={setMethod} /> : null}
-      <Field label="Reason"><input className={inputClass} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
+      <Field label="Reason" error={tried || reason.trim() ? errs.reason ?? undefined : undefined}><input className={inputClass} maxLength={320} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
     </Modal>
   );
 }

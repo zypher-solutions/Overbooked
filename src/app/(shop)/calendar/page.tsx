@@ -1,180 +1,213 @@
 "use client";
 
-import { DateInput } from "@/components/shop/DateInput";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
-import { addDays, dayRange, errorText, todayLocal } from "@/lib/shop/format";
-import { useCatalog, variationLabel } from "@/lib/shop/useCatalog";
-import type { Unit } from "@/lib/shop/types";
-import { PageHeader, Panel, StatusBadge, ghostButtonClass, inputClass } from "@/components/shop/ui";
+import { RENTAL_LIST_COLUMNS } from "@/lib/shop/api";
+import { addDays, errorText, fmtTime, isoToZoned, rupees, todayLocal, zonedToIso } from "@/lib/shop/format";
+import { isoToDisplay } from "@/components/shop/DateInput";
+import { itemsSummary, type ListRental } from "@/components/shop/RentalList";
+import { Panel, Skeleton, inputClass } from "@/components/shop/ui";
 
-interface Booking {
-  id: string;
-  unit_id: string;
-  period: string;
-  state: "held" | "out" | "returned" | "released";
-  rental_id: string;
-  rentals: { token: string; status: string; end_at: string; actual_end_at: string | null; customers: { full_name: string } | null } | null;
-}
+// Calendar: only two things matter at a glance, when a pickup is due and when a return is due.
+// A booking that has not gone out shows its pickup and its return; one that is out shows its return; a returned one is gone.
+// Pickups and returns have their own colours, and anything late is red. Tapping a day lists them; tapping one opens the booking.
 
-// "[\"2026-10-31 08:30:00+00\",\"2026-11-02 08:30:00+00\")" -> instants
-function parseRange(range: string) {
-  const [a, b] = range.replace(/[[\]()"]/g, "").split(",");
-  return { from: Date.parse(a.trim().replace(" ", "T").replace(/\+00$/, "Z")), to: Date.parse(b.trim().replace(" ", "T").replace(/\+00$/, "Z")) };
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+type Booking = ListRental;
+type Kind = "pickup" | "return";
+interface CalEvent { key: string; kind: Kind; day: string; at: string; late: boolean; booking: Booking }
+
+const COLOURS = {
+  pickup: { chip: "bg-indigo-500/15 text-indigo-700 border-indigo-500/25", dot: "bg-indigo-500", label: "Pickup" },
+  return: { chip: "bg-emerald/15 text-emerald border-emerald/30", dot: "bg-emerald", label: "Return" },
+  late: { chip: "bg-rust/15 text-rust border-rust/30", dot: "bg-rust", label: "Late" },
+};
+const colourOf = (e: CalEvent) => (e.late ? COLOURS.late : COLOURS[e.kind]);
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const monthKey = (iso: string) => iso.slice(0, 7);
+// the 6 weeks of a month, Sunday first, as YYYY-MM-DD
+function gridDays(month: string): string[] {
+  const [y, m] = month.split("-").map(Number);
+  const first = `${y}-${pad(m)}-01`;
+  const weekday = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const start = addDays(first, -weekday);
+  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
 }
+const shiftMonth = (month: string, by: number) => {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + by, 1));
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`;
+};
 
 export default function Calendar() {
-  const router = useRouter();
-  const { tz, activeBranches, myBranchId, categories, templateOf, word } = useShop();
-  const [branch, setBranch] = useState(myBranchId ?? activeBranches[0]?.id ?? "");
-  const [cat, setCat] = useState("");
-  const [start, setStart] = useState(todayLocal(tz));
-  const [span, setSpan] = useState(14);
-  const [units, setUnits] = useState<Unit[] | null>(null);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const { products } = useCatalog({ includeInactive: true });
+  const { tz, activeBranches, myBranchId } = useShop();
+  const today = todayLocal(tz);
+  const [month, setMonth] = useState(monthKey(today));
+  const [selected, setSelected] = useState(today);
+  const [branch, setBranch] = useState(myBranchId ?? "");
+  const [rows, setRows] = useState<Booking[] | null>(null);
 
-  useEffect(() => {
-    if (window.matchMedia("(max-width: 640px)").matches) setSpan(7);
-  }, []);
-  useEffect(() => { if (!branch && activeBranches[0]) setBranch(myBranchId ?? activeBranches[0].id); }, [activeBranches, branch, myBranchId]);
-
-  const from = dayRange(start, tz).from;
-  const to = dayRange(addDays(start, span - 1), tz).to;
+  // the weeks shown: a month that fits in five weeks shows five (kept as one array so the data is not fetched again by accident)
+  const shown = useMemo(() => {
+    const all = gridDays(month);
+    return all.slice(35).every((d) => monthKey(d) !== month) ? all.slice(0, 35) : all;
+  }, [month]);
 
   const load = useCallback(async () => {
-    if (!branch) return;
-    const supabase = createClient();
-    const [u, b] = await Promise.all([
-      supabase.from("units").select("*").eq("branch_id", branch).neq("status", "retired").order("code"),
-      supabase.from("unit_reservations")
-        .select("id, unit_id, period, state, rental_id, rentals!unit_reservations_shop_rental_fkey(token, status, end_at, actual_end_at, customers!rentals_shop_customer_fkey(full_name))")
-        .neq("state", "released").filter("period", "ov", `[${from},${to})`),
-    ]);
-    const err = u.error ?? b.error;
-    if (err) toast.error(errorText(err));
-    setUnits((u.data as Unit[]) ?? []);
-    setBookings((b.data as unknown as Booking[]) ?? []);
-  }, [branch, from, to]);
-  useEffect(() => { void load(); }, [load]);
+    const from = zonedToIso(`${shown[0]}T00:00`, tz);
+    const to = zonedToIso(`${addDays(shown[shown.length - 1], 1)}T00:00`, tz);
+    // only bookings still to be picked up or still out: a returned one has nothing left to show
+    let q = createClient().from("rentals").select(RENTAL_LIST_COLUMNS).in("status", ["reserved", "active"])
+      .lt("start_at", to).gt("end_at", from).order("start_at").limit(1000);
+    if (branch) q = q.eq("branch_id", branch);
+    const { data, error } = await q;
+    if (error) { toast.error(errorText(error)); setRows([]); return; }
+    setRows((data as unknown as Booking[]) ?? []);
+  }, [shown, tz, branch]);
+  useEffect(() => { setRows(null); void load(); }, [load]);
 
-  const names = useMemo(() => {
-    const m = new Map<string, { label: string; category: string; productId: string }>();
-    for (const p of products ?? []) for (const v of p.product_variations ?? []) m.set(v.id, { label: variationLabel(p, v), category: p.category_id, productId: p.id });
-    return m;
-  }, [products]);
+  // the events: pickup and return days
+  const byDay = useMemo(() => {
+    const map = new Map<string, CalEvent[]>();
+    const now = Date.now();
+    const add = (e: CalEvent) => { if (e.day >= shown[0] && e.day <= shown[shown.length - 1]) map.set(e.day, [...(map.get(e.day) ?? []), e]); };
+    for (const b of rows ?? []) {
+      if (b.status === "reserved") add({ key: `${b.id}-p`, kind: "pickup", day: isoToZoned(b.start_at, tz).slice(0, 10), at: b.start_at, late: Date.parse(b.start_at) < now, booking: b });
+      add({ key: `${b.id}-r`, kind: "return", day: isoToZoned(b.end_at, tz).slice(0, 10), at: b.end_at, late: b.status === "active" && Date.parse(b.end_at) < now, booking: b });
+    }
+    for (const list of map.values()) list.sort((a, c) => a.at.localeCompare(c.at));
+    return map;
+  }, [rows, tz, shown]);
 
-  const rows = (units ?? []).filter((u) => !cat || names.get(u.variation_id)?.category === cat)
-    .sort((a, b) => (names.get(a.variation_id)?.label ?? "").localeCompare(names.get(b.variation_id)?.label ?? "") || a.code.localeCompare(b.code, undefined, { numeric: true }));
-  const days = Array.from({ length: span }, (_, i) => addDays(start, i));
-  const t0 = Date.parse(from);
-  const t1 = Date.parse(to);
-  const pct = (t: number) => Math.min(100, Math.max(0, ((t - t0) / (t1 - t0)) * 100));
-  const today = todayLocal(tz);
-  const nowPct = pct(Date.now());
+  const [y, m] = month.split("-").map(Number);
+  const dayList = byDay.get(selected) ?? [];
+  const pickups = dayList.filter((e) => e.kind === "pickup");
+  const returns = dayList.filter((e) => e.kind === "return");
+
+  const goMonth = (by: number) => { const next = shiftMonth(month, by); setMonth(next); setSelected(monthKey(today) === next ? today : `${next}-01`); };
+  const goToday = () => { setMonth(monthKey(today)); setSelected(today); };
 
   return (
     <>
-      <PageHeader title="Calendar" subtitle={`Who has which ${word("unit").toLowerCase()} when. Click a booking to open it.`} />
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <button className={ghostButtonClass} aria-label="Earlier" onClick={() => setStart(addDays(start, -span))}><ChevronLeft className="h-4 w-4" /></button>
-        <DateInput className="w-auto" aria-label="From" value={start} onChange={(v) => v && setStart(v)} />
-        <button className={ghostButtonClass} aria-label="Later" onClick={() => setStart(addDays(start, span))}><ChevronRight className="h-4 w-4" /></button>
-        <button className={ghostButtonClass} onClick={() => setStart(today)}>Today</button>
-        <select className={cn(inputClass, "w-auto")} aria-label="Days shown" value={span} onChange={(e) => setSpan(Number(e.target.value))}>
-          {[7, 14, 30].map((n) => <option key={n} value={n}>{n} days</option>)}
-        </select>
-        {!myBranchId && activeBranches.length > 1 ? (
-          <select className={cn(inputClass, "w-auto")} aria-label="Branch" value={branch} onChange={(e) => setBranch(e.target.value)}>
-            {activeBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-        ) : null}
-        {categories.length > 1 ? (
-          <select className={cn(inputClass, "w-auto")} aria-label="Category" value={cat} onChange={(e) => setCat(e.target.value)}>
-            <option value="">All categories</option>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        ) : null}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        {/* the arrows sit on either side of the month: they move by a month, not a day */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          <button type="button" onClick={() => goMonth(-1)} aria-label="Previous month" className="flex h-10 w-10 items-center justify-center rounded-lg border border-border hover:bg-black/5"><ChevronLeft className="h-4 w-4" /></button>
+          <h1 className="min-w-[10.5rem] text-center font-display text-xl font-semibold sm:min-w-[13rem] sm:text-2xl"><span>{MONTHS[m - 1]}</span> <span className="font-normal text-muted-foreground">{y}</span></h1>
+          <button type="button" onClick={() => goMonth(1)} aria-label="Next month" className="flex h-10 w-10 items-center justify-center rounded-lg border border-border hover:bg-black/5"><ChevronRight className="h-4 w-4" /></button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {activeBranches.length > 1 && !myBranchId ? (
+            <select className={cn(inputClass, "w-auto")} aria-label="Branch" value={branch} onChange={(e) => setBranch(e.target.value)}>
+              <option value="">All branches</option>
+              {activeBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          ) : null}
+          <button type="button" onClick={goToday} className="h-10 rounded-lg border border-border px-4 text-sm font-medium hover:bg-black/5">Today</button>
+        </div>
       </div>
 
-      <Panel className="overflow-x-auto p-0">
-        <div className="min-w-[720px]">
-          <div className="flex border-b border-border text-[11px] text-muted-foreground">
-            <div className="w-44 shrink-0 px-3 py-2 sm:w-56">{word("unit")}</div>
-            <div className="flex flex-1">
-              {days.map((d) => {
-                const date = new Date(d + "T12:00:00Z");
-                return (
-                  <div key={d} className={cn("flex-1 border-l border-border px-1 py-2 text-center", d === today && "bg-gold/10 font-semibold text-foreground")}>
-                    {date.toLocaleDateString("en-IN", { weekday: "short", timeZone: "UTC" })}<br />{date.getUTCDate()}
-                  </div>
-                );
-              })}
-            </div>
+      <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5"><span className={cn("h-2.5 w-2.5 rounded-full", COLOURS.pickup.dot)} /> Pickup due</span>
+        <span className="inline-flex items-center gap-1.5"><span className={cn("h-2.5 w-2.5 rounded-full", COLOURS.return.dot)} /> Return due</span>
+        <span className="inline-flex items-center gap-1.5"><span className={cn("h-2.5 w-2.5 rounded-full", COLOURS.late.dot)} /> Late</span>
+      </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {/* the month */}
+        <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm" role="grid" aria-label={`${MONTHS[m - 1]} ${y}`}>
+          <div className="grid grid-cols-7 border-b border-border bg-muted/40" role="row">
+            {WEEKDAYS.map((w) => <div key={w} role="columnheader" className="py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{w}</div>)}
           </div>
-          {units === null ? <p className="p-4 text-sm text-muted-foreground">Loading...</p> : rows.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">No {word("units").toLowerCase()} in this branch.</p>
-          ) : rows.map((u) => {
-            const info = names.get(u.variation_id);
-            const kind = templateOf(info?.category)?.kind;
-            const mine = bookings.filter((b) => b.unit_id === u.id);
-            return (
-              <div key={u.id} className="flex border-b border-border last:border-0">
-                <Link href={info ? `/catalog/${info.productId}` : "#"} className="w-44 shrink-0 px-3 py-2 hover:bg-black/[0.02] sm:w-56">
-                  <span className="block font-mono text-xs font-semibold">{u.code}</span>
-                  <span className="block truncate text-[11px] text-muted-foreground">{info?.label}</span>
-                  {u.status !== "available" ? <StatusBadge tone="rust" className="mt-0.5">{u.status_reason || u.status}</StatusBadge> : null}
-                </Link>
-                <div className={cn("relative flex-1", u.status !== "available" && "bg-rust/5")}
-                  onClick={(e) => {
-                    if (e.target !== e.currentTarget || u.status !== "available") return;
-                    router.push(`/book?variation=${u.variation_id}`);
-                  }}
-                  title={u.status === "available" ? "Free: click to book" : undefined}>
-                  <div className="absolute inset-0 flex">{days.map((d) => <div key={d} className={cn("flex-1 border-l border-border/60", d === today && "bg-gold/5")} />)}</div>
-                  {nowPct > 0 && nowPct < 100 ? <div className="absolute inset-y-0 w-px bg-rust/60" style={{ left: `${nowPct}%` }} /> : null}
-                  {mine.map((b) => {
-                    const range = parseRange(b.period);
-                    const endUse = Date.parse(b.rentals?.actual_end_at ?? b.rentals?.end_at ?? new Date(range.to).toISOString());
-                    const left = pct(range.from);
-                    const useWidth = pct(Math.min(endUse, range.to)) - left;
-                    const turnWidth = pct(range.to) - pct(Math.min(endUse, range.to));
-                    return (
-                      <Link key={b.id} href={`/rentals/${b.rental_id}`}
-                        title={`${b.rentals?.token} · ${b.rentals?.customers?.full_name ?? ""}`}
-                        className="absolute top-1.5 flex h-[calc(100%-12px)] min-h-7 overflow-hidden rounded-md text-[11px] shadow-sm"
-                        style={{ left: `${left}%`, width: `${Math.max(useWidth + turnWidth, 0.8)}%` }}>
-                        <span className={cn("flex h-full items-center truncate px-1.5 font-medium",
-                          b.state === "out" ? "bg-gold/80 text-white" : b.state === "returned" ? "bg-muted text-muted-foreground" : "bg-indigo/80 text-white")}
-                          style={{ width: `${(useWidth / Math.max(useWidth + turnWidth, 0.0001)) * 100}%` }}>
-                          {b.rentals?.customers?.full_name ?? b.rentals?.token}
-                        </span>
-                        {turnWidth > 0 ? (
-                          <span className="h-full flex-1 bg-[repeating-linear-gradient(45deg,var(--muted),var(--muted)_4px,transparent_4px,transparent_8px)]"
-                            title={kind === "room" ? "Housekeeping" : kind === "vehicle" ? "Service time" : "Cleaning"} />
-                        ) : null}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+          <div className="grid grid-cols-7" role="rowgroup">
+            {shown.map((d, i) => {
+              const list = byDay.get(d) ?? [];
+              const inMonth = monthKey(d) === month;
+              const isToday = d === today;
+              const isSel = d === selected;
+              return (
+                <button key={d} type="button" role="gridcell" aria-selected={isSel}
+                  aria-label={`${Number(d.slice(8))} ${MONTHS[Number(d.slice(5, 7)) - 1]}, ${list.length ? `${list.length} pickup or return${list.length > 1 ? "s" : ""}` : "nothing due"}`}
+                  onClick={() => { setSelected(d); if (!inMonth) setMonth(monthKey(d)); }}
+                  className={cn("flex min-h-[3.75rem] flex-col items-stretch gap-1 border-b border-r border-border/60 p-1.5 text-left transition-colors hover:bg-gold/[0.04] sm:min-h-[6.25rem] sm:p-2",
+                    i % 7 === 6 && "border-r-0", i >= shown.length - 7 && "border-b-0", isSel && "bg-gold/10", !inMonth && "bg-muted/20")}>
+                  <span className={cn("flex h-6 w-6 items-center justify-center self-start rounded-full text-xs font-medium sm:h-7 sm:w-7 sm:text-sm",
+                    isToday ? "bg-gold font-semibold text-white" : isSel ? "ring-2 ring-gold" : inMonth ? "text-foreground" : "text-muted-foreground/60")}>
+                    {Number(d.slice(8))}
+                  </span>
+                  {/* big screens: chips; phones: dots */}
+                  <span className="hidden flex-col gap-0.5 sm:flex">
+                    {list.slice(0, 3).map((e) => (
+                      <span key={e.key} className={cn("flex items-center gap-1 truncate rounded border px-1.5 py-px text-[11px] leading-4", colourOf(e).chip)}>
+                        {e.kind === "pickup" ? <ArrowUpRight className="h-3 w-3 shrink-0" /> : <ArrowDownLeft className="h-3 w-3 shrink-0" />}
+                        <span className="truncate">{e.booking.customers?.full_name ?? e.booking.token}</span>
+                      </span>
+                    ))}
+                    {list.length > 3 ? <span className="px-1 text-[11px] font-medium text-muted-foreground">+{list.length - 3} more</span> : null}
+                  </span>
+                  <span className="flex flex-wrap gap-0.5 sm:hidden">
+                    {list.slice(0, 4).map((e) => <span key={e.key} className={cn("h-1.5 w-1.5 rounded-full", colourOf(e).dot)} />)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {rows === null ? <div className="border-t border-border p-3"><Skeleton className="h-3 w-40" /></div> : null}
         </div>
-      </Panel>
-      <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="h-3 w-5 rounded bg-indigo/80" /> Booked</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-5 rounded bg-gold/80" /> Out / checked in</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-5 rounded bg-muted" /> Returned</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-5 rounded bg-[repeating-linear-gradient(45deg,var(--muted),var(--muted)_4px,transparent_4px,transparent_8px)]" /> Cleaning / service time</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-px bg-rust" /> Now</span>
+
+        {/* the day */}
+        <Panel title={<span>{Number(selected.slice(8))} {MONTHS[Number(selected.slice(5, 7)) - 1]} <span className="font-normal text-muted-foreground">{selected === today ? "· today" : isoToDisplay(selected)}</span></span>}>
+          {rows === null ? <div className="space-y-2"><Skeleton className="h-14" /><Skeleton className="h-14" /></div>
+            : dayList.length === 0 ? <p className="py-4 text-center text-sm text-muted-foreground">No pickup or return due this day.</p> : (
+              <div className="space-y-4">
+                <DayGroup title="Pickups due" items={pickups} tz={tz} />
+                <DayGroup title="Returns due" items={returns} tz={tz} />
+              </div>
+            )}
+        </Panel>
       </div>
     </>
+  );
+}
+
+function DayGroup({ title, items, tz }: { title: string; items: CalEvent[]; tz: string }) {
+  if (!items.length) return null;
+  return (
+    <section>
+      <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title} ({items.length})</h3>
+      <ul className="space-y-2">
+        {items.map((e) => {
+          const b = e.booking;
+          const due = Number(b.total) - Number(b.paid);
+          return (
+            <li key={e.key}>
+              <Link href={`/rentals/${b.id}`} className="flex min-h-14 items-start gap-3 rounded-xl border border-border p-3 transition-colors hover:bg-black/[0.02]">
+                <span className={cn("mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full", colourOf(e).dot)} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-x-2">
+                    <span className="truncate text-sm font-semibold">{b.customers?.full_name ?? "Customer"}</span>
+                    <span className="font-mono text-xs text-muted-foreground">{fmtTime(e.at, tz)}</span>
+                    {e.late ? <span className="rounded bg-rust/15 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-rust">Late</span> : null}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">{itemsSummary(b.rental_lines) || "No items"}</span>
+                  <span className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-mono text-gold">{b.token}</span>
+                    {due > 0 ? <span className="font-mono text-muted-foreground">due {rupees(due)}</span> : null}
+                  </span>
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

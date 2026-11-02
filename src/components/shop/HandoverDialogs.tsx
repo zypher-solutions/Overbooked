@@ -11,6 +11,7 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { call, money, uploadPhotos, type RentalDetail } from "@/lib/shop/api";
 import { CHARGE_LABELS, errorText, fmtDate, isoToZoned, num, rupees, zonedToIso } from "@/lib/shop/format";
 import type { ChargeType, Method } from "@/lib/shop/types";
+import { moneyError, textLimitError } from "@/lib/validate";
 import { Field, MethodPicker, Modal, MoneyRows, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "./ui";
 
 export const FUEL_LABELS = ["Empty", "1/8", "1/4", "3/8", "Half", "5/8", "3/4", "7/8", "Full"];
@@ -27,13 +28,14 @@ function useUnits(r: RentalDetail, state: "held" | "out") {
   })), [r, state]);
 }
 
-function CheckForm({ title, kind, value, onChange, allowLost, reference }: {
+function CheckForm({ title, kind, value, onChange, allowLost, reference, compact = false }: {
   title: string;
   kind: string | undefined;
   value: CheckDraft;
   onChange: (c: CheckDraft) => void;
   allowLost: boolean;
   reference?: { odometer: number | null; fuel_level: number | null } | null;
+  compact?: boolean;
 }) {
   const vehicle = kind === "vehicle";
   const set = (patch: Partial<CheckDraft>) => onChange({ ...value, ...patch });
@@ -66,14 +68,51 @@ function CheckForm({ title, kind, value, onChange, allowLost, reference }: {
       {vehicle && reference?.fuel_level != null && value.fuel !== "" && Number(value.fuel) < reference.fuel_level ? (
         <p className="mt-2 text-xs text-rust">Fuel is lower than at pickup. Add a fuel charge below if agreed.</p>
       ) : null}
-      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-        <Field label="Notes (marks, missing pieces...)"><input className={inputClass} value={value.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
-        <label className={cn(ghostButtonClass, "cursor-pointer")}>
-          <Camera className="h-4 w-4" /> {value.files.length ? `${value.files.length} photo${value.files.length > 1 ? "s" : ""}` : "Photos"}
-          <input type="file" accept="image/*" capture="environment" multiple className="sr-only"
-            onChange={(e) => set({ files: [...value.files, ...Array.from(e.target.files ?? [])].slice(0, 8) })} />
-        </label>
+      {compact ? (
+        <details className="mt-2" open={!!value.notes || value.files.length > 0 || value.condition === "damaged"}>
+          <summary className="min-h-8 cursor-pointer text-xs text-gold">{value.notes || value.files.length ? "Note or photo added" : "Add a note or photo"}</summary>
+          <NoteAndPhotos value={value} set={set} />
+        </details>
+      ) : <NoteAndPhotos value={value} set={set} />}
+    </div>
+  );
+}
+
+function NoteAndPhotos({ value, set }: { value: CheckDraft; set: (patch: Partial<CheckDraft>) => void }) {
+  return (
+    <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+      <Field label="Notes (marks, missing pieces...)" error={textLimitError(value.notes, "note", 300) ?? undefined}><input className={inputClass} maxLength={320} value={value.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
+      <label className={cn(ghostButtonClass, "cursor-pointer")}>
+        <Camera className="h-4 w-4" /> {value.files.length ? `${value.files.length} photo${value.files.length > 1 ? "s" : ""}` : "Photos"}
+        <input type="file" accept="image/*" capture="environment" multiple className="sr-only"
+          onChange={(e) => set({ files: [...value.files, ...Array.from(e.target.files ?? [])].slice(0, 8) })} />
+      </label>
+    </div>
+  );
+}
+
+// One thing to collect: the amount is already known, so it is a method and nothing to type.
+// "Different amount" opens a box for the rare case of a part payment.
+function CollectLine({ label, due, amount, onAmount, method, onMethod, error, methodError }: {
+  label: string; due: number; amount: string; onAmount: (a: string) => void;
+  method: Method | ""; onMethod: (m: Method | "") => void; error?: string; methodError?: string;
+}) {
+  const [custom, setCustom] = useState(false);
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-medium">{label} to collect <span className="ml-1 font-mono text-base text-gold">{rupees(due)}</span></p>
+        <button type="button" className="min-h-8 text-xs text-muted-foreground hover:text-foreground hover:underline"
+          onClick={() => { if (custom) onAmount(String(due)); setCustom(!custom); }}>
+          {custom ? `Collect the full ${rupees(due)}` : "Different amount"}
+        </button>
       </div>
+      {custom ? (
+        <Field label="Amount collected (₹)" hint="Leave it empty to collect nothing now" error={error}>
+          <input className={monoInputClass} inputMode="decimal" maxLength={10} value={amount} onChange={(e) => onAmount(e.target.value)} />
+        </Field>
+      ) : null}
+      {num(amount) > 0 ? <MethodPicker value={method} onChange={onMethod} error={methodError} /> : <p className="text-xs text-muted-foreground">Nothing collected now.</p>}
     </div>
   );
 }
@@ -104,6 +143,7 @@ export function PickupDialog({ rental, open, onClose, onDone }: { rental: Rental
   const c = rental.customers;
   const licenceOk = !!c.licence_number && (!c.licence_expiry || c.licence_expiry >= new Date().toISOString().slice(0, 10));
 
+  const depDue = Math.max(0, Number(rental.deposit_agreed) - Number(rental.deposit_received));
   const [checks, setChecks] = useState<Record<string, CheckDraft>>({});
   const [verified, setVerified] = useState(false);
   const [licence, setLicence] = useState({ number: "", expiry: "" });
@@ -124,10 +164,21 @@ export function PickupDialog({ rental, open, onClose, onDone }: { rental: Rental
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const [tried, setTried] = useState(false);
+  useEffect(() => { if (open) setTried(false); }, [open]);
+  const errs = {
+    pay: moneyError(pay.amount, { label: "payment", max: m.balance, maxText: `the balance (${rupees(m.balance)})` }),
+    payMethod: num(pay.amount) > 0 && !pay.method ? "Choose how the payment was made." : null,
+    dep: moneyError(dep.amount, { label: "deposit", max: 1_000_000 }),
+    depMethod: num(dep.amount) > 0 && !dep.method ? "Choose how the deposit was paid." : null,
+    checks: Object.values(checks).map((c) => textLimitError(c.notes, "note", 300)).find(Boolean) ?? null,
+    licence: needLicence && !licenceOk && !licence.number.trim() ? "Enter the driving licence number." : null,
+    verified: needLicence && !verified ? "Confirm you checked the driving licence and ID." : null,
+  };
+  const bad = Object.values(errs).some(Boolean);
   const submit = async () => {
-    if (num(pay.amount) > 0 && !pay.method) return toast.error("Choose how the payment was made.");
-    if (num(dep.amount) > 0 && !dep.method) return toast.error("Choose how the deposit was paid.");
-    if (needLicence && !verified) return toast.error("Confirm you checked the driving licence and ID.");
+    setTried(true);
+    if (bad) return toast.error(Object.values(errs).find(Boolean)!);
     setBusy(true);
     try {
       if (hasVehicle && !licenceOk && licence.number.trim()) {
@@ -160,7 +211,7 @@ export function PickupDialog({ rental, open, onClose, onDone }: { rental: Rental
       description={`Record the condition of each ${isRoom ? "room" : "item"} as it goes out, and take any money due.`}
       footer={<>
         <button className={ghostButtonClass} onClick={onClose}>Cancel</button>
-        <button className={goldButtonClass} disabled={busy} onClick={submit}>{busy ? "Saving..." : isRoom ? "Check in" : "Hand over"}</button>
+        <button className={goldButtonClass} disabled={busy || (tried && bad)} onClick={submit}>{busy ? "Saving..." : isRoom ? "Check in" : "Hand over"}</button>
       </>}>
       {hasVehicle ? (
         <div className={cn("rounded-lg border p-3 text-sm", licenceOk ? "border-border" : "border-rust/40 bg-rust/5")}>
@@ -169,7 +220,7 @@ export function PickupDialog({ rental, open, onClose, onDone }: { rental: Rental
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               <p className="text-rust sm:col-span-2">No valid driving licence on record. Add it to hand over the vehicle.</p>
-              <Field label="Licence number"><input className={inputClass} value={licence.number} onChange={(e) => setLicence({ ...licence, number: e.target.value })} /></Field>
+              <Field label="Licence number" error={tried ? errs.licence ?? undefined : undefined}><input className={inputClass} maxLength={30} value={licence.number} onChange={(e) => setLicence({ ...licence, number: e.target.value })} /></Field>
               <Field label="Valid until"><DateInput value={licence.expiry} onChange={(v) => setLicence({ ...licence, expiry: v })} /></Field>
             </div>
           )}
@@ -178,21 +229,22 @@ export function PickupDialog({ rental, open, onClose, onDone }: { rental: Rental
       ) : null}
       {units.map((u) => (
         <CheckForm key={u.reservation.unit_id} title={`${u.reservation.units?.code ?? ""} · ${u.line?.description ?? ""}`} kind={u.line?.kind}
-          allowLost={false} value={checks[u.reservation.unit_id] ?? emptyCheck}
+          compact={u.line?.kind === "wearable"} allowLost={false} value={checks[u.reservation.unit_id] ?? emptyCheck}
           onChange={(v) => setChecks({ ...checks, [u.reservation.unit_id]: v })} />
       ))}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Field label="Payment now" hint={`Balance ${rupees(m.balance)}`}><input className={monoInputClass} inputMode="decimal" value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} /></Field>
-          {num(pay.amount) > 0 ? <MethodPicker value={pay.method} onChange={(method) => setPay({ ...pay, method })} /> : null}
+      {m.balance > 0 || depDue > 0 ? (
+        <div className="space-y-4 rounded-lg border border-gold/30 bg-gold/[0.04] p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gold">Money to collect now</p>
+          {m.balance > 0 ? (
+            <CollectLine label="Balance" due={m.balance} amount={pay.amount} onAmount={(a) => setPay({ ...pay, amount: a })}
+              method={pay.method} onMethod={(method) => setPay({ ...pay, method })} error={errs.pay ?? undefined} methodError={tried ? errs.payMethod ?? undefined : undefined} />
+          ) : null}
+          {depDue > 0 ? (
+            <CollectLine label="Security deposit" due={depDue} amount={dep.amount} onAmount={(a) => setDep({ ...dep, amount: a })}
+              method={dep.method} onMethod={(method) => setDep({ ...dep, method })} error={errs.dep ?? undefined} methodError={tried ? errs.depMethod ?? undefined : undefined} />
+          ) : null}
         </div>
-        <div className="space-y-2">
-          <Field label="Deposit now" hint={`Agreed ${rupees(rental.deposit_agreed)}, received ${rupees(rental.deposit_received)}`}>
-            <input className={monoInputClass} inputMode="decimal" value={dep.amount} onChange={(e) => setDep({ ...dep, amount: e.target.value })} />
-          </Field>
-          {num(dep.amount) > 0 ? <MethodPicker value={dep.method} onChange={(method) => setDep({ ...dep, method })} /> : null}
-        </div>
-      </div>
+      ) : <p className="rounded-lg border border-emerald/30 bg-emerald/10 p-3 text-sm text-emerald">Nothing to collect: the balance and the deposit are already paid.</p>}
     </Modal>
   );
 }
@@ -313,19 +365,32 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
     setRefund((r) => ({ ...r, amount: back > 0 ? String(back) : "" }));
   }, [open, due, m.depositHeld, touched]);
 
+  const [tried, setTried] = useState(false);
+  useEffect(() => { if (open) setTried(false); }, [open]);
+  const keptMax = Math.min(m.depositHeld, due);
+  const errs = {
+    returned: !returnedIso ? "Enter the return time." : Date.parse(returnedIso) > Date.now() + 5 * 60000 ? "The return time cannot be in the future." : null,
+    charges: charges.map((c) => (c.amount.trim() || c.note.trim() ? moneyError(c.amount, { label: "charge", required: true, positive: true, max: 1_000_000 }) ?? textLimitError(c.note, "charge note", 200) : null)).find(Boolean) ?? null,
+    kept: moneyError(kept, { label: "amount kept from the deposit", max: keptMax, maxText: `${rupees(keptMax)} (the deposit held, or the balance if smaller)` }),
+    pay: moneyError(pay.amount, { label: "payment", max: Math.max(0, Math.round((due - num(kept)) * 100) / 100), maxText: `the balance left (${rupees(Math.max(0, due - num(kept)))})` }),
+    payMethod: num(pay.amount) > 0 && !pay.method ? "Choose how the payment was made." : null,
+    refund: moneyError(refund.amount, { label: "deposit returned", max: Math.max(0, Math.round((m.depositHeld - num(kept)) * 100) / 100), maxText: `the deposit left (${rupees(Math.max(0, m.depositHeld - num(kept)))})` }),
+    refundMethod: num(refund.amount) > 0 && !refund.method ? "Choose how the deposit is returned." : null,
+  };
+  const bad = Object.values(errs).some(Boolean);
   const submit = async () => {
-    if (!returnedIso) return toast.error("Enter the return time.");
+    setTried(true);
+    if (errs.returned) return toast.error(errs.returned);
     const missing = tickPieces ? units.filter((u) => !received.has(u.reservation.unit_id) && checks[u.reservation.unit_id]?.condition !== "lost") : [];
     if (missing.length) {
       return toast.error(`Not received yet: ${missing.map((u) => u.reservation.units?.code).join(", ")}. Scan or tick each piece, or mark a missing one as lost.`);
     }
-    if (Date.parse(returnedIso) > Date.now() + 5 * 60000) return toast.error("The return time cannot be in the future.");
     for (const u of units) {
       const c = checks[u.reservation.unit_id];
       if (u.line?.kind === "vehicle" && (!c?.odometer || c.fuel === "")) return toast.error(`Record the odometer and fuel of ${u.reservation.units?.code}.`);
     }
-    if (num(pay.amount) > 0 && !pay.method) return toast.error("Choose how the payment was made.");
-    if (num(refund.amount) > 0 && !refund.method) return toast.error("Choose how the deposit is returned.");
+    const moneyBad = errs.charges ?? errs.kept ?? errs.pay ?? errs.payMethod ?? errs.refund ?? errs.refundMethod;
+    if (moneyBad) return toast.error(moneyBad);
     if (num(kept) + num(refund.amount) > m.depositHeld + 0.001) return toast.error(`Only ${rupees(m.depositHeld)} of deposit is held.`);
     const unpaid = Math.round((due - num(kept) - num(pay.amount)) * 100) / 100;
     const stillHeld = Math.round((m.depositHeld - num(kept) - num(refund.amount)) * 100) / 100;
@@ -368,9 +433,9 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
       description={`Due back ${new Date(rental.end_at).toLocaleString("en-IN", { timeZone: tz, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}. Charges below are suggested; change them as agreed.`}
       footer={<>
         <button className={ghostButtonClass} onClick={onClose}>Cancel</button>
-        <button className={goldButtonClass} disabled={busy} onClick={submit}>{busy ? "Saving..." : isRoom ? "Check out" : "Mark returned"}</button>
+        <button className={goldButtonClass} disabled={busy || (tried && bad)} onClick={submit}>{busy ? "Saving..." : isRoom ? "Check out" : "Mark returned"}</button>
       </>}>
-      <Field label="Returned at"><DateTimeInput value={returnedAt} onChange={(v) => setReturnedAt(v)} /></Field>
+      <Field label="Returned at" error={errs.returned ?? undefined}><DateTimeInput value={returnedAt} max={isoToZoned(new Date().toISOString(), tz)} onChange={(v) => setReturnedAt(v)} /></Field>
       {tickPieces ? (
         <div className="rounded-lg border border-gold/30 bg-gold/[0.03] p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -412,6 +477,7 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
             <Plus className="h-3.5 w-3.5" /> Add charge
           </button>
         </div>
+        {errs.charges ? <p className="mb-2 text-xs text-rust">{errs.charges}</p> : null}
         {charges.length === 0 ? <p className="text-sm text-muted-foreground">No charges.</p> : (
           <ul className="space-y-2">
             {charges.map((c, i) => (
@@ -420,9 +486,9 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
                   onChange={(e) => setCharges(charges.map((x, j) => j === i ? { ...x, type: e.target.value as ChargeType, suggested: false } : x))}>
                   {Object.entries(CHARGE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
-                <input className={cn(inputClass, "col-span-3 py-1.5 sm:col-span-1")} placeholder="Note" aria-label="Charge note" value={c.note}
+                <input className={cn(inputClass, "col-span-3 py-1.5 sm:col-span-1")} placeholder="Note" aria-label="Charge note" maxLength={220} value={c.note}
                   onChange={(e) => setCharges(charges.map((x, j) => j === i ? { ...x, note: e.target.value, suggested: false } : x))} />
-                <input className={cn(monoInputClass, "py-1.5")} inputMode="decimal" aria-label="Charge amount" value={c.amount}
+                <input className={cn(monoInputClass, "py-1.5", tried && moneyError(c.amount, { positive: true, required: !!c.note.trim() }) && c.note.trim() ? "border-rust/60" : "")} inputMode="decimal" maxLength={10} aria-label="Charge amount" value={c.amount}
                   onChange={(e) => setCharges(charges.map((x, j) => j === i ? { ...x, amount: e.target.value, suggested: false } : x))} />
                 <button type="button" aria-label="Remove charge" className="rounded-md p-1.5 hover:bg-black/5" onClick={() => setCharges(charges.filter((_, j) => j !== i))}>
                   <Trash2 className="h-4 w-4" />
@@ -443,16 +509,16 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
       ]} />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Keep from deposit" hint="Towards the balance">
-          <input className={monoInputClass} inputMode="decimal" value={kept} onChange={(e) => { setTouched(true); setKept(e.target.value); }} />
+        <Field label="Keep from deposit" hint="Towards the balance" error={errs.kept ?? undefined}>
+          <input className={monoInputClass} inputMode="decimal" maxLength={10} value={kept} onChange={(e) => { setTouched(true); setKept(e.target.value); }} />
         </Field>
         <div className="space-y-2">
-          <Field label="Payment now"><input className={monoInputClass} inputMode="decimal" value={pay.amount} onChange={(e) => { setTouched(true); setPay({ ...pay, amount: e.target.value }); }} /></Field>
-          {num(pay.amount) > 0 ? <MethodPicker value={pay.method} onChange={(method) => setPay({ ...pay, method })} /> : null}
+          <Field label="Payment now" error={errs.pay ?? undefined}><input className={monoInputClass} inputMode="decimal" maxLength={10} value={pay.amount} onChange={(e) => { setTouched(true); setPay({ ...pay, amount: e.target.value }); }} /></Field>
+          {num(pay.amount) > 0 ? <MethodPicker value={pay.method} onChange={(method) => setPay({ ...pay, method })} error={tried ? errs.payMethod ?? undefined : undefined} /> : null}
         </div>
         <div className="space-y-2">
-          <Field label="Deposit returned"><input className={monoInputClass} inputMode="decimal" value={refund.amount} onChange={(e) => { setTouched(true); setRefund({ ...refund, amount: e.target.value }); }} /></Field>
-          {num(refund.amount) > 0 ? <MethodPicker value={refund.method} onChange={(method) => setRefund({ ...refund, method })} /> : null}
+          <Field label="Deposit returned" error={errs.refund ?? undefined}><input className={monoInputClass} inputMode="decimal" maxLength={10} value={refund.amount} onChange={(e) => { setTouched(true); setRefund({ ...refund, amount: e.target.value }); }} /></Field>
+          {num(refund.amount) > 0 ? <MethodPicker value={refund.method} onChange={(method) => setRefund({ ...refund, method })} error={tried ? errs.refundMethod ?? undefined : undefined} /> : null}
         </div>
       </div>
     </Modal>

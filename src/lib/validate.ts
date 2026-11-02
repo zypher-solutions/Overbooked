@@ -81,3 +81,28 @@ export function gstinError(v: string): string | null {
   if (!g) return null;
   return /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/.test(g) ? null : "A GST number has 15 characters, like 32ABCDE1234F1Z5.";
 }
+
+// An amount of money typed in a box: a plain number, at most two decimals, optionally above zero and not above a limit.
+export function moneyError(v: string, o: { label?: string; required?: boolean; positive?: boolean; max?: number; maxText?: string } = {}): string | null {
+  const label = o.label ?? "amount";
+  const t = v.trim();
+  if (!t) return o.required ? `Enter the ${label}.` : null;
+  if (!/^\d+(\.\d{1,2})?$/.test(t)) return `The ${label} must be a number like 600 or 599.50.`;
+  const n = Number(t);
+  if (o.positive && n <= 0) return `The ${label} must be more than zero.`;
+  if (o.max !== undefined && n > o.max) return `The ${label} cannot be more than ${o.maxText ?? "₹" + o.max.toLocaleString("en-IN")}.`;
+  return null;
+}
+
+// a reason written for the record (corrections, cancellations): a few real words
+export function reasonError(v: string, label = "reason", min = 3, max = 300): string | null {
+  const t = v.trim();
+  if (t.length < min) return `Write the ${label} (at least ${min} characters).`;
+  if (t.length > max) return `The ${label} is too long (${max} characters at most).`;
+  return null;
+}
+
+// free text that may be blank: only a length limit
+export function textLimitError(v: string, label = "note", max = 500): string | null {
+  return v.trim().length > max ? `The ${label} is too long (${max} characters at most).` : null;
+}

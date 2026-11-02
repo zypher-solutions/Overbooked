@@ -90,6 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
       if (!mounted || !profileData) return;
       const shopId = profileData.role === "super_admin" ? null : profileData.shop_id;
+      // the shop and the role are asked together, not one after the other
+      const roleCall = profileData.is_active === false ? Promise.resolve({ data: null }) : supabase.rpc("get_my_role");
       const { data: shopData } = shopId
         ? await supabase.from("shops").select("id, name, slug, token_prefix, business_types, phone, email, address, gstin, logo_url, timezone, plan, status, paid_until, monthly_fee, settings, created_at").eq("id", shopId).maybeSingle()
         : { data: null };
@@ -102,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       // get_my_role() is null for staff whose branch is inactive (derived lockout, see branch_lifecycle migration).
-      const { data: role } = profileData.is_active === false ? { data: null } : await supabase.rpc("get_my_role");
+      const { data: role } = await roleCall;
       if (!mounted) return;
       // Zypher staff and support logins have no role until they pass two-step sign-in: send them there, do not sign them out
       if (!role && profileData.is_active !== false) {
@@ -146,15 +148,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Not async and no Supabase calls inside: awaiting here can deadlock the auth client.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
       if (currentSession) {
+        // Supabase repeats SIGNED_IN for the same person whenever the tab is opened again. That is not a new sign-in:
+        // hiding the app for the check would blank the page and throw away what was on it, so only a different person gets the check.
+        const alreadyIn = userIdRef.current === currentSession.user.id;
         setSession(currentSession);
         setUser(currentSession.user);
         userIdRef.current = currentSession.user.id;
-        
+
         // Re-fetch profile on sign-in
         if (event === "SIGNED_IN") {
           const uid = currentSession.user.id;
-          setChecking(true);
-          setTimeout(() => { void fetchProfile(uid).finally(() => setChecking(false)); }, 0);
+          if (alreadyIn) {
+            setTimeout(() => { void fetchProfile(uid); }, 0); // quietly, the screen stays as it is
+          } else {
+            setChecking(true);
+            setTimeout(() => { void fetchProfile(uid).finally(() => setChecking(false)); }, 0);
+          }
         }
       } else {
         setSession(null);
