@@ -10,7 +10,7 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { RENTAL_LIST_COLUMNS } from "@/lib/shop/api";
 import { errorText, rupees } from "@/lib/shop/format";
 import type { Customer } from "@/lib/shop/types";
-import { CustomerForm, customerPayload, type CustomerDraft } from "@/components/shop/CustomerForm";
+import { CustomerForm, customerPayload, customerProblem, type CustomerDraft } from "@/components/shop/CustomerForm";
 import { RentalList, type ListRental } from "@/components/shop/RentalList";
 import { MeasurementsPanel } from "@/components/shop/MeasurementsPanel";
 import {
@@ -54,7 +54,7 @@ export default function CustomerPage() {
   const due = live.reduce((s, r) => s + Math.max(0, Number(r.total) - Number(r.paid)), 0);
 
   const save = async (patch?: Partial<Customer>) => {
-    if (!patch && (!draft.full_name.trim() || !draft.phone.trim())) return toast.error("Name and phone are needed.");
+    if (!patch) { const bad = customerProblem(draft); if (bad) return toast.error(bad); }
     setBusy(true);
     const { error } = await createClient().from("customers").update(patch ?? customerPayload(draft)).eq("id", c.id);
     setBusy(false);

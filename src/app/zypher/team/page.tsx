@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/overbooked/AuthContext";
+import { emailError, normalizeEmail, personNameError } from "@/lib/validate";
 import { inviteZypherMember, listZypherTeam, setZypherMemberActive, type ZypherMember } from "@/app/actions/zypher";
 import { Field, StatusBadge, goldButtonClass, ghostButtonClass, inputClass } from "@/components/overbooked/primitives";
 import {
@@ -27,9 +28,11 @@ export default function Team() {
   useEffect(() => { void load(); }, [load]);
 
   const invite = async () => {
+    const bad = personNameError(form.fullName, "name") ?? emailError(form.email);
+    if (bad) return void toast.error(bad);
     setBusy(true);
     try {
-      const { link } = await inviteZypherMember(form);
+      const { link } = await inviteZypherMember({ fullName: form.fullName.trim().replace(/\s+/g, " "), email: normalizeEmail(form.email) });
       setAdding(false);
       setShare({ name: form.fullName, link });
       setForm({ fullName: "", email: "" });

@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createInviteLink, EMAIL_RE, getCaller, siteOrigin, type ShopRole } from "@/lib/server/invites";
+import { emailError, personNameError } from "@/lib/validate";
 
 // Staff are set up by Zypher from the shop's page in the console. Every rule (role, branch of this shop, plan login limit)
 // is checked again by the database function named below, so the browser cannot get past them.
@@ -9,8 +10,7 @@ import { createInviteLink, EMAIL_RE, getCaller, siteOrigin, type ShopRole } from
 export async function inviteStaff(input: { shopId: string; email: string; fullName: string; role: ShopRole; branchId: string | null }) {
   const { supabase, user, role } = await getCaller();
   if (role !== "super_admin") throw new Error("Only Zypher can invite staff.");
-  if (!EMAIL_RE.test(input.email.trim())) throw new Error("Enter a valid email address.");
-  if (!input.fullName.trim()) throw new Error("Enter the person's name.");
+  { const bad = emailError(input.email) ?? personNameError(input.fullName, "person's name"); if (bad) throw new Error(bad); }
 
   const branchId = input.role === "owner" || input.role === "support" ? null : input.branchId;
   const { error } = await supabase.rpc("setup_check_invite", { p_shop_id: input.shopId, p_role: input.role, p_branch_id: branchId });

@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createInviteLink, EMAIL_RE, getCaller, siteOrigin } from "@/lib/server/invites";
+import { addressError, businessNameError, emailError, normalizeEmail, normalizePhone, personNameError, phoneError, prefixError, slugError } from "@/lib/validate";
 
 async function requireZypher() {
   const caller = await getCaller();
@@ -26,9 +27,13 @@ export async function createShopWithOwner(input: {
 }) {
   const { supabase, user } = await requireZypher();
   if (!input.businessTypes.length) throw new Error("Choose at least one business type.");
-  if (!EMAIL_RE.test(input.ownerEmail.trim())) throw new Error("Enter a valid owner email.");
-  if (!input.ownerName.trim()) throw new Error("Enter the owner's name.");
-  if (!(input.monthlyFee >= 0)) throw new Error("The monthly fee cannot be negative.");
+  // the form checks these too; here they are checked again because a request can be made without the form
+  const bad = businessNameError(input.name, "shop name") ?? slugError(input.slug) ?? prefixError(input.tokenPrefix)
+    ?? businessNameError(input.branchName, "branch name", 40) ?? phoneError(input.phone) ?? emailError(input.email, false)
+    ?? addressError(input.address) ?? personNameError(input.ownerName, "owner's name") ?? emailError(input.ownerEmail);
+  if (bad) throw new Error(bad);
+  if (!(input.monthlyFee >= 0 && input.monthlyFee <= 1_000_000)) throw new Error("The monthly fee must be between 0 and 10,00,000.");
+  input = { ...input, phone: normalizePhone(input.phone), email: normalizeEmail(input.email), ownerEmail: normalizeEmail(input.ownerEmail) };
 
   const { data: shopId, error } = await supabase.rpc("create_shop", {
     p: {
@@ -69,8 +74,7 @@ export async function createShopWithOwner(input: {
 // Invite (or re-invite) a shop's owner without opening the shop.
 export async function inviteShopOwner(input: { shopId: string; ownerName: string; ownerEmail: string }) {
   const { supabase, user } = await requireZypher();
-  if (!EMAIL_RE.test(input.ownerEmail.trim())) throw new Error("Enter a valid owner email.");
-  if (!input.ownerName.trim()) throw new Error("Enter the owner's name.");
+  { const bad = emailError(input.ownerEmail) ?? personNameError(input.ownerName, "owner's name"); if (bad) throw new Error(bad); }
   // the plan's login limit is checked first, so Zypher sees a clear message instead of a database error
   const { error: limitErr } = await supabase.rpc("setup_check_invite", { p_shop_id: input.shopId, p_role: "owner", p_branch_id: null });
   if (limitErr) throw new Error(limitErr.message);
@@ -104,8 +108,7 @@ export async function listZypherTeam(): Promise<ZypherMember[]> {
 export async function inviteZypherMember(input: { fullName: string; email: string }) {
   const { supabase } = await requireZypher();
   const email = input.email.trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) throw new Error("Enter a valid email.");
-  if (!input.fullName.trim()) throw new Error("Enter their name.");
+  { const bad = emailError(email) ?? personNameError(input.fullName, "name"); if (bad) throw new Error(bad); }
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.generateLink({ type: "invite", email, options: { data: { full_name: input.fullName.trim() } } });
   if (error || !data?.user || !data.properties?.hashed_token) {
