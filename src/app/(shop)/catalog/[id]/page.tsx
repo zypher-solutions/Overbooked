@@ -29,7 +29,6 @@ export default function ProductPage() {
     product?.product_variations?.sort((a, b) => a.sku.localeCompare(b.sku));
     setP(product);
     setVersion((v) => v + 1);
-    setVersion((v) => v + 1);
   }, [id]);
   useEffect(() => { void load(); }, [load]);
 
@@ -41,8 +40,10 @@ export default function ProductPage() {
     <>
       <Link href="/catalog" className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ChevronLeft className="h-3.5 w-3.5" /> {trendz ? "All Products" : "Catalog"}</Link>
       <div className="space-y-4">
-        {trendz && !p.is_set ? <ProductWizard key={version} product={p} onSaved={load} /> : <ProductEditor product={p} onSaved={load} />}
-        {template && !p.is_set ? <UnitsPanel key={version} product={p} template={template} /> : null}
+        {/* bridal and groom shops: the same three steps as Add New Product and nothing else on the page.
+            The two parts have different keys: with the same key React mixed them up and drew extra cards. */}
+        {trendz && !p.is_set ? <ProductWizard key={`wizard-${version}`} product={p} /> : <ProductEditor product={p} onSaved={load} />}
+        {!trendz && template && !p.is_set ? <UnitsPanel key={`units-${version}`} product={p} template={template} /> : null}
       </div>
     </>
   );

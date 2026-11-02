@@ -11,7 +11,7 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
 import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { useCatalog } from "@/lib/shop/useCatalog";
-import { errorText, num } from "@/lib/shop/format";
+import { errorText, num, rupees } from "@/lib/shop/format";
 import type { Product, Template, Unit } from "@/lib/shop/types";
 import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "@/components/shop/ui";
 
@@ -246,8 +246,10 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
         m + Math.max(0, Math.floor(num(stockOf(r, b.id))) - (r.id ? counts[`${r.id}:${b.id}`] ?? 0 : 0)), 0) : 0), 0);
       try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
       toast.success(made ? `Saved, with ${made} new piece${made === 1 ? "" : "s"}` : "Saved");
-      if (!product) router.replace(`/catalog/${id}`);
-      else onSaved?.();
+      void id;
+      // back to the product list, as in TRENDZ
+      router.push("/catalog");
+      onSaved?.();
     } catch (e) {
       toast.error(errorText(e));
     } finally {
@@ -316,10 +318,12 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
                 </select>
               </Field>
               <Field label="Base SKU" hint={prefix || product ? "From the category and numbered for you" : "This category has no base SKU yet (Categories page)"}>
-                <input className={cn(monoInputClass, "cursor-not-allowed bg-surface opacity-70")} value={productSku} readOnly />
+                <input className={cn(monoInputClass, "cursor-default bg-muted/50 font-medium text-foreground")} value={productSku} readOnly aria-readonly="true" />
               </Field>
               <Field label="Price per day (₹)" hint="Starting price for every size; agree any price per booking">
-                <input className={monoInputClass} inputMode="decimal" value={basic.rate} onChange={(e) => setBasic({ ...basic, rate: e.target.value })} />
+                <input className={monoInputClass} inputMode="decimal" value={basic.rate}
+                  // one price for every size and colour: changing it here changes it on every variation
+                  onChange={(e) => { setBasic({ ...basic, rate: e.target.value }); setRows((rs) => rs.map((r) => ({ ...r, rate: e.target.value }))); }} />
               </Field>
               <Field label="Replacement value (₹)" hint="Charged if it is lost">
                 <input className={monoInputClass} inputMode="decimal" value={basic.replacement_value} onChange={(e) => setBasic({ ...basic, replacement_value: e.target.value })} />
@@ -396,12 +400,10 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
               <tbody className="divide-y divide-border">
                 {rows.map((r, i) => (
                   <tr key={r.key + (r.id ?? "")} className={cn(!r.enabled && "opacity-50")}>
-                    <td className="py-2 pr-2"><input className={cn(inputClass, "py-1.5")} aria-label="Variation name" value={r.name} placeholder={autoName(r.attributes)}
-                      onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} /></td>
-                    <td className="py-2 pr-2"><input className={cn(monoInputClass, "py-1.5 text-xs")} aria-label="Variation SKU" value={r.sku} placeholder={autoSku(r.attributes)}
-                      onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, sku: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "") } : x))} /></td>
-                    <td className="py-2 pr-2"><input className={cn(monoInputClass, "w-24 py-1.5")} inputMode="decimal" aria-label="Price per day" value={r.rate} placeholder={basic.rate}
-                      onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, rate: e.target.value } : x))} /></td>
+                    {/* name, code and price follow from the attributes and Basic Info: shown, not typed */}
+                    <td className="py-2 pr-2 text-sm font-medium text-foreground">{r.name || autoName(r.attributes)}</td>
+                    <td className="py-2 pr-2 font-mono text-xs text-foreground">{r.sku || autoSku(r.attributes)}</td>
+                    <td className="py-2 pr-2 font-mono text-sm text-foreground">{rupees(num(r.rate || basic.rate))}</td>
                     {activeBranches.map((b) => {
                       const have = r.id ? counts[`${r.id}:${b.id}`] ?? 0 : 0;
                       return (
