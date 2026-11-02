@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { DateInput } from "@/components/shop/DateInput";
 import Link from "next/link";
 import { Calendar, MapPin, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -202,7 +203,7 @@ export default function Bookings() {
         ) : <span className="hidden lg:block" />}
         {day === "custom" ? (
           <label className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-2">
-            Pickup on <input type="date" className={cn(inputClass, "w-44")} value={customDay} onChange={(e) => setCustomDay(e.target.value)} />
+            Pickup on <DateInput className="w-44" value={customDay} onChange={(v) => setCustomDay(v)} />
           </label>
         ) : null}
       </div>

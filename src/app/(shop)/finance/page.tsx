@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DateInput } from "@/components/shop/DateInput";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import { Download, Filter, RefreshCw, Search, X } from "lucide-react";
@@ -300,7 +301,7 @@ export default function Finance() {
               <h2 className="text-sm font-semibold uppercase tracking-wide">Daily close</h2>
               <p className="mt-1 text-xs text-muted-foreground">Money in and out by payment method{branch ? ` · ${branchName(branch)}` : " · all branches"}</p>
             </div>
-            <input type="date" className={cn(inputClass, "h-9 w-40 text-xs")} aria-label="Day" value={closeDay} max={today} onChange={(e) => setCloseDay(e.target.value || today)} />
+            <DateInput className="w-40 [&_input]:h-9 [&_input]:text-xs" aria-label="Day" value={closeDay} max={today} onChange={(v) => setCloseDay(v || today)} />
           </div>
           <table className="mt-3 w-full text-sm">
             <thead><tr className="text-left text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -382,9 +383,9 @@ export default function Finance() {
       {showFilters ? (
         <div className="glass mt-4 grid grid-cols-2 gap-3 p-3 sm:flex sm:flex-wrap sm:items-end">
           <label className="text-xs text-muted-foreground"><span className="mb-1 block">Start from</span>
-            <input type="date" className={cn(inputClass, "h-9 w-full text-xs sm:w-40")} value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} /></label>
+            <DateInput className="w-full sm:w-40 [&_input]:h-9 [&_input]:text-xs" value={f.from} onChange={(v) => setF({ ...f, from: v })} /></label>
           <label className="text-xs text-muted-foreground"><span className="mb-1 block">Start to</span>
-            <input type="date" className={cn(inputClass, "h-9 w-full text-xs sm:w-40")} value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} /></label>
+            <DateInput className="w-full sm:w-40 [&_input]:h-9 [&_input]:text-xs" value={f.to} onChange={(v) => setF({ ...f, to: v })} /></label>
           {!myBranchId && activeBranches.length > 1 ? (
             <label className="text-xs text-muted-foreground"><span className="mb-1 block">Branch</span>
               <select className={cn(inputClass, "sm:w-40")} value={f.branch} onChange={(e) => setF({ ...f, branch: e.target.value })}>

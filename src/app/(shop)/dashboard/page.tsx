@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DateInput } from "@/components/shop/DateInput";
 import Link from "next/link";
 import Papa from "papaparse";
 import { Download } from "lucide-react";
@@ -128,8 +129,8 @@ export default function Dashboard() {
           ))}
         </div>
         {preset === "custom" ? <>
-          <input type="date" className={cn(inputClass, "w-auto")} aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <input type="date" className={cn(inputClass, "w-auto")} aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DateInput className="w-auto" aria-label="From" value={from} onChange={(v) => setFrom(v)} />
+          <DateInput className="w-auto" aria-label="To" value={to} onChange={(v) => setTo(v)} />
         </> : null}
         {!myBranchId && activeBranches.length > 1 ? (
           <select className={cn(inputClass, "w-auto")} aria-label="Branch" value={branch} onChange={(e) => setBranch(e.target.value)}>

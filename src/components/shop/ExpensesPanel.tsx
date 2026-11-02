@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DateInput } from "@/components/shop/DateInput";
 import Papa from "papaparse";
 import { Download, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -161,7 +162,7 @@ function ExpenseDialog({ expense, categories, today, branchChoices, defaultBranc
         <button type="button" className={goldButtonClass} disabled={busy} onClick={() => void save()}>{busy ? "Saving..." : expense ? "Save correction" : "Add expense"}</button>
       </>}>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Date"><input type="date" className={inputClass} value={date} max={today} onChange={(e) => setDate(e.target.value)} /></Field>
+        <Field label="Date"><DateInput value={date} max={today} onChange={(v) => setDate(v)} /></Field>
         <Field label="Amount (₹)"><input inputMode="decimal" className={inputClass} value={amount} placeholder="0" onChange={(e) => setAmount(e.target.value)} /></Field>
       </div>
       {branchChoices.length > 1 || (expense && isOwner) ? (

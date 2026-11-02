@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/shop/DateInput";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -83,7 +84,7 @@ export default function Calendar() {
       <PageHeader title="Calendar" subtitle={`Who has which ${word("unit").toLowerCase()} when. Click a booking to open it.`} />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <button className={ghostButtonClass} aria-label="Earlier" onClick={() => setStart(addDays(start, -span))}><ChevronLeft className="h-4 w-4" /></button>
-        <input type="date" className={cn(inputClass, "w-auto")} aria-label="From" value={start} onChange={(e) => e.target.value && setStart(e.target.value)} />
+        <DateInput className="w-auto" aria-label="From" value={start} onChange={(v) => v && setStart(v)} />
         <button className={ghostButtonClass} aria-label="Later" onClick={() => setStart(addDays(start, span))}><ChevronRight className="h-4 w-4" /></button>
         <button className={ghostButtonClass} onClick={() => setStart(today)}>Today</button>
         <select className={cn(inputClass, "w-auto")} aria-label="Days shown" value={span} onChange={(e) => setSpan(Number(e.target.value))}>

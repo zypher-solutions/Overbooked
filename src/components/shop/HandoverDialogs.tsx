@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput, DateTimeInput } from "@/components/shop/DateInput";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Camera, Check, Plus, ScanLine, Trash2 } from "lucide-react";
 import { CameraScanner } from "@/components/overbooked/CameraScanner";
@@ -169,7 +170,7 @@ export function PickupDialog({ rental, open, onClose, onDone }: { rental: Rental
             <div className="grid gap-3 sm:grid-cols-2">
               <p className="text-rust sm:col-span-2">No valid driving licence on record. Add it to hand over the vehicle.</p>
               <Field label="Licence number"><input className={inputClass} value={licence.number} onChange={(e) => setLicence({ ...licence, number: e.target.value })} /></Field>
-              <Field label="Valid until"><input type="date" className={inputClass} value={licence.expiry} onChange={(e) => setLicence({ ...licence, expiry: e.target.value })} /></Field>
+              <Field label="Valid until"><DateInput value={licence.expiry} onChange={(v) => setLicence({ ...licence, expiry: v })} /></Field>
             </div>
           )}
           <label className="mt-2 flex items-center gap-2"><input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> I checked the original driving licence and ID</label>
@@ -369,7 +370,7 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
         <button className={ghostButtonClass} onClick={onClose}>Cancel</button>
         <button className={goldButtonClass} disabled={busy} onClick={submit}>{busy ? "Saving..." : isRoom ? "Check out" : "Mark returned"}</button>
       </>}>
-      <Field label="Returned at"><input type="datetime-local" className={inputClass} value={returnedAt} onChange={(e) => setReturnedAt(e.target.value)} /></Field>
+      <Field label="Returned at"><DateTimeInput value={returnedAt} onChange={(v) => setReturnedAt(v)} /></Field>
       {tickPieces ? (
         <div className="rounded-lg border border-gold/30 bg-gold/[0.03] p-3">
           <div className="mb-2 flex items-center justify-between gap-2">

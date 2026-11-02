@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput, DateTimeInput } from "@/components/shop/DateInput";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, X } from "lucide-react";
@@ -102,7 +103,7 @@ export function AppointmentDialog({ open, onClose, onSaved, appointment, rental 
         ))}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="When"><input type="datetime-local" className={inputClass} value={when} onChange={(e) => setWhen(e.target.value)} /></Field>
+        <Field label="When"><DateTimeInput value={when} onChange={(v) => setWhen(v)} /></Field>
         {!rental && activeBranches.length > 1 ? (
           <Field label="Branch">
             <select className={inputClass} value={branch} disabled={!!myBranchId} onChange={(e) => setBranch(e.target.value)}>

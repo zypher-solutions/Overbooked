@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/shop/DateInput";
 import { useState, type ReactNode } from "react";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
@@ -280,11 +281,11 @@ export function PaymentDialog({ shop, onClose, onSaved }: { shop: PayTarget | nu
             </select>
           </Field>
           <Field label="Received on">
-            <input type="date" className={inputClass} value={form.paidOn} onChange={(e) => setForm({ ...form, paidOn: e.target.value })} />
+            <DateInput value={form.paidOn} onChange={(v) => setForm({ ...form, paidOn: v })} />
           </Field>
           {form.kind === "subscription" ? (
             <Field label="Covers until">
-              <input type="date" className={inputClass} value={form.periodTo} onChange={(e) => setForm({ ...form, periodTo: e.target.value })} />
+              <DateInput value={form.periodTo} onChange={(v) => setForm({ ...form, periodTo: v })} />
             </Field>
           ) : <span />}
           <Field label="Note (reference no., installation ...)" className="col-span-2">

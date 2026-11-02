@@ -34,8 +34,10 @@ jobs:
           version: latest
       - name: Start a local Supabase
         run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
-      - name: Apply migrations and demo data
-        run: supabase db reset
+      - name: Apply migrations and logins, then the test fixtures
+        run: |
+          supabase db reset
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f supabase/test_fixtures.sql
       - name: Database tests (isolation, roles, money rules, Zypher setup-only)
         run: supabase test db
 
@@ -53,7 +55,10 @@ jobs:
         with:
           version: latest
       - run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
-      - run: supabase db reset
+      - name: Apply migrations and logins, then the test fixtures
+        run: |
+          supabase db reset
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f supabase/test_fixtures.sql
       - name: Write the local test environment (local keys only)
         run: |
           supabase status -o env > /tmp/sb.env

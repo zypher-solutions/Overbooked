@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput, DateTimeInput } from "@/components/shop/DateInput";
 import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -134,7 +135,7 @@ export function ExtendDialog({ rental, open, onClose, onDone }: DialogProps) {
     <Modal open={open} onClose={onClose} title="Extend"
       description={`Now ${word("end").toLowerCase()} ${fmtDateTime(rental.end_at, tz)}. Items priced by rate are re-priced; agreed prices stay as they are.`}
       footer={<><button className={ghostButtonClass} onClick={onClose}>Cancel</button><button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Extend"}</button></>}>
-      <Field label={`New ${word("end").toLowerCase()}`}><input type="datetime-local" className={inputClass} value={end} onChange={(e) => setEnd(e.target.value)} /></Field>
+      <Field label={`New ${word("end").toLowerCase()}`}><DateTimeInput value={end} onChange={(v) => setEnd(v)} /></Field>
       <Field label="Payment now (optional)"><input className={monoInputClass} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
       {num(amount) > 0 ? <MethodPicker value={method} onChange={setMethod} /> : null}
     </Modal>
