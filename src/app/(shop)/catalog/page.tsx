@@ -1,5 +1,6 @@
 "use client";
 
+import { businessNameError, moneyError } from "@/lib/validate";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -298,9 +299,10 @@ function Extras() {
 
   const save = async () => {
     if (!edit) return;
-    if (!edit.name?.trim()) return toast.error("Name the extra.");
+    const bad = businessNameError(edit.name ?? "", "extra's name", 40) ?? moneyError(edit.amountText ?? "", { label: "price", required: true, max: 1_000_000 });
+    if (bad) return toast.error(bad);
     setBusy(true);
-    const row = { name: edit.name.trim(), basis: edit.basis ?? "per_rental", amount: num(edit.amountText), template_keys: edit.template_keys ?? [], is_active: edit.is_active ?? true };
+    const row = { name: (edit.name ?? "").trim().replace(/s+/g, " "), basis: edit.basis ?? "per_rental", amount: num(edit.amountText), template_keys: edit.template_keys ?? [], is_active: edit.is_active ?? true };
     const supabase = createClient();
     const { error } = edit.id ? await supabase.from("add_ons").update(row).eq("id", edit.id) : await supabase.from("add_ons").insert({ ...row, shop_id: shop.id });
     setBusy(false);
@@ -331,9 +333,9 @@ function Extras() {
       <Modal open={edit !== null} onClose={() => setEdit(null)} title={edit?.id ? "Edit extra" : "New extra"}
         footer={<><button className={ghostButtonClass} onClick={() => setEdit(null)}>Cancel</button><button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save"}</button></>}>
         {edit ? <>
-          <Field label="Name"><input className={inputClass} value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+          <Field label="Name" error={edit.name?.trim() ? businessNameError(edit.name ?? "", "extra's name", 40) ?? undefined : undefined}><input className={inputClass} maxLength={40} value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Price (₹)"><input className={monoInputClass} inputMode="decimal" value={edit.amountText} onChange={(e) => setEdit({ ...edit, amountText: e.target.value })} /></Field>
+            <Field label="Price (₹)" error={edit.amountText?.trim() ? moneyError(edit.amountText, { label: "price", max: 1_000_000 }) ?? undefined : undefined}><input className={monoInputClass} inputMode="decimal" maxLength={10} value={edit.amountText} onChange={(e) => setEdit({ ...edit, amountText: e.target.value })} /></Field>
             <Field label="Charged">
               <select className={inputClass} value={edit.basis} onChange={(e) => setEdit({ ...edit, basis: e.target.value as AddOnBasis })}>
                 {Object.entries(BASIS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -377,13 +379,15 @@ function Categories({ addSignal }: { addSignal: number }) {
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
-    if (!edit?.name?.trim() || !edit.template_key) return toast.error("Name the category and choose its type.");
+    if (!edit?.template_key) return toast.error("Choose the category's type.");
+    const nameBad = businessNameError(edit?.name ?? "", "category name", 40);
+    if (nameBad) return toast.error(nameBad);
     const prefix = (edit.sku_prefix ?? "").trim().toUpperCase();
     // bridal and groom shops number their products from the category's base SKU, as in TRENDZ
     if (trendz && !prefix) return toast.error("Enter the base SKU: 2 to 6 capital letters, e.g. BR.");
     if (prefix && !/^[A-Z]{2,6}$/.test(prefix)) return toast.error("The SKU prefix needs 2 to 6 capital letters.");
     setBusy(true);
-    const row = { name: edit.name.trim(), template_key: edit.template_key, sku_prefix: prefix || null };
+    const row = { name: (edit.name ?? "").trim().replace(/s+/g, " "), template_key: edit.template_key, sku_prefix: prefix || null };
     const supabase = createClient();
     const { error } = edit.id ? await supabase.from("categories").update(row).eq("id", edit.id) : await supabase.from("categories").insert({ ...row, shop_id: shop.id });
     setBusy(false);
@@ -431,7 +435,7 @@ function Categories({ addSignal }: { addSignal: number }) {
         description={templates.length > 1 ? "The type decides how items in it are priced and handed over." : undefined}
         footer={<><button className={ghostButtonClass} onClick={() => setEdit(null)}>Cancel</button><button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save"}</button></>}>
         {edit ? <>
-          <Field label="Name"><input className={inputClass} value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+          <Field label="Name" error={edit.name?.trim() ? businessNameError(edit.name ?? "", "category name", 40) ?? undefined : undefined}><input className={inputClass} maxLength={40} value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
           {templates.length > 1 ? (
             <Field label="Type" hint={edit.id ? "Fixed once items exist in it" : undefined}>
               <select className={inputClass} value={edit.template_key} disabled={!!edit.id} onChange={(e) => setEdit({ ...edit, template_key: e.target.value })}>

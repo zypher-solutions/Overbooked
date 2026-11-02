@@ -8,7 +8,7 @@ export interface LedgerPdfRow {
 const pdfInr = (n: number) => `Rs. ${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 const C = {
-  gold: "#C89B3C", goldLight: "#F5EDD4", black: "#1A1A1A", dark: "#2C2C2C", gray: "#6B7280", grayLight: "#F3F4F6", white: "#FFFFFF",
+  gold: "#0F4743", goldLight: "#E3EDE9", black: "#1A1A1A", dark: "#2C2C2C", gray: "#6B7280", grayLight: "#F3F4F6", white: "#FFFFFF",
   green: "#15803D", red: "#B91C1C", blue: "#1D4ED8", border: "#E5E7EB", rowAlt: "#FAFAFA",
 };
 

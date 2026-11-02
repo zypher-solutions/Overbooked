@@ -12,7 +12,7 @@ import type { Product } from "@/lib/shop/types";
 import { ProductEditor } from "@/components/shop/ProductEditor";
 import { ProductWizard } from "@/modules/clothing/components/ProductWizard";
 import { UnitsPanel } from "@/components/shop/UnitsPanel";
-import { Panel } from "@/components/shop/ui";
+import { Panel, PageSkeleton } from "@/components/shop/ui";
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
@@ -32,7 +32,7 @@ export default function ProductPage() {
   }, [id]);
   useEffect(() => { void load(); }, [load]);
 
-  if (p === undefined || loading) return <p className="py-10 text-center text-sm text-muted-foreground">Loading...</p>;
+  if (p === undefined || loading) return <PageSkeleton columns={false} />;
   if (p === null) return <Panel><p className="text-sm text-muted-foreground">Item not found.</p></Panel>;
   const template = templateOf(p.category_id);
 

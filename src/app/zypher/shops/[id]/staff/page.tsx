@@ -100,7 +100,7 @@ export default function ShopStaff() {
     <>
       <PageHeader title="Staff" subtitle={`${shopName ? shopName + ": " : ""}who can sign in, with which role and branch`} />
 
-      <form onSubmit={sendInvite} className="mb-5 rounded-xl border border-border bg-surface p-4 shadow-sm">
+      <form onSubmit={sendInvite} className="mb-5 glass p-4 shadow-sm">
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground"><UserPlus className="h-4 w-4 text-gold" /> Invite a person</div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto_auto_auto]">
           <input type="text" required placeholder="Full name" aria-label="Full name" className={inputClass} value={invite.fullName}

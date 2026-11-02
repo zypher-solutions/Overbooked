@@ -90,6 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
       if (!mounted || !profileData) return;
       const shopId = profileData.role === "super_admin" ? null : profileData.shop_id;
+      // the shop and the role are asked together, not one after the other
+      const roleCall = profileData.is_active === false ? Promise.resolve({ data: null }) : supabase.rpc("get_my_role");
       const { data: shopData } = shopId
         ? await supabase.from("shops").select("id, name, slug, token_prefix, business_types, phone, email, address, gstin, logo_url, timezone, plan, status, paid_until, monthly_fee, settings, created_at").eq("id", shopId).maybeSingle()
         : { data: null };
@@ -102,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       // get_my_role() is null for staff whose branch is inactive (derived lockout, see branch_lifecycle migration).
-      const { data: role } = profileData.is_active === false ? { data: null } : await supabase.rpc("get_my_role");
+      const { data: role } = await roleCall;
       if (!mounted) return;
       // Zypher staff and support logins have no role until they pass two-step sign-in: send them there, do not sign them out
       if (!role && profileData.is_active !== false) {

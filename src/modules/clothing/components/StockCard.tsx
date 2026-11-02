@@ -99,7 +99,7 @@ export function StockCard({ product, stock, highlight }: { product: Product; sto
                 const avail = Math.max(0, (s?.available_now ?? 0) - inCart);
                 const canBook = !myBranchId || myBranchId === b.id;
                 return (
-                  <div key={b.id} className="w-[calc(50%-0.375rem)] rounded-xl border border-border bg-surface p-3 shadow-sm sm:w-44">
+                  <div key={b.id} className="w-[calc(50%-0.375rem)] glass p-3 shadow-sm sm:w-44">
                     <p className="truncate border-b border-border/70 pb-2 text-center text-xs font-bold uppercase tracking-[0.1em] text-foreground">{b.name}</p>
                     <div className="my-3 grid grid-cols-3 text-center">
                       <Stat n={s?.total ?? 0} label="Total" />

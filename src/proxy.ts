@@ -29,8 +29,10 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // getUser() verifies the token with Supabase Auth; getSession() only reads the cookie
-  const { data: { user: session } } = await supabase.auth.getUser();
+  // getClaims() checks the token's signature here, without a trip to Supabase Auth on every page (getUser does one).
+  // It still renews an expired token. Screens that change data check the person again on the server.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const session = claimsData?.claims ?? null;
 
   // If there is no session and the user is NOT already on the login page, redirect them to login.
   // /welcome is the invite link landing page: it signs the person in itself.

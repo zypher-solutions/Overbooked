@@ -1,5 +1,6 @@
 "use client";
 
+import { reasonError } from "@/lib/validate";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarPlus, Plus, QrCode } from "lucide-react";
@@ -43,8 +44,13 @@ export function UnitsPanel({ product, template }: { product: Product; template: 
     if (singles) {
       codes = adding.codes.split(/[\n,]+/).map((c) => c.trim().toUpperCase()).filter(Boolean);
       if (!codes.length) return toast.error(`Enter the ${template.labels.unit?.toLowerCase() ?? "unit"} number.`);
+      const badCode = codes.find((c) => !/^[A-Z0-9][A-Z0-9 ./-]{0,29}$/.test(c));
+      if (badCode) return toast.error(`"${badCode}" is not allowed: use letters, numbers, spaces and . / - only, up to 30 characters.`);
+      if (new Set(codes).size !== codes.length) return toast.error("The same number is written twice.");
     } else {
-      const n = Math.max(1, Math.min(200, Math.floor(Number(adding.count) || 1)));
+      const asked = Number(adding.count);
+      if (!Number.isInteger(asked) || asked < 1 || asked > 200) return toast.error("How many pieces: a whole number from 1 to 200.");
+      const n = asked;
       const used = new Set((units ?? []).map((u) => u.code));
       codes = [];
       for (let i = 1; codes.length < n; i++) if (!used.has(`${v.sku}-${i}`)) codes.push(`${v.sku}-${i}`);
@@ -65,6 +71,10 @@ export function UnitsPanel({ product, template }: { product: Product; template: 
 
   const saveStatus = async () => {
     if (!statusFor) return;
+    if (statusFor.status !== "available") {
+      const bad = reasonError(statusFor.reason, "reason");
+      if (bad) return toast.error(bad);
+    }
     setBusy(true);
     try {
       const res = await call<{ upcoming_rentals_to_swap: string[] }>("set_unit_status",
@@ -156,7 +166,7 @@ export function UnitsPanel({ product, template }: { product: Product; template: 
             </Field>
           ) : (
             <Field label="How many pieces" hint="Each gets its own code to put on its tag">
-              <input className={monoInputClass} inputMode="numeric" value={adding.count} onChange={(e) => setAdding({ ...adding, count: e.target.value.replace(/\D/g, "") })} />
+              <input className={monoInputClass} inputMode="numeric" maxLength={3} value={adding.count} onChange={(e) => setAdding({ ...adding, count: e.target.value.replace(/\D/g, "") })} />
             </Field>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -183,7 +193,7 @@ export function UnitsPanel({ product, template }: { product: Product; template: 
             ))}
           </div>
           {statusFor.status !== "available" ? (
-            <Field label="Reason"><input className={inputClass} value={statusFor.reason} onChange={(e) => setStatusFor({ ...statusFor, reason: e.target.value })} /></Field>
+            <Field label="Reason" error={statusFor.reason.trim() ? reasonError(statusFor.reason, "reason") ?? undefined : undefined}><input className={inputClass} maxLength={320} value={statusFor.reason} onChange={(e) => setStatusFor({ ...statusFor, reason: e.target.value })} /></Field>
           ) : null}
         </> : null}
       </Modal>

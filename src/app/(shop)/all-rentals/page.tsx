@@ -13,12 +13,12 @@ import type { Product } from "@/lib/shop/types";
 import { StockCard, stockTotals, useStock } from "@/modules/clothing/components/StockCard";
 import type { ListRental } from "@/components/shop/RentalList";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { PageHeader, StatusBadge, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
+import { PageHeader, StatusBadge, ghostButtonClass, goldButtonClass, inputClass, ListSkeleton } from "@/components/shop/ui";
 
 // All Rentals, as in TRENDZ: every product with its stock in each branch. Tapping one shows each size /
 // colour per branch (Total / Avail / Rented) with Add to Cart, and who has it out now.
 export default function AllRentals() {
-  const { activeBranches, myBranchId, tz, branches, canManage } = useShop();
+  const { activeBranches, myBranchId, tz, branches } = useShop();
   const { products } = useCatalog();
   const { stock } = useStock();
   const [q, setQ] = useState("");
@@ -82,7 +82,7 @@ export default function AllRentals() {
         </div>
       </div>
 
-      {products === null ? <p className="py-10 text-center text-sm text-muted-foreground">Loading...</p> : list.length === 0 ? (
+      {products === null ? <ListSkeleton /> : list.length === 0 ? (
         <div className="flex min-h-[240px] items-center justify-center rounded-lg border border-dashed border-border"><p className="text-sm text-muted-foreground">No products match your filters.</p></div>
       ) : view === "grid" ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">
@@ -137,11 +137,6 @@ export default function AllRentals() {
           {open ? <>
             <StockCard product={open} stock={stock} />
             <OutNow product={open} tz={tz} branchName={(id) => branches.find((b) => b.id === id)?.name ?? ""} />
-            {canManage ? (
-              <div className="flex justify-end">
-                <Link href={`/catalog/${open.id}`} className={ghostButtonClass}>Edit product</Link>
-              </div>
-            ) : null}
           </> : null}
         </DialogContent>
       </Dialog>

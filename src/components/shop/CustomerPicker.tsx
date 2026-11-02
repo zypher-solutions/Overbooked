@@ -2,12 +2,13 @@
 
 import { DateInput } from "@/components/shop/DateInput";
 import { useEffect, useState } from "react";
-import { AlertTriangle, UserCheck, X } from "lucide-react";
+import { AlertTriangle, Search, UserCheck, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDate } from "@/lib/shop/format";
 import type { Customer } from "@/lib/shop/types";
 import { Field, inputClass } from "./ui";
-import { emailError, personNameError, phoneError } from "@/lib/validate";
+import { emailError, normalizePhone, personNameError, phoneError } from "@/lib/validate";
 
 export interface NewCustomer {
   full_name: string;
@@ -56,6 +57,33 @@ export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicenc
     return () => clearTimeout(t);
   }, [term, selected]);
 
+  // a saved customer is found by name or phone in one box; with nothing typed it offers the latest ones
+  const [q, setQ] = useState("");
+  const [boxOpen, setBoxOpen] = useState(false);
+  const [saved, setSaved] = useState<Customer[]>([]);
+  useEffect(() => {
+    if (selected || !boxOpen) return;
+    const text = q.trim().replace(/[%_,()*]/g, "");
+    const t = setTimeout(async () => {
+      const base = createClient().from("customers").select("*");
+      const { data } = text.length >= 2
+        ? await base.or(`full_name.ilike.%${text}%,phone.ilike.%${text}%`).order("full_name").limit(8)
+        : await base.order("created_at", { ascending: false }).limit(5);
+      setSaved((data as Customer[]) ?? []);
+    }, text.length >= 2 ? 250 : 0);
+    return () => clearTimeout(t);
+  }, [q, boxOpen, selected]);
+
+  // a number that is already saved: say so, so the same person is not added twice
+  const [sameNumber, setSameNumber] = useState<Customer | null>(null);
+  const digits = normalizePhone(draft.phone);
+  useEffect(() => {
+    if (selected || digits.length !== 10) { setSameNumber(null); return; }
+    let live = true;
+    void createClient().from("customers").select("*").eq("phone", digits).limit(1).maybeSingle().then(({ data }) => { if (live) setSameNumber((data as Customer) ?? null); });
+    return () => { live = false; };
+  }, [digits, selected]);
+
   const set = (patch: Partial<NewCustomer>) => onDraft({ ...draft, ...patch });
   const licenceExpired = (c: Pick<Customer, "licence_expiry">) => !!c.licence_expiry && c.licence_expiry < new Date().toISOString().slice(0, 10);
 
@@ -94,15 +122,44 @@ export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicenc
 
   return (
     <div className="space-y-3">
+      <div className="relative">
+        <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Saved customer</span>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input className={cn(inputClass, "pl-9")} autoComplete="off" aria-label="Search saved customers" placeholder="Search by name or phone"
+            value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setBoxOpen(true)} onBlur={() => setTimeout(() => setBoxOpen(false), 150)} />
+        </div>
+        {boxOpen && saved.length ? (
+          <ul className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg">
+            {!q.trim() ? <li className="border-b border-border px-3 py-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">Latest customers</li> : null}
+            {saved.map((c) => (
+              <li key={c.id}>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { onSelect(c); setQ(""); setBoxOpen(false); }}
+                  className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gold/5">
+                  <span className="min-w-0 truncate"><span className="font-medium">{c.full_name}</span> <span className="font-mono text-xs text-muted-foreground">{c.phone}</span></span>
+                  {c.is_blocked ? <span className="text-xs text-rust">Blocked</span> : <span className="text-xs text-gold">Use</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      <p className="flex items-center gap-3 text-[11px] uppercase tracking-wider text-muted-foreground"><span className="h-px flex-1 bg-border" />or a new customer<span className="h-px flex-1 bg-border" /></p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Phone" error={seen.phone ? phoneError(draft.phone, true) ?? undefined : undefined}>
-          <input className={inputClass} inputMode="tel" autoComplete="off" maxLength={16} value={draft.phone} onBlur={() => see("phone")} onChange={(e) => set({ phone: e.target.value })} />
-        </Field>
         <Field label="Name" error={seen.name ? personNameError(draft.full_name, "customer's name") ?? undefined : undefined}>
           <input className={inputClass} autoComplete="off" maxLength={60} value={draft.full_name} onBlur={() => see("name")} onChange={(e) => set({ full_name: e.target.value })} />
         </Field>
+        <Field label="Phone" error={seen.phone ? phoneError(draft.phone, true) ?? undefined : undefined}>
+          <input className={inputClass} inputMode="tel" autoComplete="off" maxLength={16} value={draft.phone} onBlur={() => see("phone")} onChange={(e) => set({ phone: e.target.value })} />
+        </Field>
       </div>
-      {matches.length ? (
+      {sameNumber ? (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gold/40 bg-gold/10 p-3 text-sm">
+          <span>This number is saved for <strong>{sameNumber.full_name}</strong>. Use the saved customer instead of adding a new one.</span>
+          <button type="button" className="min-h-9 rounded-md bg-gold px-3 text-xs font-semibold text-white" onClick={() => onSelect(sameNumber)}>Use {sameNumber.full_name.split(" ")[0]}</button>
+        </div>
+      ) : null}
+      {matches.length && !sameNumber ? (
         <div className="rounded-lg border border-border">
           <p className="border-b border-border px-3 py-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">Returning customer?</p>
           <ul>

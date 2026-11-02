@@ -14,8 +14,7 @@ import { CustomerForm, customerPayload, customerProblem, type CustomerDraft } fr
 import { RentalList, type ListRental } from "@/components/shop/RentalList";
 import { MeasurementsPanel } from "@/components/shop/MeasurementsPanel";
 import {
-  Field, Modal, PageHeader, Panel, StatusBadge, SummaryCard, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass,
-} from "@/components/shop/ui";
+  Field, Modal, PageHeader, Panel, StatusBadge, SummaryCard, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, PageSkeleton } from "@/components/shop/ui";
 
 const toDraft = (c: Customer): CustomerDraft => ({
   full_name: c.full_name, phone: c.phone, email: c.email ?? "", address: c.address ?? "", id_type: c.id_type ?? "",
@@ -45,7 +44,7 @@ export default function CustomerPage() {
   }, [id]);
   useEffect(() => { void load(); }, [load]);
 
-  if (c === undefined) return <p className="py-10 text-center text-sm text-muted-foreground">Loading...</p>;
+  if (c === undefined) return <PageSkeleton />;
   if (c === null || !draft) return <Panel><p className="text-sm text-muted-foreground">Customer not found.</p></Panel>;
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(toDraft(c));

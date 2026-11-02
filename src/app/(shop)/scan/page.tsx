@@ -18,10 +18,9 @@ import { StockCard, useStock } from "@/modules/clothing/components/StockCard";
 import type { ListRental } from "@/components/shop/RentalList";
 import { Empty, PageHeader, Panel, StatusBadge, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
 
-// Inventory Search, as in TRENDZ: scan a tag (camera or USB scanner) or type a name, SKU, piece code or
-// booking number. "Find and book" shows stock per branch with Add to Cart; "Receive back" takes a scanned
-// piece straight to its return.
-type Mode = "book" | "receive";
+// Inventory Search: one box. Scan a tag (camera or USB scanner) or type a name, SKU, piece code or booking number.
+// A piece that is out on a rental opens its return with that piece ticked; anything else shows its stock per branch
+// with Add to Cart. There is nothing to switch.
 type UnitHit = Unit & { reservation: { rental_id: string; state: "held" | "out"; token: string } | null };
 
 export default function InventorySearch() {
@@ -30,7 +29,6 @@ export default function InventorySearch() {
   const cart = useCart();
   const { products } = useCatalog();
   const { stock, reload: reloadStock } = useStock();
-  const [mode, setMode] = useState<Mode>("book");
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -70,7 +68,7 @@ export default function InventorySearch() {
     setProduct({ p, variationId });
   };
 
-  const lookup = useCallback(async (raw: string, how: Mode = mode) => {
+  const lookup = useCallback(async (raw: string) => {
     const text = raw.trim();
     if (!text) return;
     setFocused(false);
@@ -86,7 +84,8 @@ export default function InventorySearch() {
           .eq("unit_id", u.id).in("state", ["held", "out"]).order("state", { ascending: false }).limit(5);
         const rows = (res ?? []) as unknown as { rental_id: string; state: "held" | "out"; rentals: { token: string } | null }[];
         const current = rows.find((r) => r.state === "out") ?? rows[0];
-        if (how === "receive" && current?.state === "out") {
+        if (current?.state === "out") {
+          toast.message(`${u.code} is out on ${current.rentals?.token ?? "a rental"}: returning it.`);
           router.push(`/rentals/${current.rental_id}?receive=${u.id}`);
           return;
         }
@@ -95,13 +94,12 @@ export default function InventorySearch() {
         setProduct(p ? { p, variationId: u.variation_id } : null);
         setUnit(hit);
         setNotFound(null);
-        if (how === "receive") toast.message(`${u.code} is not out on a rental.`);
         return;
       }
       // 2. a booking number
       const { data: r } = await supabase.from("rentals").select("id, status").ilike("token", text.replace(/[%_]/g, "")).maybeSingle();
       if (r) {
-        router.push(r.status === "active" && how === "receive" ? `/rentals/${r.id}?receive=1` : `/rentals/${r.id}`);
+        router.push(r.status === "active" ? `/rentals/${r.id}?receive=1` : `/rentals/${r.id}`);
         return;
       }
       // 3. a SKU, then a name
@@ -116,7 +114,7 @@ export default function InventorySearch() {
     } catch (e) {
       toast.error(errorText(e));
     }
-  }, [mode, products, all, router]);
+  }, [products, all, router]);
 
   const onScan = useCallback((text: string) => {
     setScanning(false);
@@ -137,24 +135,14 @@ export default function InventorySearch() {
 
   return (
     <>
-      <PageHeader title="Inventory Search" subtitle="Scan a tag or type a name, SKU, piece code or booking number."
-        actions={cart.count ? <Link href="/book" className={goldButtonClass}><ShoppingBag className="h-4 w-4" /> Checkout ({cart.count})</Link> : null} />
-
-      <div className="mb-3 inline-flex rounded-lg border border-border p-1" role="tablist" aria-label="What are you doing">
-        {([["book", "Find and book"], ["receive", "Receive back"]] as [Mode, string][]).map(([k, label]) => (
-          <button key={k} role="tab" aria-selected={mode === k} onClick={() => { setMode(k); inputRef.current?.focus(); }}
-            className={cn("rounded-md px-4 py-1.5 text-sm", mode === k ? "bg-gold/15 font-medium text-foreground" : "text-muted-foreground hover:text-foreground")}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <PageHeader title="Inventory Search" subtitle="Scan a tag or type a name, SKU, piece code or booking number. A piece that is out opens its return." />
 
       <form className="relative mb-5 flex gap-2" onSubmit={(e) => { e.preventDefault(); void lookup(query); }}>
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           {/* a USB barcode scanner types the code and presses Enter, so this box is all it needs */}
           <input ref={inputRef} autoFocus className={cn(inputClass, "h-12 pl-9 pr-9 text-base")} aria-label="Scan or type"
-            placeholder={mode === "receive" ? "Scan the piece coming back, or type its code" : "Product name, SKU or piece code"}
+            placeholder="Scan a tag, or type a name, SKU, piece code or booking number"
             value={query} onChange={(e) => { setQuery(e.target.value); setFocused(true); }}
             onFocus={() => setFocused(true)} onBlur={() => setTimeout(() => setFocused(false), 150)} />
           {query ? (
@@ -177,7 +165,7 @@ export default function InventorySearch() {
             </ul>
           ) : null}
         </div>
-        <button type="submit" className={cn(goldButtonClass, "h-12 px-5")}>{mode === "receive" ? "Receive" : "Search"}</button>
+        <button type="submit" className={cn(goldButtonClass, "h-12 px-5")}>Search</button>
         <button type="button" className={cn(ghostButtonClass, "h-12")} onClick={() => setScanning(true)} aria-label="Scan with the camera">
           <ScanLine className="h-5 w-5" /> <span className="hidden sm:inline">Camera</span>
         </button>
@@ -210,7 +198,7 @@ export default function InventorySearch() {
         </Panel>
       ) : null}
 
-      {product && mode === "book" ? <StockCard product={product.p} stock={stock} highlight={product.variationId} /> : null}
+      {product ? <StockCard product={product.p} stock={stock} highlight={product.variationId} /> : null}
 
       {product ? (
         <Panel className="mt-4" title={`Active rentals${active ? ` (${active.length})` : ""}`}>
@@ -233,9 +221,7 @@ export default function InventorySearch() {
       {!product && !unit && !notFound ? (
         <Panel>
           <p className="text-sm text-muted-foreground">
-            {mode === "receive"
-              ? "When a customer brings pieces back, scan each tag here (or type its code). It opens the return with that piece ticked."
-              : "Scan an item's tag or type its name. You will see how many are free in each branch, and can add them to the cart. Checkout opens the booking form."}
+            Scan a tag or type a name. A piece that a customer brings back opens its return with that piece ticked; any other item shows how many are free in each branch, with Rent to add it to the cart.
           </p>
         </Panel>
       ) : null}

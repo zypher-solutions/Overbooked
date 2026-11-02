@@ -1,5 +1,6 @@
 "use client";
 
+import { PageSkeleton } from "@/components/shop/ui";
 import { useEffect, type ReactNode } from "react";
 import { useAuth } from "@/lib/overbooked/AuthContext";
 import { ShopProvider } from "@/lib/shop/ShopContext";
@@ -17,7 +18,12 @@ export default function ShopLayout({ children }: { children: ReactNode }) {
   }, [zypherAdmin]);
 
   if (isLoading || !profile || !shop) {
-    return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Loading...</div>;
+    return (
+      <div className="min-h-screen bg-background lg:pl-64">
+        <div className="fixed inset-y-0 left-0 hidden w-64 bg-sidebar lg:block" aria-hidden="true" />
+        <main className="px-4 pt-[calc(4.5rem+env(safe-area-inset-top))] sm:px-6 lg:px-8 lg:pt-8"><PageSkeleton columns={false} /></main>
+      </div>
+    );
   }
   return (
     <ShopProvider>

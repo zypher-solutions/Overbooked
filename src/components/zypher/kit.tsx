@@ -1,5 +1,6 @@
 "use client";
 
+import { emailError, moneyError, normalizeEmail, personNameError, textLimitError } from "@/lib/validate";
 import { DateInput } from "@/components/shop/DateInput";
 import { useState, type ReactNode } from "react";
 import { Copy } from "lucide-react";
@@ -170,7 +171,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 
 export function Panel({ title, actions, children, className }: { title?: string; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={"rounded-xl border border-border bg-surface p-4 shadow-sm " + (className ?? "")}>
+    <section className={"glass p-4 shadow-sm " + (className ?? "")}>
       {title || actions ? (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           {title ? <h2 className="text-sm font-semibold text-foreground">{title}</h2> : <span />}
@@ -182,7 +183,7 @@ export function Panel({ title, actions, children, className }: { title?: string;
   );
 }
 
-export const tableWrap = "overflow-x-auto rounded-xl border border-border bg-surface shadow-sm";
+export const tableWrap = "overflow-x-auto glass";
 export const theadClass = "bg-muted/70 text-xs font-medium uppercase tracking-wider text-muted-foreground";
 
 // ---- dialogs ----
@@ -232,8 +233,12 @@ export function PaymentDialog({ shop, onClose, onSaved }: { shop: PayTarget | nu
   const save = async () => {
     if (!shop) return;
     const amount = Number(form.amount);
-    if (!(amount > 0)) return toast.error("Enter the amount received.");
-    if (form.kind === "subscription" && !form.periodTo) return toast.error("Enter the date this payment covers until.");
+    const bad = moneyError(form.amount, { label: "amount received", required: true, positive: true, max: 10_000_000 })
+      ?? (!form.paidOn ? "Enter the date it was received." : null)
+      ?? (form.kind === "subscription" && !form.periodTo ? "Enter the date this payment covers until." : null)
+      ?? (form.kind === "subscription" && form.periodTo < form.paidOn ? "The covered-until date cannot be before the received date." : null)
+      ?? textLimitError(form.note, "note", 200);
+    if (bad) return toast.error(bad);
     setBusy(true);
     const { error } = await createClient().rpc("record_shop_payment", {
       p_shop_id: shop.id, p_amount: amount, p_paid_on: form.paidOn, p_period_to: form.kind === "subscription" ? form.periodTo : null,
@@ -272,8 +277,8 @@ export function PaymentDialog({ shop, onClose, onSaved }: { shop: PayTarget | nu
         </div>
         {form.kind === "subscription" ? <div className="flex flex-wrap gap-1.5">{[1, 3, 6, 12].map(monthsChip)}</div> : null}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Amount (₹)">
-            <input className={inputClass} inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+          <Field label="Amount (₹)" error={form.amount.trim() ? moneyError(form.amount, { label: "amount", positive: true, max: 10_000_000 }) ?? undefined : undefined}>
+            <input className={inputClass} inputMode="decimal" maxLength={10} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
           </Field>
           <Field label="Method">
             <select className={inputClass} value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}>
@@ -289,7 +294,7 @@ export function PaymentDialog({ shop, onClose, onSaved }: { shop: PayTarget | nu
             </Field>
           ) : <span />}
           <Field label="Note (reference no., installation ...)" className="col-span-2">
-            <input className={inputClass} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+            <input className={inputClass} maxLength={220} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
           </Field>
         </div>
         <AlertDialogFooter>
@@ -314,9 +319,11 @@ export function InviteOwnerDialog({ shop, onClose, onLink }: {
 
   const send = async () => {
     if (!shop) return;
+    const bad = personNameError(name, "owner's name") ?? emailError(email);
+    if (bad) return toast.error(bad);
     setBusy(true);
     try {
-      const { link } = await inviteShopOwner({ shopId: shop.id, ownerName: name, ownerEmail: email });
+      const { link } = await inviteShopOwner({ shopId: shop.id, ownerName: name.trim().replace(/s+/g, " "), ownerEmail: normalizeEmail(email) });
       onClose();
       onLink({ name, link });
       setName("");
@@ -336,8 +343,8 @@ export function InviteOwnerDialog({ shop, onClose, onLink }: {
           <AlertDialogDescription>You get a one-hour link to send them.</AlertDialogDescription>
         </AlertDialogHeader>
         <div className="grid gap-3">
-          <Field label="Owner name"><input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} /></Field>
-          <Field label="Owner email"><input className={inputClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+          <Field label="Owner name" error={name.trim() ? personNameError(name, "owner's name") ?? undefined : undefined}><input className={inputClass} maxLength={60} value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label="Owner email" error={email.trim() ? emailError(email) ?? undefined : undefined}><input className={inputClass} inputMode="email" autoCapitalize="none" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>

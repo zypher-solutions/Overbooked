@@ -1,17 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { DateInput } from "@/components/shop/DateInput";
+import { DateInput, isoToDisplay } from "@/components/shop/DateInput";
 import Link from "next/link";
-import { Calendar, MapPin, Search } from "lucide-react";
+import { Calendar, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { RENTAL_LIST_COLUMNS } from "@/lib/shop/api";
-import { addDays, dayRange, errorText, fmtDate, fmtTime, plural, rupees, todayLocal } from "@/lib/shop/format";
+import { addDays, dayRange, errorText, fmtDate, isoToZoned, plural, rupees, todayLocal } from "@/lib/shop/format";
 import type { ListRental } from "@/components/shop/RentalList";
-import { PageHeader, RentalStatusBadge, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
+import { PageHeader, RentalStatusBadge, ghostButtonClass, goldButtonClass, inputClass, ListSkeleton } from "@/components/shop/ui";
 
 // Bookings, as in TRENDZ: cards sorted by the next pickup, filtered by pickup day, status and branch.
 // A card opens the booking (hand over, change, cancel, money). Returned ones wait under "Completed Bookings".
@@ -30,7 +30,7 @@ function holdEnd(period: string) {
 }
 
 export default function Bookings() {
-  const { tz, activeBranches, branches, myBranchId, canManage, trendz } = useShop();
+  const { tz, activeBranches, branches, myBranchId, canManage } = useShop();
   const [status, setStatus] = useState<Status>("all");
   const [day, setDay] = useState<Day>("all");
   const [customDay, setCustomDay] = useState("");
@@ -42,6 +42,8 @@ export default function Bookings() {
   const [done, setDone] = useState<Row[] | null>(null);
   const [doneCount, setDoneCount] = useState(0);
   const [showDone, setShowDone] = useState(false);
+  // on a wide screen a tap on a booking shows its summary beside the list; on a phone or tablet it opens the booking
+  const [sel, setSel] = useState<Row | null>(null);
   const today = todayLocal(tz);
   const tomorrow = addDays(today, 1);
 
@@ -112,62 +114,82 @@ export default function Bookings() {
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "";
   const total = (rows?.length ?? 0);
 
+  // A booking is one short row: who, when, what and what is still owed. The booking page has the rest.
+  const dmy = (iso: string) => isoToDisplay(isoToZoned(iso, tz).slice(0, 10));
   const card = (r: Row) => {
     const pickupToday = r.status === "reserved" && fmtDate(r.start_at, tz) === fmtDate(today);
-    const nDays = Math.max(1, Math.ceil((Date.parse(r.end_at) - Date.parse(r.start_at)) / 86_400_000));
+    const nDays = Math.max(1, Math.round((Date.parse(isoToZoned(r.end_at, tz).slice(0, 10)) - Date.parse(isoToZoned(r.start_at, tz).slice(0, 10))) / 86_400_000));
     const due = Math.max(0, Number(r.total) - Number(r.paid));
     const cancelled = r.status === "cancelled" || r.status === "no_show";
-    const buffer = r.free_at ? Math.max(0, Math.round((Date.parse(r.free_at) - Date.parse(r.end_at)) / 86_400_000)) : 0;
+    const items = (r.rental_lines ?? []).map((l) => (l.qty > 1 ? `${l.qty} × ` : "") + l.description).join(", ");
     return (
       <Link key={r.id} href={`/rentals/${r.id}`}
-        className={cn("block space-y-3 rounded-xl border bg-surface p-4 transition-colors hover:bg-black/[0.02]", pickupToday ? "border-gold/50 shadow-md shadow-gold/5" : "border-border")}>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-lg font-semibold text-gold">{r.token}</span>
+        onClick={(e) => { if (window.matchMedia("(min-width: 1440px)").matches) { e.preventDefault(); setSel(r); } }}
+        className={cn("grid gap-x-4 gap-y-1.5 rounded-2xl border bg-surface px-4 py-3.5 shadow-[0_1px_2px_rgb(16_23_21/4%),0_8px_24px_-14px_rgb(16_23_21/12%)] transition-colors hover:bg-accent/40 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto] sm:items-center",
+          sel?.id === r.id ? "border-neon ring-2 ring-neon/40" : pickupToday ? "border-gold/50" : "border-transparent")}>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-sm font-semibold text-gold">{r.token}</span>
             <RentalStatusBadge rental={r} />
-            {pickupToday ? <span className="rounded border border-gold/30 bg-gold/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gold">Pickup today</span> : null}
+            {pickupToday ? <span className="rounded border border-gold/30 bg-gold/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gold">Pickup today</span> : null}
           </div>
-          {activeBranches.length > 1 ? <span className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground"><MapPin className="h-3.5 w-3.5 text-gold" />{branchName(r.branch_id)}</span> : null}
+          <p className="mt-0.5 truncate text-sm font-semibold">{r.customers?.full_name} <span className="font-mono text-xs font-normal text-muted-foreground">{r.customers?.phone}</span></p>
         </div>
-        <div className="grid grid-cols-1 gap-4 text-xs sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Customer</span>
-            <p className="truncate text-sm font-semibold">{r.customers?.full_name}</p>
-            <p className="font-mono text-emerald">{r.customers?.phone}</p>
-          </div>
-          <div className="rounded-lg border border-border p-2">
-            <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gold"><Calendar className="h-3 w-3" /> Pickup / give date</span>
-            <p className="font-mono text-sm font-semibold text-gold">{fmtDate(r.start_at, tz)} <span className="text-xs font-normal">{fmtTime(r.start_at, tz)}</span></p>
-            <p className="text-[10px] text-muted-foreground">Return: {fmtDate(r.end_at, tz)} {fmtTime(r.end_at, tz)}</p>
-          </div>
-          <div>
-            <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Schedule</span>
-            {trendz ? <>
-              <p className="font-mono text-muted-foreground">Buffer: <strong className="text-foreground">{buffer} day(s)</strong></p>
-              <p className="font-mono text-muted-foreground">Available: <strong className="text-emerald">{r.free_at ? fmtDate(r.free_at, tz) : "-"}</strong></p>
-            </> : <>
-              <p className="font-mono text-muted-foreground">Duration: <strong className="text-foreground">{plural(nDays, "day")}</strong></p>
-              <p className="text-muted-foreground">{(r.rental_lines ?? []).map((l) => (l.qty > 1 ? `${l.qty} × ` : "") + l.description).join(", ")}</p>
-            </>}
-          </div>
-          {canManage ? (
-            <div className="sm:text-right">
-              <span className={cn("block text-[10px] font-semibold uppercase tracking-wider", cancelled ? "text-rust" : "text-muted-foreground")}>{cancelled ? "Cancelled" : "Payment summary"}</span>
-              <p className={cn("font-mono text-sm font-semibold", cancelled ? "text-muted-foreground" : "text-emerald")}>{rupees(r.total)}</p>
-              <p className="font-mono text-[11px] text-muted-foreground">Paid: <strong className="text-emerald">{rupees(r.paid)}</strong> · Rem: <strong className="text-gold">{rupees(cancelled ? 0 : due)}</strong></p>
-              <p className="font-mono text-[10px] text-muted-foreground">Dep: {rupees(r.deposit_received ?? 0)}</p>
-            </div>
-          ) : null}
-          <div className="border-t border-border/50 pt-2 sm:col-span-2 lg:col-span-4">
-            <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Assigned pieces</span>
-            <div className="mt-1 flex flex-col gap-1">
-              {trendz && r.rental_lines?.length
-                ? <p className="text-muted-foreground"><span className="font-semibold text-foreground">{(r.rental_lines ?? []).map((l) => (l.qty > 1 ? `${l.qty} × ` : "") + l.description).join(", ")}</span></p> : null}
-              <p className="font-mono text-emerald">{r.pieces?.length ? r.pieces.join(", ") : "No pieces kept"}</p>
-            </div>
-          </div>
+        <div className="min-w-0 text-xs">
+          <p className="font-mono text-sm text-foreground">{dmy(r.start_at)} <span className="text-muted-foreground">→</span> {dmy(r.end_at)} <span className="text-xs text-muted-foreground">· {plural(nDays, "day")}</span></p>
+          <p className="truncate text-muted-foreground">
+            {items || "No items"}{r.pieces?.length ? <span className="font-mono text-emerald"> · {r.pieces.join(", ")}</span> : null}
+            {activeBranches.length > 1 ? <span> · {branchName(r.branch_id)}</span> : null}
+          </p>
         </div>
+        {canManage ? (
+          <div className="flex items-baseline justify-between gap-3 sm:block sm:text-right">
+            <p className={cn("font-mono text-sm font-semibold", cancelled ? "text-muted-foreground" : due > 0 ? "text-amber" : "text-emerald")}>
+              {cancelled ? "Cancelled" : due > 0 ? `Due ${rupees(due)}` : "Paid"}
+            </p>
+            <p className="font-mono text-[11px] text-muted-foreground">Total {rupees(r.total)}</p>
+          </div>
+        ) : null}
       </Link>
+    );
+  };
+
+  const panel = (r: Row) => {
+    const due = Math.max(0, Number(r.total) - Number(r.paid));
+    const pcs = (r.rental_lines ?? []).reduce((n, l) => n + l.qty, 0);
+    const line = (k: string, v: string, tone = "") => <div className="flex items-baseline justify-between gap-3 py-2"><span className="text-sm text-muted-foreground">{k}</span><span className={cn("font-mono text-sm font-semibold", tone)}>{v}</span></div>;
+    return (
+      <aside className="glass sticky top-6 hidden self-start p-5 min-[1440px]:block" aria-label="Booking summary">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-mono text-sm font-semibold text-gold">{r.token}</p>
+            <h2 className="mt-1 truncate font-display text-xl font-bold">{r.customers?.full_name}</h2>
+            <p className="font-mono text-xs text-muted-foreground">{r.customers?.phone}</p>
+          </div>
+          <button type="button" aria-label="Close summary" onClick={() => setSel(null)} className="rounded-full p-1.5 hover:bg-accent"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="mt-3"><RentalStatusBadge rental={r} /></div>
+        <div className="mt-4 rounded-xl bg-accent/60 p-3 text-sm">
+          <p className="font-mono">{dmy(r.start_at)} <span className="text-muted-foreground">→</span> {dmy(r.end_at)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{plural(pcs, "piece")}{activeBranches.length > 1 ? ` · ${branchName(r.branch_id)}` : ""}</p>
+        </div>
+        <ul className="mt-3 space-y-1 text-sm">
+          {(r.rental_lines ?? []).map((l, i) => <li key={i} className="flex justify-between gap-3"><span className="truncate">{l.description}</span><span className="font-mono text-muted-foreground">× {l.qty}</span></li>)}
+        </ul>
+        {r.pieces?.length ? <p className="mt-2 font-mono text-xs text-emerald">{r.pieces.join(", ")}</p> : null}
+        {canManage ? (
+          <div className="mt-4 divide-y divide-border border-t border-border">
+            {line("Total", rupees(r.total))}
+            {line("Paid", rupees(r.paid))}
+            {line("Balance", due > 0 ? rupees(due) : "Paid", due > 0 ? "text-amber" : "text-emerald")}
+          </div>
+        ) : null}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {r.status === "reserved" ? <Link href={`/rentals/${r.id}?handover=1`} className={goldButtonClass}>Hand over</Link> : null}
+          {r.status === "active" ? <Link href={`/rentals/${r.id}?receive=1`} className={goldButtonClass}>Return</Link> : null}
+          <Link href={`/rentals/${r.id}`} className={cn(ghostButtonClass, "py-2")}>Open booking</Link>
+        </div>
+      </aside>
     );
   };
 
@@ -177,7 +199,7 @@ export default function Bookings() {
         subtitle={rows ? `${total}${more ? "+" : ""} booking${total === 1 ? "" : "s"} found · ${status === "completed" || status === "cancelled" ? "newest first" : "sorted by upcoming pickup date"}` : "Loading..."}
         actions={<Link href="/scan" className={goldButtonClass}>New rental</Link>} />
 
-      <div className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="glass mb-4 grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="relative lg:col-span-2">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input className={cn(inputClass, "pl-9")} placeholder="Search customer, phone, token, SKU..." aria-label="Search bookings" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -208,16 +230,19 @@ export default function Bookings() {
         ) : null}
       </div>
 
-      {rows === null ? <p className="py-10 text-center text-sm text-muted-foreground">Loading...</p> : rows.length === 0 ? (
+      {rows === null ? <ListSkeleton /> : rows.length === 0 ? (
         <div className="rounded-xl border border-border p-12 text-center">
           <Calendar className="mx-auto h-10 w-10 text-muted-foreground opacity-50" />
           <h3 className="mt-2 text-lg font-semibold">{status === "all" && doneCount > 0 ? "No active bookings" : "No bookings found"}</h3>
           <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{term || day !== "all" ? "No bookings match the search and filters." : status === "all" && doneCount > 0 ? "There are no current bookings matching your criteria." : "No bookings here yet."}</p>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {rows.map(card)}
-          {more ? <button className={cn(ghostButtonClass, "mx-auto")} onClick={() => void load(rows.length)}>Show more</button> : null}
+        <div className={cn("grid gap-4", sel && "min-[1440px]:grid-cols-[minmax(0,1fr)_22rem]")}>
+          <div className="grid content-start gap-4">
+            {rows.map(card)}
+            {more ? <button className={cn(ghostButtonClass, "mx-auto")} onClick={() => void load(rows.length)}>Show more</button> : null}
+          </div>
+          {sel ? panel(sel) : null}
         </div>
       )}
 

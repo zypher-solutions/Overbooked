@@ -20,7 +20,7 @@ import { BalanceBadge, Panel, RentalStatusBadge, StatusBadge, SummaryCard, ghost
 
 // Finance, as in TRENDZ: what was earned, what came in, what is still owed and the deposits held,
 // a daily close per payment method that matches the cash drawer, the same per branch, and below them
-// the Ledger Records (every booking and rental in the filters, with Export PDF and Records CSV).
+// the Ledger Records (every booking and rental in the filters, with Export PDF).
 // Every figure is summed from the payment records and the rentals, so it always matches them.
 type PayRow = Pick<Payment, "id" | "rental_id" | "kind" | "amount" | "method" | "paid_at" | "note"> & {
   rentals: { token: string; branch_id: string; customers: { full_name: string } | null } | null;
@@ -208,14 +208,6 @@ export default function Finance() {
     }));
     download(Papa.unparse(list, { escapeFormulae: true }), `ledger-${from || "start"}-to-${to}.csv`);
   };
-  const exportRecordsCsv = () => {
-    const list = rows.map((r) => ({
-      token: r.token, type: r.status === "reserved" ? "Booking" : "Rental", customer: r.customers?.full_name ?? "", phone: r.customers?.phone ?? "",
-      branch: branchName(r.branch_id), start: fmtDate(r.start_at, tz), due: fmtDate(r.end_at, tz), status: STATUS_LABELS[r.status] ?? r.status,
-      total: r.status === "cancelled" || r.status === "no_show" ? Number(r.cancellation_fee) : Number(r.total), paid: Number(r.paid), balance: balanceOf(r),
-    }));
-    download(Papa.unparse(list, { escapeFormulae: true }), `records-${from || "start"}-to-${to}.csv`);
-  };
   const exportPdf = async () => {
     setPdfBusy(true);
     try {
@@ -258,7 +250,7 @@ export default function Finance() {
     </div>
   );
   const totalCell = (r: LedgerRow) => (r.status === "cancelled" || r.status === "no_show" ? (
-    <div><span>{rupees(r.cancellation_fee)}</span><span className="block text-[10px] text-muted-foreground line-through">Orig: {rupees(r.total)}</span></div>
+    <span><span>{rupees(r.cancellation_fee)}</span><span className="block text-[10px] text-muted-foreground line-through">Orig: {rupees(r.total)}</span></span>
   ) : rupees(r.total));
 
   return (
@@ -376,7 +368,6 @@ export default function Finance() {
           <button type="button" className={ghostButtonClass} disabled={pdfBusy || ledger === null} onClick={() => void exportPdf()}>
             <Download className={cn("h-4 w-4", pdfBusy && "animate-spin")} /> {pdfBusy ? "Generating…" : "Export PDF"}
           </button>
-          <button type="button" className={ghostButtonClass} disabled={ledger === null} onClick={exportRecordsCsv}><Download className="h-4 w-4" /> Records CSV</button>
         </div>
       </div>
 

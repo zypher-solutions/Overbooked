@@ -24,6 +24,11 @@ const rent = async (page: Page, product: RegExp) => {
   await page.getByRole("button", { name: /to cart$/, disabled: false }).first().click();
   await page.goto("/book");
 };
+// open a booking from the Bookings list by the customer's name
+const openBooking = async (page: Page, customer: string) => {
+  await page.getByRole("link", { name: new RegExp(customer) }).first().click();
+  await expect(page).toHaveURL(/\/rentals\//);
+};
 const farDay = () => new Date(Date.now() + (60 + Math.floor(Math.random() * 300)) * 86_400_000).toISOString().slice(0, 10);
 const num = (t: string | null) => Number((t ?? "").replace(/[^0-9.]/g, ""));
 
@@ -34,17 +39,17 @@ test("bridal: a lost piece is charged, a return that leaves money unpaid asks fi
   await setDates(page, today, new Date(Date.parse(today) + 86_400_000).toISOString().slice(0, 10));
   await field(page, "Phone").fill("96" + String(Date.now()).slice(-8));
   await field(page, "Name").fill("Lost Piece Bride");
-  await field(page, "Deposit agreed").fill("2000");
+  await field(page, "Security Deposit").fill("2000");
+  await page.getByLabel("Deposit payment method").selectOption("cash");
   await field(page, "Advance").fill("1000");
   await page.getByLabel("Advance payment method").selectOption("cash");
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
-  await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
-  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
+  await openBooking(page, "Lost Piece Bride");
 
-  // hand over, taking the deposit
+  // hand over (the deposit was taken with the booking)
   await page.getByRole("button", { name: "Hand over" }).click();
   const pickup = page.getByRole("dialog");
-  await field(pickup, "Deposit now").fill("2000");
   // the balance and the deposit each ask how the money was paid
   const cash = pickup.getByRole("radio", { name: "Cash" });
   for (let i = (await cash.count()) - 1; i >= 0; i--) await cash.nth(i).click();
@@ -67,7 +72,7 @@ test("bridal: a lost piece is charged, a return that leaves money unpaid asks fi
   expect(asked).toMatch(/will stay unpaid/);
 
   // the rental page and Finance agree: the balance is owed
-  await expect(page.getByText(/Balance due/).first()).toBeVisible();
+  await expect(page.getByText(/Remaining amount|is still owed/).first()).toBeVisible();
   await page.goto("/finance");
   await expect(page.getByText(/^Outstanding now$/i)).toBeVisible();
   await expect(page.getByText(/owed on [1-9]\d* rentals?/)).toBeVisible({ timeout: 15_000 }); // the figures have loaded
@@ -87,16 +92,16 @@ test("bridal: Cancel offers a no-show once the pickup date has passed, and refun
   await field(page, "Advance").fill("800");
   await page.getByLabel("Advance payment method").selectOption("cash");
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
-  await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
-  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
+  await openBooking(page, "Cancelling Bride");
 
-  await page.getByRole("button", { name: "More actions" }).click();
-  await page.getByRole("menuitem", { name: /Cancel booking/ }).click();
+  await page.getByRole("button", { name: "Cancel booking" }).click();
   const dlg = page.getByRole("dialog");
-  await expect(dlg.getByText("Refund")).toBeVisible();
-  await field(dlg, "Cancellation fee kept").fill("200");
+  await expect(dlg.getByText("Total Refund Outflow")).toBeVisible();
+  await dlg.getByLabel(/Retained Cancellation Fee/).fill("200");
   await expect(dlg.getByText("₹600").first()).toBeVisible(); // 800 paid less the 200 fee
   await dlg.getByRole("radio", { name: "Cash" }).first().click();
-  await dlg.getByRole("button", { name: "Cancel booking" }).last().click();
+  await dlg.getByLabel(/Cancellation Reason/).fill("Customer asked to cancel");
+  await dlg.getByRole("button", { name: /Confirm Cancellation/ }).click();
   await expect(page.getByText("Cancelled", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
 });

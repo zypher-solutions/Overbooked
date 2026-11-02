@@ -27,6 +27,11 @@ const rent = async (page: Page, product: RegExp) => {
   await page.getByRole("button", { name: /to cart$/, disabled: false }).first().click();
   await page.goto("/book");
 };
+// open a booking from the Bookings list by the customer's name
+const openBooking = async (page: Page, customer: string) => {
+  await page.getByRole("link", { name: new RegExp(customer) }).first().click();
+  await expect(page).toHaveURL(/\/rentals\//);
+};
 
 test("a bridal owner gets the TRENDZ menu", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
@@ -167,8 +172,8 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   await page.getByLabel("Advance payment method").selectOption("cash");
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
 
-  await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
-  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).first().click(); // the WhatsApp confirmation
+  await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
+  await openBooking(page, "Playwright Bride");
   await expect(page.getByText("Booked", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Hand over" }).click();
@@ -217,8 +222,8 @@ test("bridal: customer and payment open only when every item is free; the piece 
   await field(page, "Phone").fill("98" + String(Date.now()).slice(-8));
   await field(page, "Name").fill("Playwright Cleaning");
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
-  await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
-  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
+  await openBooking(page, "Playwright Cleaning");
   await expect(page.getByText("BR-001-M-1").first()).toBeVisible(); // the piece that was chosen
 });
 
@@ -237,8 +242,8 @@ test("bridal: scan a tag into the cart, check out, hand over, then scan it back 
   await field(page, "Phone").fill("97" + String(Date.now()).slice(-8));
   await field(page, "Name").fill("Scanned Bride");
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
-  await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
-  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
+  await openBooking(page, "Scanned Bride");
   await expect(page.getByText("BR-002-GOLD-2").first()).toBeVisible(); // the exact piece that was scanned
 
   await page.getByRole("button", { name: "Hand over" }).click();
@@ -247,9 +252,8 @@ test("bridal: scan a tag into the cart, check out, hand over, then scan it back 
   await pickup.getByRole("button", { name: "Hand over" }).click();
   await expect(page.getByText("Out", { exact: true })).toBeVisible();
 
-  // the customer brings it back: scan the tag on "Receive back"
+  // the customer brings it back: scanning a piece that is out opens its return (there is no separate mode)
   await page.goto("/scan");
-  await page.getByRole("tab", { name: "Receive back" }).click();
   await page.getByLabel("Scan or type").fill("BR-002-GOLD-2");
   await page.getByLabel("Scan or type").press("Enter");
   const ret = page.getByRole("dialog");
@@ -298,4 +302,36 @@ test("Zypher never enters a shop's screens, and a support login sees only its ow
   await expect(nav2.getByRole("link", { name: "Branch Management", exact: true })).toHaveCount(0);
   await page.goto("/zypher");
   await expect(page).not.toHaveURL(/\/zypher$/);
+});
+
+test("bridal: Edit changes a booking and takes a payment in the same card; the money card has no Received row", async ({ page }) => {
+  await signIn(page, "owner@bridal.test");
+  await rent(page, /Kanjivaram silk saree/);
+  const day = farDay();
+  await setDates(page, day, new Date(Date.parse(day) + 2 * 86_400_000).toISOString().slice(0, 10));
+  await field(page, "Phone").fill("97" + String(Date.now()).slice(-8));
+  await field(page, "Name").fill("Edit Card Bride");
+  await field(page, "Security Deposit").fill("500");
+  await page.getByLabel("Deposit payment method").selectOption("cash");
+  await page.getByRole("button", { name: /^Confirm Booking/ }).click();
+  await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
+  await openBooking(page, "Edit Card Bride");
+
+  // the payment summary shows the deposit once, with how much is held now, and no "Received" row
+  await expect(page.getByText("Security deposit", { exact: true })).toBeVisible();
+  await expect(page.getByText(/held now/).first()).toBeVisible();
+  await expect(page.getByText("Received", { exact: true })).toHaveCount(0);
+  // the four actions are on the page, not behind a menu
+  for (const name of ["Edit", "WhatsApp the customer", "Print", "Cancel booking"]) await expect(page.getByRole("button", { name }).or(page.getByRole("link", { name }))).toBeVisible();
+
+  // Edit opens the booking card: take a payment and add a note there
+  await page.getByRole("button", { name: "Edit" }).click();
+  await expect(page).toHaveURL(/\/book\?edit=/);
+  await field(page, "Take a payment now").fill("700");
+  await page.getByLabel("Payment method").selectOption("upi");
+  await page.locator("textarea").fill("changed from the edit card");
+  await page.getByRole("button", { name: "Save change" }).click();
+  await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
+  await expect(page.getByText("changed from the edit card")).toBeVisible();
+  await expect(page.getByText(/^Payment recorded|Part paid/).first()).toBeVisible();
 });
