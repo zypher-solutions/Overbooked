@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { fmtDate } from "@/lib/shop/format";
 import type { Customer } from "@/lib/shop/types";
 import { Field, inputClass } from "./ui";
+import { emailError, personNameError, phoneError } from "@/lib/validate";
 
 export interface NewCustomer {
   full_name: string;
@@ -36,6 +37,9 @@ export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicenc
   needsLicence: boolean;
 }) {
   const [matches, setMatches] = useState<Customer[]>([]);
+  // a message shows under a field once the person has left it
+  const [seen, setSeen] = useState<Record<string, boolean>>({});
+  const see = (k: string) => setSeen((s) => ({ ...s, [k]: true }));
   const term = (draft.phone.length >= 4 ? draft.phone : draft.full_name).trim().replace(/[%_,()*]/g, "");
 
   useEffect(() => {
@@ -91,8 +95,12 @@ export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicenc
   return (
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Phone"><input className={inputClass} inputMode="tel" autoComplete="off" value={draft.phone} onChange={(e) => set({ phone: e.target.value })} /></Field>
-        <Field label="Name"><input className={inputClass} autoComplete="off" value={draft.full_name} onChange={(e) => set({ full_name: e.target.value })} /></Field>
+        <Field label="Phone" error={seen.phone ? phoneError(draft.phone, true) ?? undefined : undefined}>
+          <input className={inputClass} inputMode="tel" autoComplete="off" maxLength={16} value={draft.phone} onBlur={() => see("phone")} onChange={(e) => set({ phone: e.target.value })} />
+        </Field>
+        <Field label="Name" error={seen.name ? personNameError(draft.full_name, "customer's name") ?? undefined : undefined}>
+          <input className={inputClass} autoComplete="off" maxLength={60} value={draft.full_name} onBlur={() => see("name")} onChange={(e) => set({ full_name: e.target.value })} />
+        </Field>
       </div>
       {matches.length ? (
         <div className="rounded-lg border border-border">
@@ -125,7 +133,9 @@ export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicenc
               <Field label="Licence valid until"><DateInput value={draft.licence_expiry} onChange={(v) => set({ licence_expiry: v })} /></Field>
             </>
           ) : null}
-          <Field label="Email"><input type="email" className={inputClass} value={draft.email} onChange={(e) => set({ email: e.target.value })} /></Field>
+          <Field label="Email" error={seen.email ? emailError(draft.email, false) ?? undefined : undefined}>
+            <input className={inputClass} inputMode="email" autoCapitalize="none" maxLength={254} value={draft.email} onBlur={() => see("email")} onChange={(e) => set({ email: e.target.value })} />
+          </Field>
           <Field label="Address"><input className={inputClass} value={draft.address} onChange={(e) => set({ address: e.target.value })} /></Field>
         </div>
       </details>

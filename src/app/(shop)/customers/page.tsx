@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { errorText, fmtDate } from "@/lib/shop/format";
 import type { Customer } from "@/lib/shop/types";
-import { CustomerForm, customerPayload } from "@/components/shop/CustomerForm";
+import { CustomerForm, customerPayload, customerProblem } from "@/components/shop/CustomerForm";
 import { emptyCustomer } from "@/components/shop/CustomerPicker";
 import { Modal, PageHeader, StatusBadge, ghostButtonClass, goldButtonClass, inputClass, linkClass, tableWrap, theadClass } from "@/components/shop/ui";
 
@@ -43,7 +43,7 @@ export default function Customers() {
   }, [fetchPage]);
 
   const create = async () => {
-    if (!draft.full_name.trim() || !draft.phone.trim()) return toast.error("Enter a name and phone.");
+    { const bad = customerProblem(draft); if (bad) return toast.error(bad); }
     setBusy(true);
     const { data, error } = await createClient().from("customers").insert({ shop_id: shop.id, ...customerPayload(draft) }).select("id").single();
     setBusy(false);

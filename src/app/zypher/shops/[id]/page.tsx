@@ -1,5 +1,6 @@
 "use client";
 
+import { addressError, amountError, businessNameError, emailError, normalizeEmail, normalizePhone, phoneError } from "@/lib/validate";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -96,10 +97,11 @@ export default function ShopDetail() {
   const otherTypes = templates.filter((t) => !s.business_types.includes(t.key));
 
   const saveDetails = () => {
-    if (!edit.name.trim()) return toast.error("The shop needs a name.");
-    if (!(Number(edit.monthlyFee) >= 0)) return toast.error("The monthly fee cannot be negative.");
-    void update({ name: edit.name, plan: edit.plan, monthly_fee: Number(edit.monthlyFee), phone: edit.phone, email: edit.email,
-                  address: edit.address, notes: edit.notes }, "Shop saved");
+    const bad = businessNameError(edit.name, "shop name") ?? amountError(edit.monthlyFee, { max: 1_000_000 }) ?? phoneError(edit.phone)
+      ?? emailError(edit.email, false) ?? addressError(edit.address);
+    if (bad) return toast.error(bad);
+    void update({ name: edit.name.trim().replace(/\s+/g, " "), plan: edit.plan, monthly_fee: Number(edit.monthlyFee || 0), phone: normalizePhone(edit.phone),
+                  email: normalizeEmail(edit.email), address: edit.address.trim(), notes: edit.notes }, "Shop saved");
   };
 
   // the whole features object is sent: settings are merged one level deep

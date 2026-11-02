@@ -271,7 +271,7 @@ test("bridal: Add New Product makes every size and colour with its pieces", asyn
   await stock.nth(1).fill("1");
   await page.getByRole("button", { name: "Save product" }).first().click();
   await expect(page.getByText("Saved, with 3 new pieces")).toBeVisible({ timeout: 15_000 });
-  await expect(page).toHaveURL(/\/catalog\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/catalog$/); // back to All Products
 });
 
 test("Zypher never enters a shop's screens, and a support login sees only its own shop", async ({ page, context }) => {

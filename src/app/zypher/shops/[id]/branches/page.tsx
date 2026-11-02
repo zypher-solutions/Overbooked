@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { addressError, businessNameError, emailError, normalizeEmail, normalizePhone, phoneError } from "@/lib/validate";
 import { Field, StatusBadge, goldButtonClass, ghostButtonClass, inputClass } from "@/components/overbooked/primitives";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -53,8 +54,9 @@ export default function ShopBranches() {
   const save = async () => {
     if (!edit) return;
     const f = edit.form;
-    if (!f.name.trim()) return toast.error("The branch needs a name.");
-    const p = { name: f.name, phone: f.phone, email: f.email, address: f.address };
+    const bad = businessNameError(f.name, "branch name", 40) ?? phoneError(f.phone) ?? emailError(f.email, false) ?? addressError(f.address);
+    if (bad) return toast.error(bad);
+    const p = { name: f.name.trim().replace(/\s+/g, " "), phone: normalizePhone(f.phone), email: normalizeEmail(f.email), address: f.address.trim() };
     const done = await run(createClient().rpc("setup_save_branch", { p_shop_id: id, p_branch_id: edit.branch?.id ?? null, p }),
       edit.branch ? "Branch saved" : "Branch added");
     if (done) setEdit(null);

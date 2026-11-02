@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Link2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { emailError, normalizeEmail, personNameError } from "@/lib/validate";
 import { inviteStaff, newInviteLink } from "@/app/actions/staff";
 import { StatusBadge, goldButtonClass, inputClass } from "@/components/overbooked/primitives";
 import {
@@ -54,9 +55,11 @@ export default function ShopStaff() {
 
   const sendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
+    const bad = emailError(invite.email) ?? personNameError(invite.fullName, "person's name");
+    if (bad) return void toast.error(bad);
     setInviting(true);
     try {
-      const { link } = await inviteStaff({ shopId: id, email: invite.email, fullName: invite.fullName, role: invite.role, branchId: invite.branchId || null });
+      const { link } = await inviteStaff({ shopId: id, email: normalizeEmail(invite.email), fullName: invite.fullName.trim().replace(/\s+/g, " "), role: invite.role, branchId: invite.branchId || null });
       setShare({ name: invite.fullName, link });
       setInvite({ email: "", fullName: "", role: "staff", branchId: "" });
       await load();

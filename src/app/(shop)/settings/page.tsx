@@ -1,5 +1,6 @@
 "use client";
 
+import { addressError, emailError, gstinError, normalizeEmail, normalizePhone, phoneError } from "@/lib/validate";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useShop } from "@/lib/shop/ShopContext";
@@ -31,11 +32,13 @@ export default function Settings() {
     if (!Number.isInteger(grace) || grace < 0 || grace > 1440) return toast.error("Grace time is whole minutes, 0 to 1440.");
     const gst = Number(f.gst_percent || 0);
     if (!(gst >= 0 && gst <= 28)) return toast.error("GST is a percentage from 0 to 28.");
+    const bad = phoneError(f.phone) ?? emailError(f.email, false) ?? addressError(f.address) ?? gstinError(f.gstin);
+    if (bad) return toast.error(bad);
     setBusy(true);
     try {
       await call("update_my_shop", {
         p: {
-          phone: f.phone.trim(), email: f.email.trim(), address: f.address.trim(), gstin: f.gstin.trim().toUpperCase(),
+          phone: normalizePhone(f.phone), email: normalizeEmail(f.email), address: f.address.trim(), gstin: f.gstin.trim().toUpperCase(),
           settings: { grace_minutes: grace, check_in_time: f.check_in_time, check_out_time: f.check_out_time, require_licence: f.require_licence,
             gst_percent: gst, receipt_note: f.receipt_note.trim(), sac_code: f.sac_code.trim() },
         },

@@ -15,6 +15,8 @@ import {
 } from "@/lib/shop/format";
 import type { Customer, Method, Product, Quote, Template, Variation } from "@/lib/shop/types";
 import { CustomerPicker, emptyCustomer, type NewCustomer } from "@/components/shop/CustomerPicker";
+import { customerProblem } from "@/components/shop/CustomerForm";
+import { normalizeEmail, normalizePhone } from "@/lib/validate";
 import { DateInput, isoToDisplay } from "@/components/shop/DateInput";
 import {
   Field, MethodPicker, Modal, MoneyRows, PageHeader, Panel, StatusBadge, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass,
@@ -340,7 +342,7 @@ function NewBooking() {
         if (!free.some((p) => p.unit_id === id)) return toast.error(`The piece chosen for ${label} (piece ${i + 1}) is no longer free. Choose another.`);
       }
     }
-    if (!customer && (!d.customer.full_name.trim() || !d.customer.phone.trim())) return toast.error("Enter the customer's name and phone.");
+    if (!customer) { const bad = customerProblem(d.customer); if (bad) return toast.error(bad); }
     if (num(d.advance) > 0 && !d.advanceMethod) return toast.error("Choose how the advance was paid.");
     if (num(d.deposit) > 0 && !d.depositMethod) return toast.error("Choose how the deposit was paid.");
     setBusy(true);
@@ -367,7 +369,10 @@ function NewBooking() {
       const res = await call<{ rental_id: string; token: string }>("create_rental", {
         p: {
           ...quoteInput,
-          customer: customer ? { id: customer.id } : Object.fromEntries(Object.entries(d.customer).map(([k, v]) => [k, v.trim()])),
+          customer: customer ? { id: customer.id } : {
+            ...Object.fromEntries(Object.entries(d.customer).map(([k, v]) => [k, v.trim()])),
+            full_name: d.customer.full_name.trim().replace(/\s+/g, " "), phone: normalizePhone(d.customer.phone), email: normalizeEmail(d.customer.email),
+          },
           discount: num(d.discount),
           deposit_agreed: num(d.depositAgreed),
           notes: d.notes,

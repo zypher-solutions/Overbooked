@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { createShopWithOwner } from "@/app/actions/zypher";
 import { cn } from "@/lib/utils";
+import { addressError, amountError, businessNameError, emailError, normalizeEmail, normalizePhone, personNameError, phoneError, prefixError, slugError } from "@/lib/validate";
 import { Field, goldButtonClass, ghostButtonClass, inputClass, monoInputClass } from "@/components/overbooked/primitives";
 import { FEATURE_LABELS, PLANS, PageHeader, Panel, fmtInterval, rupees, type Plan, type Template } from "@/components/zypher/kit";
 
@@ -46,31 +47,42 @@ export default function NewShop() {
   const toggleType = (key: string) =>
     set({ businessTypes: form.businessTypes.includes(key) ? form.businessTypes.filter((k) => k !== key) : [...form.businessTypes, key] });
 
-  const problems: string[][] = [
-    form.businessTypes.length ? [] : ["Choose at least one business type."],
-    [
-      ...(form.name.trim() ? [] : ["Enter the shop name."]),
-      ...(/^[a-z0-9]+(-[a-z0-9]+)*$/.test(form.slug) ? [] : ["The web name can use small letters, numbers and dashes."]),
-      ...(/^[A-Z]{2,6}$/.test(form.tokenPrefix) ? [] : ["The booking prefix needs 2 to 6 capital letters."]),
-      ...(form.monthlyFee === "" || Number(form.monthlyFee) >= 0 ? [] : ["The monthly fee cannot be negative."]),
-    ],
-    [
-      ...(form.branchName.trim() ? [] : ["Name the first branch."]),
-      ...(form.ownerName.trim() ? [] : ["Enter the owner's name."]),
-      ...(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.ownerEmail.trim()) ? [] : ["Enter the owner's email."]),
-    ],
-    [],
-  ];
+  // what is wrong with each field; shown under the field once the person has left it or pressed Next
+  const errs: Record<string, string | null> = {
+    name: businessNameError(form.name, "shop name"),
+    slug: slugError(form.slug),
+    tokenPrefix: prefixError(form.tokenPrefix),
+    monthlyFee: amountError(form.monthlyFee, { max: 1_000_000 }),
+    phone: phoneError(form.phone),
+    email: emailError(form.email, false),
+    address: addressError(form.address),
+    branchName: businessNameError(form.branchName, "branch name", 40),
+    ownerName: personNameError(form.ownerName, "owner's name"),
+    ownerEmail: emailError(form.ownerEmail),
+  };
+  const STEP_FIELDS: string[][] = [[], ["name", "slug", "tokenPrefix", "monthlyFee", "phone", "email", "address"], ["branchName", "ownerName", "ownerEmail"], []];
+  const [shown, setShown] = useState<Record<string, boolean>>({});
+  const err = (k: string) => (shown[k] ? errs[k] ?? undefined : undefined);
+  const leave = (k: string) => setShown((s) => ({ ...s, [k]: true }));
 
   const next = () => {
-    if (problems[step].length) return toast.error(problems[step][0]);
+    if (step === 0 && !form.businessTypes.length) return toast.error("Choose at least one business type.");
+    const bad = STEP_FIELDS[step].filter((k) => errs[k]);
+    if (bad.length) {
+      setShown((s) => ({ ...s, ...Object.fromEntries(STEP_FIELDS[step].map((k) => [k, true])) }));
+      return toast.error(errs[bad[0]]!);
+    }
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   };
 
   const create = async () => {
     setBusy(true);
     try {
-      const res = await createShopWithOwner({ ...form, monthlyFee: Number(form.monthlyFee || 0) });
+      const res = await createShopWithOwner({
+        ...form, name: form.name.trim().replace(/\s+/g, " "), branchName: form.branchName.trim().replace(/\s+/g, " "),
+        ownerName: form.ownerName.trim().replace(/\s+/g, " "), phone: normalizePhone(form.phone), email: normalizeEmail(form.email),
+        ownerEmail: normalizeEmail(form.ownerEmail), address: form.address.trim(), monthlyFee: Number(form.monthlyFee || 0),
+      });
       setDone(res);
       toast.success(`${form.name} created`);
     } catch (e: any) {
@@ -164,22 +176,22 @@ export default function NewShop() {
       {step === 1 && (
         <Panel>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Shop name">
-              <input className={inputClass} value={form.name} autoFocus onChange={(e) => {
+            <Field label="Shop name" error={err("name")}>
+              <input className={inputClass} value={form.name} autoFocus maxLength={60} onBlur={() => leave("name")} onChange={(e) => {
                 const name = e.target.value;
                 set({ name, ...(touched.slug ? {} : { slug: slugify(name) }), ...(touched.prefix ? {} : { tokenPrefix: prefixFrom(name) }) });
               }} />
             </Field>
-            <Field label="Web name" hint="Unique; small letters, numbers and dashes">
-              <input className={monoInputClass} value={form.slug}
+            <Field label="Web name" hint="Unique; small letters, numbers and dashes" error={err("slug")}>
+              <input className={monoInputClass} value={form.slug} maxLength={40} onBlur={() => leave("slug")}
                 onChange={(e) => { setTouched({ ...touched, slug: true }); set({ slug: slugify(e.target.value) }); }} />
             </Field>
-            <Field label="Booking prefix" hint={`Bookings will read ${form.tokenPrefix || "ABC"}-${new Date().getFullYear()}-0001`}>
-              <input className={monoInputClass} maxLength={6} value={form.tokenPrefix}
+            <Field label="Booking prefix" hint={`Bookings will read ${form.tokenPrefix || "ABC"}-${new Date().getFullYear()}-0001`} error={err("tokenPrefix")}>
+              <input className={monoInputClass} maxLength={6} value={form.tokenPrefix} onBlur={() => leave("tokenPrefix")}
                 onChange={(e) => { setTouched({ ...touched, prefix: true }); set({ tokenPrefix: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") }); }} />
             </Field>
-            <Field label="Monthly fee (₹)" hint="As agreed with the client">
-              <input className={monoInputClass} inputMode="decimal" value={form.monthlyFee} onChange={(e) => set({ monthlyFee: e.target.value })} />
+            <Field label="Monthly fee (₹)" hint="As agreed with the client" error={err("monthlyFee")}>
+              <input className={monoInputClass} inputMode="decimal" value={form.monthlyFee} onBlur={() => leave("monthlyFee")} onChange={(e) => set({ monthlyFee: e.target.value })} />
             </Field>
             <div className="sm:col-span-2">
               <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Plan</span>
@@ -193,9 +205,9 @@ export default function NewShop() {
                 ))}
               </div>
             </div>
-            <Field label="Shop phone"><input className={inputClass} inputMode="tel" value={form.phone} onChange={(e) => set({ phone: e.target.value })} /></Field>
-            <Field label="Shop email"><input className={inputClass} type="email" value={form.email} onChange={(e) => set({ email: e.target.value })} /></Field>
-            <Field label="Address" className="sm:col-span-2"><input className={inputClass} value={form.address} onChange={(e) => set({ address: e.target.value })} /></Field>
+            <Field label="Shop phone" hint="10-digit mobile number" error={err("phone")}><input className={inputClass} inputMode="tel" maxLength={16} value={form.phone} onBlur={() => leave("phone")} onChange={(e) => set({ phone: e.target.value })} /></Field>
+            <Field label="Shop email" error={err("email")}><input className={inputClass} inputMode="email" autoCapitalize="none" maxLength={254} value={form.email} onBlur={() => { leave("email"); set({ email: normalizeEmail(form.email) }); }} onChange={(e) => set({ email: e.target.value })} /></Field>
+            <Field label="Address" className="sm:col-span-2" error={err("address")}><input className={inputClass} maxLength={220} value={form.address} onBlur={() => leave("address")} onChange={(e) => set({ address: e.target.value })} /></Field>
           </div>
         </Panel>
       )}
@@ -203,12 +215,13 @@ export default function NewShop() {
       {step === 2 && (
         <Panel>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="First branch" hint="More branches can be added later, within the plan" className="sm:col-span-2">
-              <input className={inputClass} value={form.branchName} onChange={(e) => set({ branchName: e.target.value })} />
+            <Field label="First branch" hint="More branches can be added later, within the plan" className="sm:col-span-2" error={err("branchName")}>
+              <input className={inputClass} maxLength={40} value={form.branchName} onBlur={() => leave("branchName")} onChange={(e) => set({ branchName: e.target.value })} />
             </Field>
-            <Field label="Owner name"><input className={inputClass} value={form.ownerName} onChange={(e) => set({ ownerName: e.target.value })} /></Field>
-            <Field label="Owner email" hint="Their login; they get an invite link from you">
-              <input className={inputClass} type="email" value={form.ownerEmail} onChange={(e) => set({ ownerEmail: e.target.value })} />
+            <Field label="Owner name" error={err("ownerName")}><input className={inputClass} maxLength={60} value={form.ownerName} onBlur={() => leave("ownerName")} onChange={(e) => set({ ownerName: e.target.value })} /></Field>
+            <Field label="Owner email" hint="Their login; they get an invite link from you" error={err("ownerEmail")}>
+              <input className={inputClass} inputMode="email" autoCapitalize="none" maxLength={254} value={form.ownerEmail}
+                onBlur={() => { leave("ownerEmail"); set({ ownerEmail: normalizeEmail(form.ownerEmail) }); }} onChange={(e) => set({ ownerEmail: e.target.value })} />
             </Field>
           </div>
         </Panel>

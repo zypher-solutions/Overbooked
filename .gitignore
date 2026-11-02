@@ -60,3 +60,6 @@ prisma/backups/
 # playwright
 test-results/
 playwright-report/
+
+# local Docker settings kept so you can switch back (rename to .env.local)
+.env.local.docker
