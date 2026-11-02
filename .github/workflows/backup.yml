@@ -38,7 +38,7 @@ jobs:
           tar -czf backup.tgz backup
           gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" --symmetric --cipher-algo AES256 -o backup.tgz.gpg backup.tgz
           rm -rf backup backup.tgz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: overbooked-db-backup-${{ github.run_id }}
           path: backup.tgz.gpg
