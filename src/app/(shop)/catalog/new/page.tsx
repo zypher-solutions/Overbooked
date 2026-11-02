@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { useShop } from "@/lib/shop/ShopContext";
 import { ProductEditor } from "@/components/shop/ProductEditor";
-import { ProductWizard } from "@/components/shop/ProductWizard";
+import { ProductWizard } from "@/modules/clothing/components/ProductWizard";
 import { Panel } from "@/components/shop/ui";
 
 export default function NewProductPage() {

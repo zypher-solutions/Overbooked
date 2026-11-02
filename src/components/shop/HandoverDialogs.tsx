@@ -233,6 +233,35 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
   const [refund, setRefund] = useState({ amount: "", method: "" as Method | "" });
   const [touched, setTouched] = useState(false); // money fields edited by hand
   const [busy, setBusy] = useState(false);
+  const [replacement, setReplacement] = useState<Record<string, number>>({}); // product id -> replacement value
+
+  useEffect(() => {
+    if (!open) return;
+    const ids = Array.from(new Set(units.map((u) => u.line?.product_id).filter((x): x is string => !!x)));
+    if (!ids.length) return;
+    void createClient().from("products").select("id, replacement_value").in("id", ids).then(({ data }) => {
+      setReplacement(Object.fromEntries((data ?? []).map((p) => [p.id as string, Number(p.replacement_value)])));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // a piece marked lost gets a "Lost item" charge of its replacement value (staff can change the amount); un-marking removes it
+  useEffect(() => {
+    if (!open) return;
+    setCharges((rows) => {
+      let next = rows;
+      for (const u of units) {
+        const code = u.reservation.units?.code ?? "";
+        const tag = `Lost: ${code}`;
+        const lost = checks[u.reservation.unit_id]?.condition === "lost";
+        const has = next.some((r) => r.type === "lost" && r.note === tag);
+        if (lost && !has) next = [...next, { type: "lost", amount: replacement[u.line?.product_id ?? ""] ? String(replacement[u.line?.product_id ?? ""]) : "", note: tag, suggested: false }];
+        else if (!lost && has) next = next.filter((r) => !(r.type === "lost" && r.note === tag));
+      }
+      return next === rows ? rows : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, checks, replacement]);
 
   useEffect(() => {
     if (!open) return;
@@ -297,6 +326,12 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
     if (num(pay.amount) > 0 && !pay.method) return toast.error("Choose how the payment was made.");
     if (num(refund.amount) > 0 && !refund.method) return toast.error("Choose how the deposit is returned.");
     if (num(kept) + num(refund.amount) > m.depositHeld + 0.001) return toast.error(`Only ${rupees(m.depositHeld)} of deposit is held.`);
+    const unpaid = Math.round((due - num(kept) - num(pay.amount)) * 100) / 100;
+    const stillHeld = Math.round((m.depositHeld - num(kept) - num(refund.amount)) * 100) / 100;
+    if (unpaid > 0.004 || stillHeld > 0.004) {
+      const parts = [unpaid > 0.004 ? `${rupees(unpaid)} will stay unpaid` : "", stillHeld > 0.004 ? `${rupees(stillHeld)} of the deposit will stay held` : ""].filter(Boolean);
+      if (!window.confirm(`${parts.join(" and ")}. Mark ${rental.token} as returned anyway?`)) return;
+    }
     setBusy(true);
     try {
       const payload = await checksPayload(shop.id, rental.id, "return", units, checks);

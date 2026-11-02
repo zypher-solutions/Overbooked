@@ -4,20 +4,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 // Server-only helpers shared by the staff and Zypher server actions.
 
-export type ShopRole = "owner" | "manager" | "staff";
+export type ShopRole = "owner" | "manager" | "staff" | "support";
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Who is calling, in which shop. Never trusts ids sent by the browser.
+// Who is calling. Never trusts ids sent by the browser: the role comes from the database.
 export async function getCaller() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Your session ended, please sign in again.");
-  const [{ data: role }, { data: shopId }] = await Promise.all([
-    supabase.rpc("get_my_role"),
-    supabase.rpc("current_shop_id"),
-  ]);
-  return { supabase, user, role: role as string | null, shopId: shopId as string | null };
+  const { data: role } = await supabase.rpc("get_my_role");
+  return { supabase, user, role: role as string | null };
 }
 
 export async function siteOrigin() {

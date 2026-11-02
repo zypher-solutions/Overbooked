@@ -5,7 +5,7 @@ import { ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useShop } from "@/lib/shop/ShopContext";
-import { useCart } from "@/lib/shop/cart";
+import { useCart } from "@/modules/clothing/cart";
 import { call } from "@/lib/shop/api";
 import { errorText, rupees } from "@/lib/shop/format";
 import { headlinePrice } from "@/lib/shop/useCatalog";

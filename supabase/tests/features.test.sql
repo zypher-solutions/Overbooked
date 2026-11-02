@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(36);
+SELECT plan(35);
 
 \set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
@@ -56,9 +56,7 @@ SELECT lives_ok($$ SELECT public.record_shop_payment('5a000000-0000-0000-0000-00
 SELECT lives_ok($$ SELECT public.update_shop('5a000000-0000-0000-0000-000000000005', '{"status": "active"}') $$, 'and resumes the shop');
 SELECT is((SELECT array[status, paid_until::text, array_to_string(business_types, ',')] FROM platform_overview() WHERE slug = 'munnar-bikes'),
           array['active', (CURRENT_DATE + 30)::text, 'bike'], 'active again, paid until extended, business types kept');
-SELECT lives_ok($$ SELECT public.switch_shop('5a000000-0000-0000-0000-000000000003') $$, 'Zypher opens another shop');
-SELECT is((SELECT array_agg(token) FROM rentals), (SELECT array_agg(token) FROM rentals WHERE token LIKE 'GVR-%'),
-          'Zypher now sees only that shop''s rentals');
+SELECT is((SELECT count(*) FROM rentals), 0::bigint, 'Zypher sees no rentals in any shop');
 
 -- ===========================================================================
 -- Resort: whole property, no-show
@@ -84,9 +82,9 @@ SELECT is(public.cancel_rental((SELECT id FROM rentals WHERE token LIKE 'GVR-%-0
 -- ===========================================================================
 SELECT pg_temp.as_postgres();
 INSERT INTO products (id, shop_id, category_id, name, sku, is_set) VALUES
-  ('d0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Bridal set', 'BR-SET-1', true);
+  ('d0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Bridal set', 'BR-901', true);
 INSERT INTO product_variations (id, shop_id, product_id, name, sku) VALUES
-  ('e0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-0000000000ff', 'Standard', 'BR-SET-1-STD');
+  ('e0000000-0000-0000-0000-0000000000ff', '5a000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-0000000000ff', 'Standard', 'BR-901-STD');
 INSERT INTO variation_rates (shop_id, variation_id, rate_type, amount) VALUES
   ('5a000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-0000000000ff', 'day', 3000);
 INSERT INTO set_items (shop_id, set_product_id, variation_id, qty) VALUES
@@ -97,20 +95,20 @@ SELECT is((pg_temp.book('b0000000-0000-0000-0000-000000000001', 'e0000000-0000-0
              pg_temp.ist(50, '10:00'), pg_temp.ist(51, '10:00')) ->> 'total')::numeric, 3000.00, 'a set is priced as one item');
 SELECT is((SELECT string_agg(u.code, ',' ORDER BY u.code) FROM unit_reservations ur JOIN units u ON u.id = ur.unit_id
            JOIN rentals r ON r.id = ur.rental_id WHERE r.start_at = pg_temp.ist(50, '10:00')),
-          'BR-LEH-001-M-1,BR-SAR-001-GOLD-1', 'a set holds one piece of each of its parts');
+          'BR-001-M-1,BR-002-GOLD-1', 'a set holds one piece of each of its parts');
 
 -- ===========================================================================
 -- Unit swaps and extensions
 -- ===========================================================================
 SELECT throws_like($$ SELECT public.swap_unit((SELECT id FROM rentals WHERE token LIKE 'KAL-%-0001'),
-    (SELECT id FROM units WHERE code = 'BR-LEH-001-M-1'), (SELECT id FROM units WHERE code = 'BR-LEH-001-M-2')) $$,
+    (SELECT id FROM units WHERE code = 'BR-001-M-1'), (SELECT id FROM units WHERE code = 'BR-001-M-2')) $$,
   'Choose an available unit of the same item in the same branch', 'cannot swap to a unit in another branch');
 SELECT pg_temp.act_as(:groom_staff);
 SELECT lives_ok($$ SELECT public.swap_unit((SELECT id FROM rentals WHERE token LIKE 'RAJ-%-0001'),
     (SELECT unit_id FROM unit_reservations WHERE rental_id = (SELECT id FROM rentals WHERE token LIKE 'RAJ-%-0001')),
-    (SELECT id FROM units WHERE code = 'GR-SHW-001-L-2')) $$, 'swap to another piece of the same item');
+    (SELECT id FROM units WHERE code = 'GR-001-L-2')) $$, 'swap to another piece of the same item');
 SELECT is((SELECT u.code FROM unit_reservations ur JOIN units u ON u.id = ur.unit_id
-           WHERE ur.rental_id = (SELECT id FROM rentals WHERE token LIKE 'RAJ-%-0001')), 'GR-SHW-001-L-2', 'the booking now holds the new piece');
+           WHERE ur.rental_id = (SELECT id FROM rentals WHERE token LIKE 'RAJ-%-0001')), 'GR-001-L-2', 'the booking now holds the new piece');
 SELECT lives_ok($$ SELECT pg_temp.book('b0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000022',
                                          pg_temp.ist(20, '10:00'), pg_temp.ist(21, '10:00')) $$, 'suit booked');
 SELECT lives_ok($$ SELECT pg_temp.book('b0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000022',
@@ -152,18 +150,17 @@ SELECT is((public.admin_delete_payment((SELECT p.id FROM payments p JOIN rentals
 -- Staff management, invites, login limit
 -- ===========================================================================
 -- branches and staff are Zypher's job: the shop's own owner is refused
-SELECT throws_like($$ SELECT public.get_staff_emails() $$, 'Your role (owner) cannot do this', 'an owner cannot list the logins');
-SELECT throws_like($$ SELECT public.set_staff_branch('aaaaaaaa-0000-0000-0000-000000000013', 'b0000000-0000-0000-0000-000000000002') $$,
-  'Your role (owner) cannot do this', 'an owner cannot move staff between branches');
+SELECT throws_like($$ SELECT public.setup_people('5a000000-0000-0000-0000-000000000001') $$, 'Only Zypher can do this', 'an owner cannot list the logins');
+SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000013', '{"branch_id":"b0000000-0000-0000-0000-000000000002"}') $$,
+  'Only Zypher can do this', 'an owner cannot move staff between branches');
 SELECT throws_ok($$ INSERT INTO branches (shop_id, name, slug) VALUES ('5a000000-0000-0000-0000-000000000001', 'Third', 'third') $$,
   '42501', NULL, 'an owner cannot add a branch');
--- Zypher opens the shop from the console and does it
+-- Zypher does it from the shop's page in the console, naming the shop
 SELECT pg_temp.act_as(:zypher);
-SELECT public.switch_shop('5a000000-0000-0000-0000-000000000001');
-SELECT is((SELECT count(*) FROM public.get_staff_emails()), 3::bigint, 'Zypher sees the shop''s 3 logins');
-SELECT throws_like($$ SELECT public.admin_set_staff_status('aaaaaaaa-0000-0000-0000-000000000001', false, 'owner') $$,
+SELECT is(jsonb_array_length(public.setup_people('5a000000-0000-0000-0000-000000000001')), 4, 'Zypher sees the shop''s 4 logins (one is the support login)');
+SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', '{"is_active":false}') $$,
   'You cannot change your own role or active status', 'Zypher cannot change their own login');
-SELECT throws_like($$ SELECT public.set_staff_branch('aaaaaaaa-0000-0000-0000-000000000013', 'b0000000-0000-0000-0000-000000000003') $$,
+SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000013', '{"branch_id":"b0000000-0000-0000-0000-000000000003"}') $$,
   'Branch not found in this shop', 'cannot move staff to another shop''s branch');
 SELECT pg_temp.as_postgres();
 INSERT INTO staff_invites (shop_id, email, role, branch_id) VALUES

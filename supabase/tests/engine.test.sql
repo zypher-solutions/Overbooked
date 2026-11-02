@@ -90,7 +90,7 @@ SELECT throws_like($$ SELECT pg_temp.q('b0000000-0000-0000-0000-000000000003', '
   '%end must be after the start%', 'the end must be after the start');
 
 -- ===========================================================================
--- Double booking (the seeded bridal booking holds BR-LEH-001-M-1 from day 7 10:00 to day 9 11:00 + 1 cleaning day)
+-- Double booking (the seeded bridal booking holds BR-001-M-1 from day 7 10:00 to day 9 11:00 + 1 cleaning day)
 -- ===========================================================================
 SELECT pg_temp.act_as(:bridal_staff);
 SELECT throws_like($$ SELECT public.create_rental(jsonb_build_object('branch_id', 'b0000000-0000-0000-0000-000000000001',
@@ -116,7 +116,7 @@ SELECT throws_like($$ SELECT public.create_rental(jsonb_build_object('branch_id'
 SELECT pg_temp.as_postgres();
 SELECT throws_ok($$ INSERT INTO unit_reservations (shop_id, rental_id, line_id, unit_id, period, state)
     SELECT shop_id, rental_id, line_id, unit_id, tstzrange(lower(period) + interval '1 hour', upper(period)), 'held'
-    FROM unit_reservations WHERE unit_id = (SELECT id FROM units WHERE code = 'BR-LEH-001-M-1') LIMIT 1 $$,
+    FROM unit_reservations WHERE unit_id = (SELECT id FROM units WHERE code = 'BR-001-M-1') LIMIT 1 $$,
   '23P01', NULL, 'the database itself refuses an overlapping reservation');
 
 -- ===========================================================================

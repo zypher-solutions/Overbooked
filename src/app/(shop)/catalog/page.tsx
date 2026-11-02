@@ -3,11 +3,13 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Plus, QrCode, Search, Upload } from "lucide-react";
+import { Pencil, Plus, QrCode, Search, Tag, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
+import { call } from "@/lib/shop/api";
+import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { BASIS_LABELS, errorText, num, rupees } from "@/lib/shop/format";
 import { headlinePrice, useCatalog, variationLabel } from "@/lib/shop/useCatalog";
 import type { AddOn, AddOnBasis, Category, Product, Unit } from "@/lib/shop/types";
@@ -25,20 +27,23 @@ function Catalog() {
   const { canManage, word, feature, templates, trendz } = useShop();
   // ?tab=categories: the sidebar's Categories item
   const asked = useSearchParams().get("tab");
+  const [adding, setAdding] = useState(0);
   const [tab, setTab] = useState<Tab>(asked === "categories" || asked === "extras" ? asked : "items");
   useEffect(() => { setTab(asked === "categories" || asked === "extras" ? asked : "items"); }, [asked]);
   return (
     <>
-      <PageHeader title={trendz ? (tab === "categories" ? "Categories" : "All Products") : word("items", "Catalog")}
-        actions={canManage ? <>
-          <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link>
+      <PageHeader title={trendz ? (tab === "categories" ? "Categories" : tab === "extras" ? "Extras" : "All Products") : word("items", "Catalog")}
+        actions={!canManage || tab === "extras" ? null : tab === "categories" ? (
+          <button className={goldButtonClass} onClick={() => setAdding((n) => n + 1)}><Plus className="h-4 w-4" /> Add Category</button>
+        ) : <>
+          {tab === "items" ? <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link> : null}
           <Link href="/catalog/import" className={ghostButtonClass}><Upload className="h-4 w-4" /> Import</Link>
           {feature("sets") && templates.some((t) => t.kind === "wearable") ? (
             <Link href="/catalog/new?set=1" className={ghostButtonClass}><Plus className="h-4 w-4" /> New set</Link>
           ) : null}
           <Link href="/catalog/new" className={goldButtonClass}><Plus className="h-4 w-4" /> Add {word("item").toLowerCase()}</Link>
-        </> : null} />
-      <div className="mb-4 flex gap-1.5" role="tablist">
+        </>} />
+      <div className={cn("mb-4 flex gap-1.5", trendz && "hidden")} role="tablist">
         {([["items", word("items")], ["extras", "Extras"], ["categories", "Categories"]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
             className={cn("rounded-full border px-3 py-1 text-xs", tab === k ? "border-gold/60 bg-gold/10 font-medium" : "border-border text-muted-foreground")}>
@@ -46,17 +51,18 @@ function Catalog() {
           </button>
         ))}
       </div>
-      {tab === "items" ? <Items /> : tab === "extras" ? <Extras /> : <Categories />}
+      {tab === "items" ? <Items /> : tab === "extras" ? <Extras /> : <Categories addSignal={adding} />}
     </>
   );
 }
 
 function Items() {
   const { categories, branches, templateOf, word, trendz } = useShop();
-  const { products } = useCatalog({ includeInactive: true });
+  const { products, reload } = useCatalog({ includeInactive: true });
   const [units, setUnits] = useState<Pick<Unit, "variation_id" | "branch_id" | "status">[]>([]);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
+  const [stockFilter, setStockFilter] = useState<"" | "in" | "out">("");
   const [showInactive, setShowInactive] = useState(false);
 
   useEffect(() => {
@@ -87,7 +93,9 @@ function Items() {
   }, [units]);
 
   const term = q.trim().toLowerCase();
-  const list = (products ?? []).filter((p) => (showInactive || p.is_active) && (!cat || p.category_id === cat)
+  const stockOf = (p: Product) => (p.product_variations ?? []).filter((v) => v.is_enabled).reduce((s, v) => s + (count.get(v.id)?.total ?? 0), 0);
+  const list = (products ?? []).filter((p) => (showInactive || p.is_active || trendz) && (!cat || p.category_id === cat)
+    && (!stockFilter || p.is_set || (stockFilter === "in") === (stockOf(p) > 0))
     && (!term || `${p.name} ${p.sku} ${(p.product_variations ?? []).map((v) => `${v.name} ${v.sku}`).join(" ")}`.toLowerCase().includes(term)));
 
   return (
@@ -103,11 +111,17 @@ function Items() {
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         ) : null}
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /> Show switched-off
-        </label>
+        {trendz ? (
+          <select className={cn(inputClass, "w-auto")} aria-label="Stock status" value={stockFilter} onChange={(e) => setStockFilter(e.target.value as typeof stockFilter)}>
+            <option value="">Filter by stock status</option><option value="in">In stock</option><option value="out">Out of stock</option>
+          </select>
+        ) : (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /> Show switched-off
+          </label>
+        )}
       </div>
-      {trendz ? <ProductTable list={list} units={units} loading={products === null} /> : (
+      {trendz ? <ProductTable list={list} units={units} loading={products === null} reload={reload} /> : (
       <div className={tableWrap}>
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className={theadClass}>
@@ -151,8 +165,30 @@ function Items() {
 }
 
 // All Products, as in TRENDZ: one row per product with its variations, rate, stock and branches
-function ProductTable({ list, units, loading }: { list: Product[]; units: Pick<Unit, "variation_id" | "branch_id" | "status">[]; loading: boolean }) {
-  const { categories, activeBranches, canManage } = useShop();
+function ProductTable({ list, units, loading, reload }: { list: Product[]; units: Pick<Unit, "variation_id" | "branch_id" | "status">[]; loading: boolean; reload: () => Promise<void> }) {
+  const { categories, activeBranches, canManage, isOwner } = useShop();
+  const [deleting, setDeleting] = useState<Product | null>(null);
+  const reactivate = async (p: Product) => {
+    try {
+      await call("reactivate_product", { p_product_id: p.id });
+      toast.success(`${p.name} is active again`);
+      await reload();
+    } catch (e) { toast.error(errorText(e)); }
+  };
+  const remove = async (p: Product) => {
+    try {
+      const res = await call<{ result: string }>("delete_or_deactivate_product", { p_product_id: p.id });
+      toast.success(res.result === "deleted" ? "Deleted" : "Switched off (it has rental history)");
+      await reload();
+    } catch (e) { toast.error(errorText(e)); }
+  };
+  const actions = (p: Product, full = false) => (
+    <span className={cn("flex flex-wrap items-center gap-2", full ? "mt-auto border-t border-border/50 pt-2" : "justify-end")}>
+      <Link href={`/catalog/${p.id}`} className={cn(ghostButtonClass, full && "flex-1")}>{canManage ? "Edit" : "View"}</Link>
+      {canManage && !p.is_active ? <button className={ghostButtonClass} onClick={() => void reactivate(p)}>Reactivate</button> : null}
+      {isOwner ? <button className={dangerIconClass} title="Delete product" aria-label={`Delete ${p.name}`} onClick={() => setDeleting(p)}><Trash2 className="h-4 w-4" /></button> : null}
+    </span>
+  );
   const byVariation = useMemo(() => {
     const m = new Map<string, Map<string, number>>();
     for (const u of units) {
@@ -165,8 +201,15 @@ function ProductTable({ list, units, loading }: { list: Product[]; units: Pick<U
   }, [units]);
   const perBranch = (p: Product, branchId: string) => (p.product_variations ?? []).reduce((s, v) => s + (byVariation.get(v.id)?.get(branchId) ?? 0), 0);
 
+  const rateText = (p: Product) => {
+    const rates = (p.product_variations ?? []).filter((v) => v.is_enabled).map((v) => headlinePrice(v)?.amount).filter((x): x is number => x !== undefined);
+    if (!rates.length) return <span className="text-rust">No price</span>;
+    return Math.min(...rates) === Math.max(...rates) ? rupees(rates[0]) : `${rupees(Math.min(...rates))} – ${rupees(Math.max(...rates))}`;
+  };
+
   return (
-    <div className={tableWrap}>
+    <>
+    <div className={cn(tableWrap, "hidden xl:block")}>
       <table className="w-full min-w-[860px] text-left text-sm">
         <thead className={theadClass}>
           <tr>
@@ -199,15 +242,54 @@ function ProductTable({ list, units, loading }: { list: Product[]; units: Pick<U
                     </span>
                   </td>
                   <td className="px-4 py-2"><StatusBadge tone={p.is_active ? "emerald" : "rust"}>{p.is_active ? "Active" : "Inactive"}</StatusBadge></td>
-                  <td className="px-4 py-2 text-right"><Link href={`/catalog/${p.id}`} className={ghostButtonClass}>{canManage ? "Edit" : "View"}</Link></td>
+                  <td className="px-4 py-2 text-right">{actions(p)}</td>
                 </tr>
               );
             })}
         </tbody>
       </table>
     </div>
+
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:hidden">
+      {loading ? <p className="col-span-full py-6 text-center text-sm text-muted-foreground">Loading...</p>
+        : list.length === 0 ? <div className="col-span-full"><Empty>No products yet. Add one with Add New Product.</Empty></div>
+        : list.map((p) => {
+          const total = activeBranches.reduce((s, b) => s + perBranch(p, b.id), 0);
+          return (
+            <div key={p.id} className="glass flex flex-col rounded-xl p-4">
+              <div className="mb-3 flex gap-4">
+                {p.image_url ? <img src={p.image_url} alt="" className="h-16 w-16 shrink-0 rounded-md border border-border object-cover" /> : <span className="h-16 w-16 shrink-0 rounded-md border border-border bg-muted/60" />}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="truncate font-semibold">{p.name}</h3>
+                    <StatusBadge tone={p.is_active ? "emerald" : "rust"}>{p.is_active ? "Active" : "Inactive"}</StatusBadge>
+                  </div>
+                  <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{p.sku}</p>
+                  <p className="mt-1 font-mono text-sm font-medium text-gold">{rateText(p)}</p>
+                </div>
+              </div>
+              <div className="mb-3 grid grid-cols-2 gap-2 rounded-lg bg-muted/70 p-2.5 text-xs">
+                <div><p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Category</p><p className="font-medium text-gold">{categories.find((c) => c.id === p.category_id)?.name ?? "Uncategorized"}</p></div>
+                <div className="text-right"><p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Stock</p><p className={cn("font-medium", total > 0 ? "text-emerald" : "text-rust")}>{p.is_set ? "Set" : total > 0 ? `${total} units` : "Out of stock"}</p></div>
+                <div className="col-span-2 flex items-start justify-between border-t border-border pt-2">
+                  <div className="flex flex-wrap gap-1">
+                    {activeBranches.map((b) => <span key={b.id} className="rounded-md border border-border px-1.5 py-0.5 text-[10px]">{b.name} {perBranch(p, b.id)}</span>)}
+                  </div>
+                  <span className="text-muted-foreground">{p.is_set ? "" : `${(p.product_variations ?? []).filter((v) => v.is_enabled).length} variations`}</span>
+                </div>
+              </div>
+              {actions(p, true)}
+            </div>
+          );
+        })}
+    </div>
+    <ConfirmDialog open={!!deleting} message={`Delete ${deleting?.name}?\n\nIf it has rental or booking history it will be switched off instead of deleted.`}
+      onCancel={() => setDeleting(null)} onConfirm={() => { if (deleting) void remove(deleting); setDeleting(null); }} />
+    </>
   );
 }
+
+const dangerIconClass = "inline-flex items-center justify-center rounded-md border border-rust/40 bg-rust/10 p-2 text-rust transition-colors hover:bg-rust/15";
 
 function Extras() {
   const { shop, addOns, templates, canManage, refresh } = useShop();
@@ -278,14 +360,27 @@ function Extras() {
   );
 }
 
-function Categories() {
-  const { shop, categories, templates, canManage, refresh } = useShop();
+function Categories({ addSignal }: { addSignal: number }) {
+  const { shop, categories, templates, canManage, refresh, trendz } = useShop();
   const [edit, setEdit] = useState<Partial<Category> | null>(null);
+  const [deleting, setDeleting] = useState<Category | null>(null);
+  // the page header's "Add Category" button counts up; each count opens the new-category form
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (addSignal > 0) setEdit({ template_key: templates[0]?.key }); }, [addSignal]);
+
+  const remove = async (c: Category) => {
+    const { error } = await createClient().from("categories").delete().eq("id", c.id);
+    if (error) return toast.error(error.code === "23503" ? `Products are still in ${c.name}. Move or delete them first.` : errorText(error));
+    toast.success(`${c.name} deleted`);
+    await refresh();
+  };
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
     if (!edit?.name?.trim() || !edit.template_key) return toast.error("Name the category and choose its type.");
     const prefix = (edit.sku_prefix ?? "").trim().toUpperCase();
+    // bridal and groom shops number their products from the category's base SKU, as in TRENDZ
+    if (trendz && !prefix) return toast.error("Enter the base SKU: 2 to 6 capital letters, e.g. BR.");
     if (prefix && !/^[A-Z]{2,6}$/.test(prefix)) return toast.error("The SKU prefix needs 2 to 6 capital letters.");
     setBusy(true);
     const row = { name: edit.name.trim(), template_key: edit.template_key, sku_prefix: prefix || null };
@@ -299,15 +394,39 @@ function Categories() {
   };
 
   return (
-    <Panel title="Categories" actions={canManage ? <button className={ghostButtonClass} onClick={() => setEdit({ template_key: templates[0]?.key })}><Plus className="h-4 w-4" /> Add category</button> : null}>
-      <ul className="divide-y divide-border">
-        {categories.map((c) => (
-          <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-            <span><span className="font-medium">{c.name}</span> <span className="text-xs text-muted-foreground">· {templates.find((t) => t.key === c.template_key)?.name}{c.sku_prefix ? ` · SKUs start ${c.sku_prefix}-` : ""}</span></span>
-            {canManage ? <button className={ghostButtonClass} onClick={() => setEdit(c)}>Edit</button> : null}
-          </li>
-        ))}
-      </ul>
+    <>
+      <div className={tableWrap}>
+        <table className="w-full text-left text-sm">
+          <thead className={theadClass}>
+            <tr><th className="px-6 py-3">Name</th>{trendz ? null : <th className="px-6 py-3">Type</th>}<th className="px-6 py-3">Base SKU</th>{canManage ? <th className="px-6 py-3 text-right">Actions</th> : null}</tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {categories.map((c) => (
+              <tr key={c.id}>
+                <td className="px-6 py-3">
+                  <span className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-md bg-gold/10 text-gold"><Tag className="h-4 w-4" /></span>
+                    <span className="font-medium">{c.name}</span>
+                  </span>
+                </td>
+                {trendz ? null : <td className="px-6 py-3 text-muted-foreground">{templates.find((t) => t.key === c.template_key)?.name}</td>}
+                <td className="px-6 py-3">{c.sku_prefix ? <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{c.sku_prefix}</span> : <span className="text-muted-foreground">-</span>}</td>
+                {canManage ? (
+                  <td className="px-6 py-3">
+                    <div className="flex justify-end gap-1">
+                      <button className="rounded-md p-2 text-muted-foreground hover:bg-black/5 hover:text-foreground" aria-label={`Edit ${c.name}`} title="Edit" onClick={() => setEdit(c)}><Pencil className="h-4 w-4" /></button>
+                      <button className="rounded-md p-2 text-muted-foreground hover:bg-black/5 hover:text-rust" aria-label={`Delete ${c.name}`} title="Delete" onClick={() => setDeleting(c)}><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  </td>
+                ) : null}
+              </tr>
+            ))}
+            {categories.length === 0 ? <tr><td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">No categories yet.</td></tr> : null}
+          </tbody>
+        </table>
+      </div>
+      <ConfirmDialog open={!!deleting} message={`Delete ${deleting?.name}?\n\nA category that still has products cannot be deleted.`}
+        onCancel={() => setDeleting(null)} onConfirm={() => { if (deleting) void remove(deleting); setDeleting(null); }} />
       <Modal open={edit !== null} onClose={() => setEdit(null)} title={edit?.id ? "Edit category" : "New category"}
         description="The type decides how items in it are priced and handed over."
         footer={<><button className={ghostButtonClass} onClick={() => setEdit(null)}>Cancel</button><button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save"}</button></>}>
@@ -318,11 +437,12 @@ function Categories() {
               {templates.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
             </select>
           </Field>
-          <Field label="SKU prefix (optional)" hint="2 to 6 capital letters, e.g. LEH">
+          <Field label={trendz ? "Base SKU" : "SKU prefix (optional)"}
+            hint={trendz ? "2 to 6 capital letters, e.g. BR. Products in this category are numbered BR-001, BR-002..." : "2 to 6 capital letters, e.g. LEH"}>
             <input className={monoInputClass} maxLength={6} value={edit.sku_prefix ?? ""} onChange={(e) => setEdit({ ...edit, sku_prefix: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") })} />
           </Field>
         </> : null}
       </Modal>
-    </Panel>
+    </>
   );
 }

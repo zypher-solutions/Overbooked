@@ -9,9 +9,10 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
+import { useCatalog } from "@/lib/shop/useCatalog";
 import { errorText, num } from "@/lib/shop/format";
 import type { Product, Unit } from "@/lib/shop/types";
-import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "./ui";
+import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "@/components/shop/ui";
 
 // Add New Product, as in TRENDZ: three steps on one page.
 //   1. Basic info  2. Attributes (Colour, Size... with their values)  3. Variations & stock
@@ -19,7 +20,9 @@ import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButt
 // branch holds; saving creates those pieces with their own codes (printable as QR tags).
 // Changing a product uses the same form: pieces can be added here, and removed from the Pieces list.
 interface Attr { key: string; label: string; values: string[] }
-interface VarRow { id?: string; key: string; attributes: Record<string, string>; name: string; sku: string; rate: string; enabled: boolean; stock: Record<string, string> }
+interface VarRow { id?: string; key: string; attributes: Record<string, string>; name: string; sku: string; savedSku?: string; rate: string; enabled: boolean; stock: Record<string, string> }
+// product and variation SKUs of bridal and groom shops, as in TRENDZ: BR-001, BR-001-GOLD-M
+const SKU_PATTERN = /^[A-Z]{2,6}-[0-9]{3,4}(-[A-Za-z0-9]+)*$/;
 interface Basic { category_id: string; name: string; sku: string; rate: string; replacement_value: string; description: string; image_url: string; is_active: boolean }
 type Step = "basic" | "attributes" | "variations";
 
@@ -78,7 +81,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     })));
     setRows(vars.map((v) => {
       const a = Object.fromEntries(Object.entries(v.attributes ?? {}).map(([k, x]) => [k, String(x)]));
-      return { id: v.id, key: comboKey(a), attributes: a, name: v.name, sku: v.sku, enabled: v.is_enabled, stock: {},
+      return { id: v.id, key: comboKey(a), attributes: a, name: v.name, sku: v.sku, savedSku: v.sku, enabled: v.is_enabled, stock: {},
         rate: String(v.variation_rates?.find((r) => r.rate_type === "day")?.amount ?? "") };
     }));
     const first = vars.find((v) => v.variation_rates?.some((r) => r.rate_type === "day"));
@@ -102,7 +105,21 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     try { localStorage.setItem(draftKey, JSON.stringify({ basic, attrs, rows })); } catch { /* ignore */ }
   }, [basic, attrs, rows, product, draftKey]);
 
-  const productSku = basic.sku || (basic.name ? `${categories.find((c) => c.id === basic.category_id)?.sku_prefix ? categories.find((c) => c.id === basic.category_id)!.sku_prefix + "-" : ""}${skuPart(basic.name)}` : "");
+  // As in TRENDZ the product SKU cannot be typed: the category's base SKU and the next number (BR-001, BR-002...).
+  // A product being changed keeps its SKU.
+  const { products: allProducts } = useCatalog({ includeInactive: true });
+  const prefix = categories.find((c) => c.id === basic.category_id)?.sku_prefix ?? "";
+  const nextSku = useMemo(() => {
+    if (!prefix) return "";
+    let max = 0;
+    for (const p of allProducts ?? []) {
+      if (!p.sku.startsWith(prefix + "-")) continue;
+      const n = parseInt(p.sku.slice(prefix.length + 1), 10);
+      if (!Number.isNaN(n) && n > max) max = n;
+    }
+    return `${prefix}-${String(max + 1).padStart(3, "0")}`;
+  }, [prefix, allProducts]);
+  const productSku = product ? product.sku : nextSku;
   const autoName = (a: Record<string, string>) => Object.values(a).filter(Boolean).join(" / ") || basic.name.trim() || "Standard";
   const autoSku = (a: Record<string, string>) => `${productSku}${Object.values(a).filter(Boolean).length ? "-" + skuPart(Object.values(a).filter(Boolean).join("-")) : ""}`;
 
@@ -130,7 +147,8 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   const validBasic = () => {
     if (!basic.category_id) { toast.error("Choose a category."); return false; }
     if (!basic.name.trim()) { toast.error("Name the product."); return false; }
-    if (!/^[A-Z0-9-]{2,40}$/.test(productSku)) { toast.error("The SKU can use letters, numbers and hyphens (2 to 40)."); return false; }
+    if (!product && !prefix) { toast.error("This category has no base SKU yet. Set it on the Categories page first."); return false; }
+    if (!product && allProducts === null) { toast.error("Still loading the products. Try again in a moment."); return false; }
     return true;
   };
   const goAttributes = () => { if (validBasic()) setStep("attributes"); };
@@ -160,6 +178,9 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     const sent = rows.filter((r) => r.id || r.enabled);
     const skus = sent.map((r) => (r.sku || autoSku(r.attributes)).toUpperCase());
     if (new Set(skus).size !== skus.length) return toast.error("Two variations have the same SKU. Change one of them.");
+    // a new or changed variation SKU follows the shop's pattern (a saved one that was not touched is left alone)
+    const bad = skus.find((s, i) => !SKU_PATTERN.test(s) && s !== sent[i].savedSku);
+    if (bad) return toast.error(`SKU ${bad} is not allowed: start with ${productSku}, then more parts after hyphens (e.g. ${productSku}-GOLD-M).`);
     setBusy(true);
     try {
       const id = await call<string>("save_product", {
@@ -169,36 +190,15 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
           variations: sent.map((r, i) => ({
             id: r.id, name: r.name.trim() || autoName(r.attributes), sku: skus[i], attributes: r.attributes,
             rates: { day: String(num(r.rate || basic.rate)) }, is_enabled: r.enabled,
+            stock: Object.fromEntries(activeBranches.map((b) => [b.id, Math.max(0, Math.floor(num(r.stock[b.id])))])),
           })),
         },
       });
-      // the new pieces, numbered after the ones each variation already has
-      const supabase = createClient();
-      const { data: vars, error: vErr } = await supabase.from("product_variations").select("id, sku").eq("product_id", id);
-      if (vErr) throw vErr;
-      const { data: existing } = await supabase.from("units").select("code").eq("product_id", id).limit(5000);
-      const used = new Set((existing ?? []).map((u) => u.code));
-      const units: { shop_id: string; product_id: string; variation_id: string; branch_id: string; code: string; attributes: Record<string, string> }[] = [];
-      sent.forEach((r, i) => {
-        const v = (vars ?? []).find((x) => x.sku === skus[i]);
-        if (!v || !r.enabled) return;
-        for (const b of activeBranches) {
-          const add = Math.max(0, Math.floor(num(r.stock[b.id])) - (r.id ? counts[`${r.id}:${b.id}`] ?? 0 : 0));
-          for (let n = 1, made = 0; made < add; n++) {
-            const code = `${v.sku}-${n}`;
-            if (used.has(code)) continue;
-            used.add(code);
-            units.push({ shop_id: shop.id, product_id: id, variation_id: v.id, branch_id: b.id, code, attributes: r.attributes });
-            made++;
-          }
-        }
-      });
-      if (units.length) {
-        const { error } = await supabase.from("units").insert(units);
-        if (error) throw new Error(error.code === "23505" ? "A piece code is already used. Save again to number them after it." : errorText(error));
-      }
+      // the pieces were made by the database in the same step, numbered after the ones each variation already has
+      const made = sent.reduce((n, r) => n + (r.enabled ? activeBranches.reduce((m, b) =>
+        m + Math.max(0, Math.floor(num(r.stock[b.id])) - (r.id ? counts[`${r.id}:${b.id}`] ?? 0 : 0)), 0) : 0), 0);
       try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
-      toast.success(units.length ? `Saved, with ${units.length} new piece${units.length === 1 ? "" : "s"}` : "Saved");
+      toast.success(made ? `Saved, with ${made} new piece${made === 1 ? "" : "s"}` : "Saved");
       if (!product) router.replace(`/catalog/${id}`);
       else onSaved?.();
     } catch (e) {
@@ -267,8 +267,8 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
                   {wearCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </Field>
-              <Field label="SKU" hint="Filled in for you; type your own code if you have one">
-                <input className={monoInputClass} value={basic.sku} placeholder={productSku} onChange={(e) => setBasic({ ...basic, sku: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "") })} />
+              <Field label="Base SKU" hint={prefix || product ? "From the category and numbered for you" : "This category has no base SKU yet (Categories page)"}>
+                <input className={cn(monoInputClass, "cursor-not-allowed bg-surface opacity-70")} value={productSku} readOnly />
               </Field>
               <Field label="Price per day (₹)" hint="Starting price for every size; agree any price per booking">
                 <input className={monoInputClass} inputMode="decimal" value={basic.rate} onChange={(e) => setBasic({ ...basic, rate: e.target.value })} />
@@ -276,7 +276,6 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
               <Field label="Replacement value (₹)" hint="Charged if it is lost">
                 <input className={monoInputClass} inputMode="decimal" value={basic.replacement_value} onChange={(e) => setBasic({ ...basic, replacement_value: e.target.value })} />
               </Field>
-              <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" checked={basic.is_active} onChange={(e) => setBasic({ ...basic, is_active: e.target.checked })} /> Can be booked</label>
               <Field label="Description" className="sm:col-span-2"><textarea className={inputClass} rows={2} value={basic.description} onChange={(e) => setBasic({ ...basic, description: e.target.value })} /></Field>
             </div>
             <div>
@@ -298,9 +297,12 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
           <ul className="space-y-3">
             {attrs.map((a, i) => (
               <li key={i} className="grid gap-2 rounded-lg border border-border p-3 sm:grid-cols-[180px_1fr_auto] sm:items-start">
-                <input className={inputClass} aria-label="Attribute name" placeholder="e.g. Fabric" value={a.label} disabled={template?.variation_fields.some((f) => f.key === a.key)}
-                  onChange={(e) => setAttrs(attrs.map((x, j) => j === i ? { ...x, label: e.target.value, key: e.target.value.trim().toLowerCase().replace(/\s+/g, "_") } : x))} />
-                <ChipInput values={a.values} label={a.label || "attribute"} onChange={(values) => setAttrs(attrs.map((x, j) => j === i ? { ...x, values } : x))} />
+                <AttributeName attr={a} locked={!!template?.variation_fields.some((f) => f.key === a.key)}
+                  choices={[...(template?.variation_fields.map((f) => f.label) ?? []), ...EXTRA_ATTRIBUTES].filter((n, k, all) => all.indexOf(n) === k
+                    && !attrs.some((x, j) => j !== i && x.label.toLowerCase() === n.toLowerCase()))}
+                  onChange={(label) => setAttrs(attrs.map((x, j) => j === i ? { ...x, label, key: label.trim().toLowerCase().replace(/\s+/g, "_") } : x))} />
+                <ChipInput values={a.values} label={a.label || "attribute"} suggestions={template?.variation_fields.find((f) => f.key === a.key)?.suggestions ?? []}
+                  onChange={(values) => setAttrs(attrs.map((x, j) => j === i ? { ...x, values } : x))} />
                 <button type="button" aria-label={`Remove ${a.label || "attribute"}`} className="rounded p-2 hover:bg-black/5" onClick={() => setAttrs(attrs.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4" /></button>
               </li>
             ))}
@@ -360,14 +362,37 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   );
 }
 
-function ChipInput({ values, label, onChange }: { values: string[]; label: string; onChange: (v: string[]) => void }) {
+// Names offered besides the business type's own attributes; "Custom..." lets the shop type its own.
+const EXTRA_ATTRIBUTES = ["Fabric", "Fit", "Length", "Work", "Style", "Occasion"];
+
+function AttributeName({ attr, locked, choices, onChange }: { attr: Attr; locked: boolean; choices: string[]; onChange: (label: string) => void }) {
+  const known = choices.includes(attr.label);
+  const [custom, setCustom] = useState(!!attr.label && !known);
+  return (
+    <div className="space-y-1.5">
+      <select className={inputClass} aria-label="Attribute name" disabled={locked} value={locked || known ? attr.label : custom ? "__custom" : ""}
+        onChange={(e) => { if (e.target.value === "__custom") { setCustom(true); onChange(""); } else { setCustom(false); onChange(e.target.value); } }}>
+        {locked ? <option value={attr.label}>{attr.label}</option> : <>
+          <option value="" disabled>Choose...</option>
+          {choices.map((n) => <option key={n} value={n}>{n}</option>)}
+          <option value="__custom">Custom...</option>
+        </>}
+      </select>
+      {!locked && custom ? <input className={inputClass} aria-label="Custom attribute name" placeholder="e.g. Sleeve type" value={attr.label} onChange={(e) => onChange(e.target.value)} /> : null}
+    </div>
+  );
+}
+
+function ChipInput({ values, label, onChange, suggestions = [] }: { values: string[]; label: string; onChange: (v: string[]) => void; suggestions?: string[] }) {
   const [text, setText] = useState("");
   const add = () => {
     const parts = text.split(",").map((s) => s.trim()).filter(Boolean).filter((s) => !values.includes(s));
     if (parts.length) onChange([...values, ...parts]);
     setText("");
   };
+  const left = suggestions.filter((s) => !values.includes(s));
   return (
+    <div>
     <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-md border border-input px-2 py-1.5">
       {values.map((v) => (
         <span key={v} className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-xs">
@@ -378,6 +403,13 @@ function ChipInput({ values, label, onChange }: { values: string[]; label: strin
       <input className="min-w-[8rem] flex-1 bg-transparent text-sm outline-none" aria-label={`${label} values`} placeholder={values.length ? "Add another" : "Type a value, press Enter"}
         value={text} onChange={(e) => setText(e.target.value)} onBlur={add}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); } else if (e.key === "Backspace" && !text && values.length) onChange(values.slice(0, -1)); }} />
+    </div>
+    {left.length ? (
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">Suggestions:</span>
+        {left.map((s) => <button key={s} type="button" className="rounded-md border border-border px-2 py-0.5 text-xs hover:bg-black/5" onClick={() => onChange([...values, s])}>{s}</button>)}
+      </div>
+    ) : null}
     </div>
   );
 }

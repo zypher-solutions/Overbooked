@@ -6,13 +6,18 @@ import { ChevronDown, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useShop } from "@/lib/shop/ShopContext";
 import { useCatalog, variationLabel } from "@/lib/shop/useCatalog";
-import { useStock } from "@/components/shop/StockCard";
+import { useStock } from "@/modules/clothing/components/StockCard";
 import { PageHeader, Panel, StatusBadge, ghostButtonClass, tableWrap, theadClass } from "@/components/shop/ui";
 
 // Stock Locations, as in TRENDZ: each branch with its contact details and how many pieces it holds,
 // free, out, in service or lost; open a branch to see the count of every item there.
-export default function StockLocations() {
-  const { role, branches } = useShop();
+export default function StockLocationsPage() {
+  return <StockLocations />;
+}
+
+
+function StockLocations() {
+  const { isSupport, branches } = useShop();
   const { stock } = useStock();
   const { products } = useCatalog({ includeInactive: true });
   const [openId, setOpenId] = useState<string | null>(null);
@@ -27,14 +32,13 @@ export default function StockLocations() {
     total: t.total + r.total, free: t.free + r.available_now, out: t.out + r.out_now, service: t.service + Number(r.maintenance), lost: t.lost + Number(r.lost),
   }), { total: 0, free: 0, out: 0, service: 0, lost: 0 });
 
-  if (role !== "super_admin") return <Panel><p className="text-sm text-muted-foreground">Stock locations are set up by the Zypher team.</p></Panel>;
+  if (!isSupport) return <Panel><p className="text-sm text-muted-foreground">Stock locations are set up by the Zypher team.</p></Panel>;
 
   return (
     <>
       <PageHeader title="Stock Locations" subtitle="Where every piece is kept"
         actions={<>
           <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link>
-          <Link href="/branches" className={ghostButtonClass}>Edit branches</Link>
         </>} />
       <div className={tableWrap}>
         <table className="w-full min-w-[820px] text-left text-sm">

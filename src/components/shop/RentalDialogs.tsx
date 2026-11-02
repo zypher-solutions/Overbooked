@@ -27,6 +27,7 @@ function useBusy() {
 // ==========================================================================
 export function PaymentDialog({ rental, open, onClose, onDone }: DialogProps) {
   const m = money(rental);
+  const { isOwner } = useShop();
   const [kind, setKind] = useState<PaymentKind>("payment");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<Method | "">("");
@@ -46,8 +47,10 @@ export function PaymentDialog({ rental, open, onClose, onDone }: DialogProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // while the piece is out, only the owner can give the deposit back (the database enforces it); staff do it at return
+  const refundNow = isOwner || rental.status === "completed";
   const kinds: PaymentKind[] = rental.status === "cancelled" || rental.status === "no_show"
-    ? ["deposit_refund"] : ["payment", "deposit", "deposit_refund", "deposit_applied"];
+    ? ["deposit_refund"] : ["payment", "deposit", ...(refundNow ? ["deposit_refund" as const] : []), "deposit_applied"];
 
   const save = () => run(async () => {
     if (!(num(amount) > 0)) throw new Error("Enter an amount above zero.");

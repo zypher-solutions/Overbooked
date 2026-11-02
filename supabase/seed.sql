@@ -6,6 +6,7 @@
 --   owner@bridal.test        owner    Kalyani Bridal (Pro plan, 2 branches)
 --   manager@bridal.test      manager  Kalyani Bridal, MG Road branch
 --   staff@bridal.test        staff    Kalyani Bridal, MG Road branch
+--   support@bridal.test      support  Zypher's login for Kalyani Bridal only (owner-like inside that shop, no money corrections)
 --   owner@groom.test         owner    Raja Groom Wear (Starter)
 --   staff@groom.test         staff    Raja Groom Wear
 --   owner@resort.test        owner    Green Valley Resort (Starter)
@@ -19,8 +20,8 @@
 
 -- ---- shops ----
 INSERT INTO public.shops (id, name, slug, token_prefix, business_types, plan, monthly_fee, phone, address, paid_until, settings) VALUES
-  ('5a000000-0000-0000-0000-000000000001', 'Kalyani Bridal', 'kalyani-bridal', 'KAL', ARRAY['bridal'], 'pro', 899, '9000000001', 'MG Road, Kochi', CURRENT_DATE + 30, '{}'),
-  ('5a000000-0000-0000-0000-000000000002', 'Raja Groom Wear', 'raja-groom', 'RAJ', ARRAY['groom'], 'starter', 599, '9000000002', 'Broadway, Kochi', CURRENT_DATE + 30, '{}'),
+  ('5a000000-0000-0000-0000-000000000001', 'Kalyani Bridal', 'kalyani-bridal', 'KAL', ARRAY['clothing'], 'pro', 899, '9000000001', 'MG Road, Kochi', CURRENT_DATE + 30, '{}'),
+  ('5a000000-0000-0000-0000-000000000002', 'Raja Groom Wear', 'raja-groom', 'RAJ', ARRAY['clothing'], 'starter', 599, '9000000002', 'Broadway, Kochi', CURRENT_DATE + 30, '{}'),
   ('5a000000-0000-0000-0000-000000000003', 'Green Valley Resort', 'green-valley', 'GVR', ARRAY['resort'], 'starter', 599, '9000000003', 'Vythiri, Wayanad', CURRENT_DATE + 30,
    '{"check_in_time": "14:00", "check_out_time": "11:00"}'),
   ('5a000000-0000-0000-0000-000000000004', 'Kochi Drive Cars', 'kochi-drive', 'KDC', ARRAY['car'], 'starter', 599, '9000000004', 'Edappally, Kochi', CURRENT_DATE + 30,
@@ -58,6 +59,7 @@ FROM (VALUES
   ('aaaaaaaa-0000-0000-0000-000000000011'::uuid, 'owner@bridal.test', 'Bridal Owner'),
   ('aaaaaaaa-0000-0000-0000-000000000012'::uuid, 'manager@bridal.test', 'Bridal Manager'),
   ('aaaaaaaa-0000-0000-0000-000000000013'::uuid, 'staff@bridal.test', 'Bridal Staff'),
+  ('aaaaaaaa-0000-0000-0000-000000000014'::uuid, 'support@bridal.test', 'Zypher Support (Kalyani)'),
   ('aaaaaaaa-0000-0000-0000-000000000021'::uuid, 'owner@groom.test', 'Groom Owner'),
   ('aaaaaaaa-0000-0000-0000-000000000022'::uuid, 'staff@groom.test', 'Groom Staff'),
   ('aaaaaaaa-0000-0000-0000-000000000031'::uuid, 'owner@resort.test', 'Resort Owner'),
@@ -75,8 +77,7 @@ SELECT gen_random_uuid(), u.id, u.id::text,
 FROM auth.users u
 WHERE u.email LIKE '%.test';
 
-UPDATE public.profiles SET role = 'super_admin', is_active = true, shop_id = NULL,
-       active_shop_id = '5a000000-0000-0000-0000-000000000001'
+UPDATE public.profiles SET role = 'super_admin', is_active = true, shop_id = NULL
 WHERE id = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 UPDATE public.profiles p SET role = v.role, shop_id = v.shop_id, branch_id = v.branch_id, is_active = true
@@ -84,6 +85,7 @@ FROM (VALUES
   ('aaaaaaaa-0000-0000-0000-000000000011'::uuid, 'owner',   '5a000000-0000-0000-0000-000000000001'::uuid, NULL::uuid),
   ('aaaaaaaa-0000-0000-0000-000000000012'::uuid, 'manager', '5a000000-0000-0000-0000-000000000001'::uuid, 'b0000000-0000-0000-0000-000000000001'::uuid),
   ('aaaaaaaa-0000-0000-0000-000000000013'::uuid, 'staff',   '5a000000-0000-0000-0000-000000000001'::uuid, 'b0000000-0000-0000-0000-000000000001'::uuid),
+  ('aaaaaaaa-0000-0000-0000-000000000014'::uuid, 'support', '5a000000-0000-0000-0000-000000000001'::uuid, NULL),
   ('aaaaaaaa-0000-0000-0000-000000000021'::uuid, 'owner',   '5a000000-0000-0000-0000-000000000002'::uuid, NULL),
   ('aaaaaaaa-0000-0000-0000-000000000022'::uuid, 'staff',   '5a000000-0000-0000-0000-000000000002'::uuid, 'b0000000-0000-0000-0000-000000000003'::uuid),
   ('aaaaaaaa-0000-0000-0000-000000000031'::uuid, 'owner',   '5a000000-0000-0000-0000-000000000003'::uuid, NULL),
@@ -97,17 +99,17 @@ WHERE p.id = v.id;
 
 -- ---- catalog: one category per shop, from its template ----
 INSERT INTO public.categories (id, shop_id, name, template_key, sku_prefix) VALUES
-  ('c0000000-0000-0000-0000-000000000001', '5a000000-0000-0000-0000-000000000001', 'Bridal wear', 'bridal', 'BR'),
-  ('c0000000-0000-0000-0000-000000000002', '5a000000-0000-0000-0000-000000000002', 'Groom wear', 'groom', 'GR'),
+  ('c0000000-0000-0000-0000-000000000001', '5a000000-0000-0000-0000-000000000001', 'Bridal wear', 'clothing', 'BR'),
+  ('c0000000-0000-0000-0000-000000000002', '5a000000-0000-0000-0000-000000000002', 'Groom wear', 'clothing', 'GR'),
   ('c0000000-0000-0000-0000-000000000003', '5a000000-0000-0000-0000-000000000003', 'Rooms', 'resort', 'RM'),
   ('c0000000-0000-0000-0000-000000000004', '5a000000-0000-0000-0000-000000000004', 'Cars', 'car', 'CR'),
   ('c0000000-0000-0000-0000-000000000005', '5a000000-0000-0000-0000-000000000005', 'Bikes', 'bike', 'BK');
 
 INSERT INTO public.products (id, shop_id, category_id, name, sku, description, purchase_price, replacement_value) VALUES
-  ('d0000000-0000-0000-0000-000000000011', '5a000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Red bridal lehenga', 'BR-LEH-001', 'Hand-embroidered', 60000, 75000),
-  ('d0000000-0000-0000-0000-000000000012', '5a000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Kanjivaram silk saree', 'BR-SAR-001', NULL, 25000, 30000),
-  ('d0000000-0000-0000-0000-000000000021', '5a000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000002', 'Cream sherwani', 'GR-SHW-001', NULL, 18000, 22000),
-  ('d0000000-0000-0000-0000-000000000022', '5a000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000002', 'Navy three-piece suit', 'GR-SUT-001', NULL, 12000, 15000),
+  ('d0000000-0000-0000-0000-000000000011', '5a000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Red bridal lehenga', 'BR-001', 'Hand-embroidered', 60000, 75000),
+  ('d0000000-0000-0000-0000-000000000012', '5a000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Kanjivaram silk saree', 'BR-002', NULL, 25000, 30000),
+  ('d0000000-0000-0000-0000-000000000021', '5a000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000002', 'Cream sherwani', 'GR-001', NULL, 18000, 22000),
+  ('d0000000-0000-0000-0000-000000000022', '5a000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000002', 'Navy three-piece suit', 'GR-002', NULL, 12000, 15000),
   ('d0000000-0000-0000-0000-000000000031', '5a000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000003', 'Deluxe cottage', 'RM-DLX', 'Valley view, private sit-out', 0, 0),
   ('d0000000-0000-0000-0000-000000000032', '5a000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000003', 'Family villa', 'RM-VIL', 'Two bedrooms, kitchenette', 0, 0),
   ('d0000000-0000-0000-0000-000000000041', '5a000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000004', 'Maruti Swift', 'CR-SWIFT', NULL, 650000, 650000),
@@ -116,10 +118,10 @@ INSERT INTO public.products (id, shop_id, category_id, name, sku, description, p
   ('d0000000-0000-0000-0000-000000000052', '5a000000-0000-0000-0000-000000000005', 'c0000000-0000-0000-0000-000000000005', 'Honda Activa', 'BK-ACTIVA', NULL, 80000, 80000);
 
 INSERT INTO public.product_variations (id, shop_id, product_id, name, sku, attributes, base_occupancy, max_occupancy, km_included_per_day, turnaround) VALUES
-  ('e0000000-0000-0000-0000-000000000011', '5a000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000011', 'M', 'BR-LEH-001-M', '{"color": "Red", "size": "M"}', NULL, NULL, NULL, '1 day'),
-  ('e0000000-0000-0000-0000-000000000012', '5a000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000012', 'Gold', 'BR-SAR-001-GOLD', '{"color": "Gold", "size": "Free"}', NULL, NULL, NULL, '1 day'),
-  ('e0000000-0000-0000-0000-000000000021', '5a000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000021', 'L', 'GR-SHW-001-L', '{"color": "Cream", "size": "L"}', NULL, NULL, NULL, '1 day'),
-  ('e0000000-0000-0000-0000-000000000022', '5a000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000022', '40', 'GR-SUT-001-40', '{"color": "Navy", "size": "40"}', NULL, NULL, NULL, '1 day'),
+  ('e0000000-0000-0000-0000-000000000011', '5a000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000011', 'M', 'BR-001-M', '{"color": "Red", "size": "M"}', NULL, NULL, NULL, '1 day'),
+  ('e0000000-0000-0000-0000-000000000012', '5a000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000012', 'Gold', 'BR-002-GOLD', '{"color": "Gold", "size": "Free"}', NULL, NULL, NULL, '1 day'),
+  ('e0000000-0000-0000-0000-000000000021', '5a000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000021', 'L', 'GR-001-L', '{"color": "Cream", "size": "L"}', NULL, NULL, NULL, '1 day'),
+  ('e0000000-0000-0000-0000-000000000022', '5a000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000022', '40', 'GR-002-40', '{"color": "Navy", "size": "40"}', NULL, NULL, NULL, '1 day'),
   ('e0000000-0000-0000-0000-000000000031', '5a000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000031', 'Deluxe cottage', 'RM-DLX-KING', '{"bed_type": "King", "view": "Valley"}', 2, 4, NULL, '3 hours'),
   ('e0000000-0000-0000-0000-000000000032', '5a000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000032', 'Family villa', 'RM-VIL-2BR', '{"bed_type": "2 x Queen", "view": "Garden"}', 4, 6, NULL, '3 hours'),
   ('e0000000-0000-0000-0000-000000000041', '5a000000-0000-0000-0000-000000000004', 'd0000000-0000-0000-0000-000000000041', 'VXi manual', 'CR-SWIFT-MT', '{"fuel_type": "Petrol", "transmission": "Manual", "seats": 5}', NULL, NULL, 250, '1 hour'),
@@ -154,13 +156,13 @@ JOIN public.product_variations v ON v.id = r.variation_id;
 INSERT INTO public.units (shop_id, product_id, variation_id, branch_id, code, attributes, odometer)
 SELECT v.shop_id, v.product_id, v.id, u.branch_id, u.code, u.attributes::jsonb, u.odometer
 FROM (VALUES
-  ('e0000000-0000-0000-0000-000000000011'::uuid, 'b0000000-0000-0000-0000-000000000001'::uuid, 'BR-LEH-001-M-1', '{}', NULL::integer),
-  ('e0000000-0000-0000-0000-000000000011'::uuid, 'b0000000-0000-0000-0000-000000000002'::uuid, 'BR-LEH-001-M-2', '{}', NULL),
-  ('e0000000-0000-0000-0000-000000000012'::uuid, 'b0000000-0000-0000-0000-000000000001'::uuid, 'BR-SAR-001-GOLD-1', '{}', NULL),
-  ('e0000000-0000-0000-0000-000000000012'::uuid, 'b0000000-0000-0000-0000-000000000001'::uuid, 'BR-SAR-001-GOLD-2', '{}', NULL),
-  ('e0000000-0000-0000-0000-000000000021'::uuid, 'b0000000-0000-0000-0000-000000000003'::uuid, 'GR-SHW-001-L-1', '{}', NULL),
-  ('e0000000-0000-0000-0000-000000000021'::uuid, 'b0000000-0000-0000-0000-000000000003'::uuid, 'GR-SHW-001-L-2', '{}', NULL),
-  ('e0000000-0000-0000-0000-000000000022'::uuid, 'b0000000-0000-0000-0000-000000000003'::uuid, 'GR-SUT-001-40-1', '{}', NULL),
+  ('e0000000-0000-0000-0000-000000000011'::uuid, 'b0000000-0000-0000-0000-000000000001'::uuid, 'BR-001-M-1', '{}', NULL::integer),
+  ('e0000000-0000-0000-0000-000000000011'::uuid, 'b0000000-0000-0000-0000-000000000002'::uuid, 'BR-001-M-2', '{}', NULL),
+  ('e0000000-0000-0000-0000-000000000012'::uuid, 'b0000000-0000-0000-0000-000000000001'::uuid, 'BR-002-GOLD-1', '{}', NULL),
+  ('e0000000-0000-0000-0000-000000000012'::uuid, 'b0000000-0000-0000-0000-000000000001'::uuid, 'BR-002-GOLD-2', '{}', NULL),
+  ('e0000000-0000-0000-0000-000000000021'::uuid, 'b0000000-0000-0000-0000-000000000003'::uuid, 'GR-001-L-1', '{}', NULL),
+  ('e0000000-0000-0000-0000-000000000021'::uuid, 'b0000000-0000-0000-0000-000000000003'::uuid, 'GR-001-L-2', '{}', NULL),
+  ('e0000000-0000-0000-0000-000000000022'::uuid, 'b0000000-0000-0000-0000-000000000003'::uuid, 'GR-002-40-1', '{}', NULL),
   ('e0000000-0000-0000-0000-000000000031'::uuid, 'b0000000-0000-0000-0000-000000000004'::uuid, '101', '{"floor": "Block A"}', NULL),
   ('e0000000-0000-0000-0000-000000000031'::uuid, 'b0000000-0000-0000-0000-000000000004'::uuid, '102', '{"floor": "Block A"}', NULL),
   ('e0000000-0000-0000-0000-000000000031'::uuid, 'b0000000-0000-0000-0000-000000000004'::uuid, '103', '{"floor": "Block B"}', NULL),
@@ -225,3 +227,7 @@ BEGIN
   END LOOP;
   PERFORM set_config('request.jwt.claims', '', true);
 END $$;
+
+-- Local demo only: the demo logins have no authenticator app, so two-factor is off here.
+-- Hosted databases keep the default (on) and nobody can change it from the app.
+UPDATE public.platform_settings SET require_mfa = false;

@@ -18,15 +18,18 @@ their shop, role and branch. The screens only make it pleasant; the database has
 
 ## Many shops in one database
 - Every business row carries `shop_id`. A restrictive rule on every table keeps a person inside
-  `current_shop_id()`: their own shop, or for Zypher staff the shop they opened.
+  `current_shop_id()`: their own shop. Zypher admins have none.
 - Composite foreign keys (`shop_id, x_id`) make it impossible to link rows of two shops.
+- `current_shop_id()` is NULL for Zypher admins, so no table is open to them. Setup (branches, stock counts, staff) goes through functions that
+  name the shop each time (`setup_branches(shop_id)`, `setup_people`, `setup_save_branch`, `setup_set_person`...) and check the caller again. There is no "open shop" state. Billing, shops and business types change only through functions, and setup changes are written to `audit_log`.
 - Shop functions run as the role `app_rpc`, which the same rules bind, so even a bug inside one cannot
   reach another shop. Zypher functions (console) run as the owner and check `is_platform_admin()`.
 
 ## Roles
 | Role | Who | Can |
 | --- | --- | --- |
-| super_admin | Zypher staff | The console; open any shop and act as its owner; the only role that adds branches, invites staff and changes roles |
+| super_admin | Zypher staff | The console: setup and billing only. Opens a shop for **setup** (branches, staff and roles, stock location counts) and never sees its bookings, customers, money, products or photos: the database gives it no shop for business data |
+| support | Zypher's login for ONE shop | Works inside that shop like its owner, to find and fix a problem. No money corrections or deletions, does not use the shop's login limit, every setup change is audited. One credential exposes one shop |
 | owner | Shop owner | Runs the shop: all branches, bookings, products, money, corrections, shop settings (branches and staff are set up by Zypher) |
 | manager | Branch manager | Own branch: bookings, catalog and units there, money reports for the branch |
 | staff | Counter staff | Own branch: bookings, handovers, returns, customers; no money reports |
@@ -50,7 +53,7 @@ says "Check-in" and asks for guests, a car shop asks for odometer, fuel and lice
 | Customers | Search, history, what they owe, ID and licence, block |
 | Catalog | Items by category with prices per rate type, units per branch and their status, extras, categories, CSV import |
 | Money and reports | Money in by method, booked value, owed, deposits held, every money record (CSV), stock right now |
-| Branches, Staff | Zypher only (Open shop from the console): branches, invite links, roles |
+| Branches (also the stock locations), Staff | Zypher only, on the shop's page in the console (Branches, Staff tabs); it never shows what a branch holds: branches, invite links, roles |
 | Settings | Owner: shop rules (grace time, check-in/out times, licence rule) |
 
 ### Bridal and groom shops: the TRENDZ screens
@@ -60,7 +63,7 @@ admin panel Overbooked grew from. Cars, bikes and resorts keep the screens above
 | Menu | Screen | What it does |
 | --- | --- | --- |
 | | Dashboard (`/`) | Pickups today / Returns due today / Overdue cards that pick the list below (Hand over, Return, WhatsApp); To collect; all rentals out, sortable and filtered |
-| | Finance | Earned, collected, outstanding, deposits held (vs the previous period); daily close per payment method; by branch; ledger CSV |
+| | Finance | Earned, collected, outstanding, deposits held (vs the previous period); Expenses and Profit (earned minus expenses) with an Expenses list; daily close per payment method; by branch; ledger CSV |
 | Rentals | Bookings | Cards by upcoming pickup; pickups today / tomorrow / a date; status, branch, search incl. SKU; pieces kept |
 | | Inventory Search (`/scan`) | Scan a tag (camera or USB scanner) or type a name, SKU, piece code or booking no. Find and book: stock per branch (Total / Avail / Rented), Add to Cart. Receive back: a scanned piece opens its return with that piece ticked |
 | | All Rentals | Products with stock per branch; tap for Add to Cart per size and branch, and who has it out |

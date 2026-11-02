@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ChevronLeft, LogIn, Pause, Play, UserPlus, Wallet } from "lucide-react";
+import { Pause, Play, UserPlus, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/lib/overbooked/AuthContext";
 import { cn } from "@/lib/utils";
 import { Field, StatusBadge, SummaryCard, goldButtonClass, ghostButtonClass, inputClass, monoInputClass } from "@/components/overbooked/primitives";
 import { Switch } from "@/components/ui/switch";
@@ -25,7 +24,7 @@ interface Detail {
     status: "active" | "suspended"; monthly_fee: number; paid_until: string | null; phone: string | null;
     email: string | null; address: string | null; notes: string | null; settings: Record<string, any>; created_at: string;
   };
-  branches: { id: string; name: string; is_active: boolean; phone: string | null; address: string | null; units: number }[];
+  branches: { id: string; name: string; is_active: boolean; phone: string | null; address: string | null }[];
   people: { id: string; full_name: string; role: string; branch: string | null; is_active: boolean; email: string; last_sign_in_at: string | null }[];
   invites: { email: string; role: string; branch: string | null; created_at: string }[];
   usage: { products: number; units: number; customers: number; rentals: number; rentals_30d: number; open_rentals: number; last_rental_at: string | null };
@@ -35,7 +34,6 @@ interface Detail {
 
 export default function ShopDetail() {
   const { id } = useParams<{ id: string }>();
-  const { shop: openShop, switchShop } = useAuth();
   const [d, setD] = useState<Detail | null>(null);
   const [missing, setMissing] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -96,7 +94,6 @@ export default function ShopDetail() {
     || edit.phone !== (s.phone ?? "") || edit.email !== (s.email ?? "") || edit.address !== (s.address ?? "") || edit.notes !== (s.notes ?? "");
   const typeName = (k: string) => templates.find((t) => t.key === k)?.name ?? k;
   const otherTypes = templates.filter((t) => !s.business_types.includes(t.key));
-  const isOpen = openShop?.id === s.id;
 
   const saveDetails = () => {
     if (!edit.name.trim()) return toast.error("The shop needs a name.");
@@ -111,9 +108,6 @@ export default function ShopDetail() {
 
   return (
     <>
-      <Link href="/zypher/shops" className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-        <ChevronLeft className="h-3.5 w-3.5" /> Shops
-      </Link>
       <PageHeader
         title={s.name}
         subtitle={<span className="inline-flex flex-wrap items-center gap-2">
@@ -123,10 +117,7 @@ export default function ShopDetail() {
           <span className="text-xs">Client since {fmtDay(s.created_at)}</span>
         </span>}
         actions={<>
-          <button className={goldButtonClass} disabled={isOpen} onClick={() => switchShop(s.id)}>
-            <LogIn className="h-4 w-4" /> {isOpen ? "Open now" : "Open shop"}
-          </button>
-          <button className={ghostButtonClass} onClick={() => setPayOpen(true)}><Wallet className="h-4 w-4" /> Record payment</button>
+          <button className={goldButtonClass} onClick={() => setPayOpen(true)}><Wallet className="h-4 w-4" /> Record payment</button>
           <button className={ghostButtonClass} onClick={() => setInviteOpen(true)}><UserPlus className="h-4 w-4" /> Invite owner</button>
           <button className={ghostButtonClass} disabled={busy} onClick={() => s.status === "active" ? setConfirmPause(true) : void update({ status: "active" }, `${s.name} resumed`)}>
             {s.status === "active" ? <><Pause className="h-4 w-4" /> Pause</> : <><Play className="h-4 w-4" /> Resume</>}
@@ -198,16 +189,15 @@ export default function ShopDetail() {
                   <span className="block text-xs text-muted-foreground">{[b.address, b.phone].filter(Boolean).join(" · ") || "No contact details"}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">{b.units} units</span>
                   {b.is_active ? null : <StatusBadge>Closed</StatusBadge>}
                 </div>
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-xs text-muted-foreground">Branches are added by the owner, or by you after opening the shop.</p>
+          <Link href={`/zypher/shops/${s.id}/branches`} className="mt-3 inline-block text-xs text-gold hover:underline">Manage branches</Link>
         </Panel>
 
-        <Panel title="People">
+        <Panel title="People" actions={<Link href={`/zypher/shops/${s.id}/staff`} className="text-xs text-gold hover:underline">Manage staff</Link>}>
           <ul className="divide-y divide-border">
             {d.people.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">

@@ -59,6 +59,7 @@ export async function createShopWithOwner(input: {
       branchId: null,
       invitedBy: user.id,
     });
+    await supabase.rpc("log_setup_event", { p_shop_id: shopId as string, p_action: "shop_created", p_detail: { name: input.name, plan: input.plan, owner_email: input.ownerEmail.trim().toLowerCase() } });
     return { shopId: shopId as string, link };
   } catch (e: any) {
     return { shopId: shopId as string, link: null, inviteError: e?.message ?? "Could not create the owner's invite." };
@@ -67,9 +68,12 @@ export async function createShopWithOwner(input: {
 
 // Invite (or re-invite) a shop's owner without opening the shop.
 export async function inviteShopOwner(input: { shopId: string; ownerName: string; ownerEmail: string }) {
-  const { user } = await requireZypher();
+  const { supabase, user } = await requireZypher();
   if (!EMAIL_RE.test(input.ownerEmail.trim())) throw new Error("Enter a valid owner email.");
   if (!input.ownerName.trim()) throw new Error("Enter the owner's name.");
+  // the plan's login limit is checked first, so Zypher sees a clear message instead of a database error
+  const { error: limitErr } = await supabase.rpc("setup_check_invite", { p_shop_id: input.shopId, p_role: "owner", p_branch_id: null });
+  if (limitErr) throw new Error(limitErr.message);
   const link = await createInviteLink({
     shopId: input.shopId,
     email: input.ownerEmail,
@@ -78,6 +82,7 @@ export async function inviteShopOwner(input: { shopId: string; ownerName: string
     branchId: null,
     invitedBy: user.id,
   });
+  await supabase.rpc("log_setup_event", { p_shop_id: input.shopId, p_action: "invite_created", p_detail: { email: input.ownerEmail.trim().toLowerCase(), role: "owner" } });
   return { link };
 }
 
@@ -97,7 +102,7 @@ export async function listZypherTeam(): Promise<ZypherMember[]> {
 
 // a one-hour link for a new Zypher staff member; they choose their own password
 export async function inviteZypherMember(input: { fullName: string; email: string }) {
-  await requireZypher();
+  const { supabase } = await requireZypher();
   const email = input.email.trim().toLowerCase();
   if (!EMAIL_RE.test(email)) throw new Error("Enter a valid email.");
   if (!input.fullName.trim()) throw new Error("Enter their name.");
@@ -107,8 +112,9 @@ export async function inviteZypherMember(input: { fullName: string; email: strin
     throw new Error(/registered|exists/i.test(error?.message ?? "") ? "This email already has an Overbooked account." : "Could not create the invite: " + (error?.message ?? "unknown error"));
   }
   // the new account starts inactive with no shop; make it Zypher staff
-  const { error: upErr } = await admin.from("profiles").update({ role: "super_admin", is_active: true, shop_id: null, branch_id: null, active_shop_id: null }).eq("id", data.user.id);
+  const { error: upErr } = await admin.from("profiles").update({ role: "super_admin", is_active: true, shop_id: null, branch_id: null }).eq("id", data.user.id);
   if (upErr) throw new Error("Account created, but could not make it Zypher staff: " + upErr.message);
+  await supabase.rpc("log_setup_event", { p_shop_id: null, p_action: "zypher_member_invited", p_detail: { email } });
   return { link: `${await siteOrigin()}/welcome?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=invite` };
 }
 
@@ -123,4 +129,5 @@ export async function setZypherMemberActive(userId: string, active: boolean) {
   }
   const { error } = await createAdminClient().from("profiles").update({ is_active: active }).eq("id", userId);
   if (error) throw new Error(error.message);
+  await supabase.rpc("log_setup_event", { p_shop_id: null, p_action: active ? "zypher_member_enabled" : "zypher_member_disabled", p_detail: { user_id: userId } });
 }

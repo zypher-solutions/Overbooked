@@ -10,7 +10,7 @@ import { RENTAL_LIST_COLUMNS } from "@/lib/shop/api";
 import { fmtDateTime, rupees } from "@/lib/shop/format";
 import { headlinePrice, useCatalog } from "@/lib/shop/useCatalog";
 import type { Product } from "@/lib/shop/types";
-import { StockCard, stockTotals, useStock } from "@/components/shop/StockCard";
+import { StockCard, stockTotals, useStock } from "@/modules/clothing/components/StockCard";
 import type { ListRental } from "@/components/shop/RentalList";
 import { Empty, Modal, PageHeader, StatusBadge, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
 

@@ -1,14 +1,15 @@
 "use client";
 
-import { Suspense, useState, type ReactNode } from "react";
+import { PasswordField, passwordIsStrong } from "@/components/overbooked/PasswordField";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   BarChart3, Boxes, Building2, Calendar, CalendarClock, CalendarDays, CalendarPlus, ChevronDown, ClipboardList, Home, KeyRound, LayoutGrid, LineChart,
   LogOut, Menu, Plus, ScanLine, Settings, ShoppingBag, Store, Tag, Upload, Users, UserSquare, Wallet, X, type LucideIcon,
 } from "lucide-react";
-import { useCart } from "@/lib/shop/cart";
+import { useCart } from "@/modules/clothing/cart";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/overbooked/AuthContext";
@@ -16,60 +17,32 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { OfflineBanner } from "@/components/overbooked/OfflineBanner";
 import { Field, Modal, goldButtonClass, ghostButtonClass, inputClass } from "./ui";
 import { SubscriptionBanner } from "./Subscription";
+import { clothingNav } from "@/modules/clothing/nav";
+import { standardNav, type NavGroup } from "@/lib/shop/nav";
 
-type NavItem = { href: string; label: string; icon: LucideIcon; show: boolean };
-type NavGroup = { title?: string; items: NavItem[] };
 
 export function ShopShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { profile, signOut } = useAuth();
-  const { shop, role, isOwner, canManage, branches, myBranchId, word, feature, trendz, loading } = useShop();
+  const { shop, role, isSupport, isOwner, canManage, branches, myBranchId, word, feature, trendz, loading } = useShop();
+
+  // Each kind of shop has its own screens. Typing the address of the other kind's screen goes to the right one,
+  // so a bridal shop never lands on the old lists and a car shop never lands on the clothing screens.
+  useEffect(() => {
+    if (loading) return;
+    const to = trendz
+      ? pathname === "/rentals" ? "/bookings" : pathname === "/dashboard" ? (canManage ? "/finance" : "/") : null
+      : ["/finance", "/bookings", "/all-rentals", "/scan"].includes(pathname) ? "/" : null;
+    if (to) router.replace(to);
+  }, [loading, trendz, canManage, pathname, router]);
   const cart = useCart();
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
-  const isZypher = role === "super_admin";
 
-  // Bridal and groom: the TRENDZ menu. Other businesses keep the simpler one.
-  const groups: NavGroup[] = loading ? [] : trendz ? [
-    { items: [
-      { href: "/", label: "Dashboard", icon: BarChart3, show: true },
-      { href: "/finance", label: "Finance", icon: Wallet, show: canManage },
-    ] },
-    { title: "Rentals", items: [
-      { href: "/bookings", label: "Bookings", icon: Calendar, show: true },
-      { href: "/scan", label: "Inventory Search", icon: ScanLine, show: true },
-      { href: "/all-rentals", label: "All Rentals", icon: ClipboardList, show: true },
-      { href: "/calendar", label: "Calendar", icon: CalendarDays, show: true },
-      { href: "/customers", label: "Customers", icon: UserSquare, show: true },
-      { href: "/appointments", label: "Appointments", icon: CalendarClock, show: feature("appointments") },
-    ] },
-    { title: "Products", items: [
-      { href: "/catalog", label: "All Products", icon: LayoutGrid, show: true },
-      { href: "/catalog/new", label: "Add New Product", icon: Plus, show: canManage },
-      { href: "/catalog?tab=categories", label: "Categories", icon: Tag, show: canManage },
-      { href: "/catalog/import", label: "CSV Import", icon: Upload, show: canManage },
-    ] },
-    // branches, staff and where stock is kept are set up by Zypher (Open shop from the console), not by the shop
-    { title: "Admin", items: [
-      { href: "/branches", label: "Branch Management", icon: Building2, show: isZypher },
-      { href: "/staff", label: "Staff Management", icon: Users, show: isZypher },
-      { href: "/stock-locations", label: "Stock Locations", icon: Boxes, show: isZypher },
-      { href: "/settings", label: "Shop settings", icon: Settings, show: isOwner },
-    ] },
-  ] : [{ items: [
-    { href: "/", label: "Today", icon: Home, show: true },
-    { href: "/book", label: "New booking", icon: CalendarPlus, show: true },
-    { href: "/rentals", label: "Bookings", icon: ClipboardList, show: true },
-    { href: "/calendar", label: "Calendar", icon: CalendarDays, show: true },
-    { href: "/appointments", label: "Appointments", icon: CalendarClock, show: feature("appointments") },
-    { href: "/customers", label: "Customers", icon: UserSquare, show: true },
-    { href: "/catalog", label: word("items", "Catalog"), icon: LayoutGrid, show: true },
-    { href: "/dashboard", label: "Money and reports", icon: LineChart, show: canManage },
-    { href: "/branches", label: "Branches", icon: Building2, show: isZypher },
-    { href: "/staff", label: "Staff", icon: Users, show: isZypher },
-    { href: "/settings", label: "Shop settings", icon: Settings, show: isOwner },
-  ] }];
+  const navCtx = { isOwner, canManage, isSupport, feature, word };
+  const groups: NavGroup[] = loading ? [] : trendz ? clothingNav(navCtx) : standardNav(navCtx);
   const visible = groups.map((g) => ({ ...g, items: g.items.filter((n) => n.show) })).filter((g) => g.items.length);
 
   const myBranch = branches.find((b) => b.id === myBranchId)?.name;
@@ -90,16 +63,11 @@ export function ShopShell({ children }: { children: ReactNode }) {
         <div className="flex items-start justify-between px-5 pb-4 pt-6">
           <div className="min-w-0">
             <p className="truncate font-display text-xl font-semibold text-foreground">{shop.name}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-gold">{role === "super_admin" ? "Zypher view" : trendz ? "Rental Studio" : "Overbooked"}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-gold">{isSupport ? "Zypher support" : trendz ? "Rental Studio" : "Overbooked"}</p>
           </div>
           <button aria-label="Close menu" onClick={() => setOpen(false)} className="rounded-md p-2 hover:bg-black/5 lg:hidden"><X className="h-4 w-4" /></button>
         </div>
         <nav className="flex-1 px-3 pb-4">
-          {role === "super_admin" ? (
-            <a href="/zypher" className="mb-2 flex items-center gap-3 rounded-md border border-gold/30 bg-gold/5 px-3 py-2 text-sm text-foreground hover:bg-gold/10">
-              <Store className="h-4 w-4 text-gold" /> Zypher console
-            </a>
-          ) : null}
           {/* which item is active depends on ?tab= too (Categories), so it reads the address in its own boundary */}
           <Suspense fallback={<NavGroups groups={visible} pathname={pathname} tab={null} onPick={() => setOpen(false)} />}>
             <NavWithTab groups={visible} pathname={pathname} onPick={() => setOpen(false)} />
@@ -108,7 +76,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
         <div className="space-y-2 border-t border-border p-4 text-xs">
           <div>
             <p className="truncate font-medium text-foreground">{profile?.full_name}</p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-gold">{role === "super_admin" ? "Zypher" : role}</p>
+            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-gold">{isSupport ? "Zypher support" : role}</p>
             <p className="text-muted-foreground">{myBranch ?? "All branches"}</p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -209,7 +177,7 @@ function PasswordDialog({ open, onClose }: { open: boolean; onClose: () => void 
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
-    if (pw.length < 8) return toast.error("Password must be at least 8 characters.");
+    if (!passwordIsStrong(pw)) return toast.error("Follow every password rule in the list.");
     if (pw !== pw2) return toast.error("Passwords do not match.");
     setBusy(true);
     const { error } = await createClient().auth.updateUser({ password: pw });
@@ -227,8 +195,9 @@ function PasswordDialog({ open, onClose }: { open: boolean; onClose: () => void 
         <button className={ghostButtonClass} onClick={onClose}>Cancel</button>
         <button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Change password"}</button>
       </>}>
-      <Field label="New password"><input type="password" autoComplete="new-password" className={inputClass} value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
-      <Field label="Repeat it"><input type="password" autoComplete="new-password" className={inputClass} value={pw2} onChange={(e) => setPw2(e.target.value)} /></Field>
+      <PasswordField id="new-pw" label="New password" value={pw} onChange={setPw} autoComplete="new-password" rules icon={false} autoFocus />
+      <PasswordField id="new-pw2" label="Repeat it" value={pw2} onChange={setPw2} autoComplete="new-password" icon={false} />
+      <a href="/mfa" className="mt-3 block text-xs text-gold hover:underline">Set up two-step sign-in with an authenticator app</a>
     </Modal>
   );
 }

@@ -18,11 +18,10 @@ import {
 interface Profile {
   id: string;
   full_name: string;
-  role: "super_admin" | "manager" | "owner" | "staff";
+  role: "super_admin" | "manager" | "owner" | "staff" | "support";
   branch_id: string | null;
   is_active: boolean;
   shop_id: string | null;
-  active_shop_id: string | null;
 }
 
 export interface Shop {
@@ -49,12 +48,10 @@ interface AuthContextValue {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
-  /** The shop being worked in: the user's own shop, or for Zypher staff the shop they switched into. */
+  /** The signed-in person's shop (none for Zypher admins, who work in the console). */
   shop: Shop | null;
   isLoading: boolean;
   signOut: () => Promise<void>;
-  /** Zypher staff only: work inside another shop (null = no shop). Reloads the app. */
-  switchShop: (shopId: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -92,9 +89,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("id", userId)
         .single();
       if (!mounted || !profileData) return;
-      const shopId = profileData.role === "super_admin" ? profileData.active_shop_id : profileData.shop_id;
+      const shopId = profileData.role === "super_admin" ? null : profileData.shop_id;
       const { data: shopData } = shopId
-        ? await supabase.from("shops").select("*").eq("id", shopId).maybeSingle()
+        ? await supabase.from("shops").select("id, name, slug, token_prefix, business_types, phone, email, address, gstin, logo_url, timezone, plan, status, paid_until, monthly_fee, settings, created_at").eq("id", shopId).maybeSingle()
         : { data: null };
       if (!mounted) return;
       // a suspended shop locks out its people; Zypher staff can still open it
@@ -107,6 +104,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // get_my_role() is null for staff whose branch is inactive (derived lockout, see branch_lifecycle migration).
       const { data: role } = profileData.is_active === false ? { data: null } : await supabase.rpc("get_my_role");
       if (!mounted) return;
+      // Zypher staff and support logins have no role until they pass two-step sign-in: send them there, do not sign them out
+      if (!role && profileData.is_active !== false) {
+        const { data: needsCode } = await supabase.rpc("mfa_required");
+        if (!mounted) return;
+        if (needsCode) {
+          if (!window.location.pathname.startsWith("/mfa")) window.location.replace("/mfa");
+          return;
+        }
+      }
       if (profileData.is_active === false || !role) {
         endingOnPurpose.current = true;
         setNotice("deactivated");
@@ -186,19 +192,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/login";
   };
 
-  const switchShop = async (shopId: string | null) => {
-    const { error } = await supabase.rpc("switch_shop", { p_shop_id: shopId });
-    if (error) {
-      toast.error(error.message || "Could not switch shop.");
-      return;
-    }
-    // half-filled bookings belong to the shop being left
-    clearBookingDrafts();
-    window.location.href = "/";
-  };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, shop, isLoading, signOut, switchShop }}>
+    <AuthContext.Provider value={{ session, user, profile, shop, isLoading, signOut }}>
       {checking || notice === "deactivated" || notice === "paused" ? null : children}
       <AlertDialog open={notice !== null}>
         <AlertDialogContent>

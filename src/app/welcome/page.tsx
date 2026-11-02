@@ -2,10 +2,11 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Lock, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { inputClass, goldButtonClass } from "@/components/overbooked/primitives";
+import { goldButtonClass } from "@/components/overbooked/primitives";
+import { PasswordField, passwordIsStrong } from "@/components/overbooked/PasswordField";
 
 // A token works once. Signing in makes AuthProvider re-mount this page, so the result is kept per token
 // for the life of the page instead of in component state.
@@ -38,14 +39,15 @@ function Welcome() {
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 8) return toast.error("Password must be at least 8 characters.");
+    if (!passwordIsStrong(password)) return toast.error("Follow every password rule in the list.");
     if (password !== password2) return toast.error("Passwords do not match.");
     setSaving(true);
     const { error } = await supabase.auth.updateUser({ password });
     setSaving(false);
     if (error) return toast.error(error.message || "Could not save the password.");
     toast.success("Password set. Welcome!");
-    router.push("/");
+    const { data: needsCode } = await supabase.rpc("mfa_required");
+    router.push(needsCode ? "/mfa" : "/");
     router.refresh();
   };
 
@@ -65,24 +67,15 @@ function Welcome() {
           {state === "invalid" && (
             <div className="text-center space-y-2">
               <h2 className="text-xl font-semibold">This link has expired</h2>
-              <p className="text-sm text-muted-foreground">Invite links work once and for one hour. Ask your shop owner for a new link.</p>
+              <p className="text-sm text-muted-foreground">Invite links work once and for one hour. Ask Zypher for a new link.</p>
             </div>
           )}
           {state === "ready" && (
             <form onSubmit={save} className="space-y-5">
               <h2 className="text-2xl font-semibold">Choose your password</h2>
-              {[{ id: "pw", label: "Password", value: password, set: setPassword },
-                { id: "pw2", label: "Confirm password", value: password2, set: setPassword2 }].map((f) => (
-                <div key={f.id} className="space-y-2">
-                  <label htmlFor={f.id} className="text-sm font-medium text-muted-foreground block">{f.label}</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground/50" />
-                    <input id={f.id} type="password" autoComplete="new-password" value={f.value}
-                      onChange={(e) => f.set(e.target.value)} className={inputClass + " pl-10 h-12"} required />
-                  </div>
-                </div>
-              ))}
-              <p className="text-xs text-muted-foreground">At least 8 characters.</p>
+              <PasswordField id="pw" label="Password" value={password} onChange={setPassword} autoComplete="new-password" rules autoFocus />
+              <PasswordField id="pw2" label="Confirm password" value={password2} onChange={setPassword2} autoComplete="new-password" />
+              {password2 && password !== password2 ? <p className="text-xs text-rust">The two passwords are not the same yet.</p> : null}
               <button type="submit" disabled={saving} className={goldButtonClass + " w-full h-12 text-base"}>
                 {saving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Save and continue"}
               </button>

@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Store, PlusCircle, Wallet, Layers, ScrollText, LogOut, LogIn, Menu, Settings, Users, X } from "lucide-react";
+import { LayoutDashboard, Store, PlusCircle, Wallet, Layers, ScrollText, LogOut, Menu, Settings, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/overbooked/AuthContext";
 
@@ -20,7 +20,7 @@ const NAV = [
 
 export function ZypherShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { profile, shop, signOut, switchShop } = useAuth();
+  const { profile, signOut } = useAuth();
   const [open, setOpen] = useState(false);
 
   const isActive = (item: (typeof NAV)[number]) =>
@@ -47,16 +47,6 @@ export function ZypherShell({ children }: { children: ReactNode }) {
         ))}
       </ul>
       <div className="space-y-2 border-t border-border p-4 text-xs">
-        {shop ? (
-          <div className="rounded-md border border-gold/30 bg-gold/5 p-2.5">
-            <p className="text-muted-foreground">Shop open</p>
-            <p className="truncate font-medium text-foreground">{shop.name}</p>
-            <div className="mt-2 flex gap-2">
-              <a href="/" className="inline-flex items-center gap-1 text-gold hover:underline"><LogIn className="h-3.5 w-3.5" /> Go to shop</a>
-              <button onClick={() => switchShop(null)} className="text-muted-foreground hover:text-foreground hover:underline">Close</button>
-            </div>
-          </div>
-        ) : null}
         <p className="truncate text-muted-foreground">{profile?.full_name}</p>
         <button onClick={signOut} className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
           <LogOut className="h-3.5 w-3.5" /> Sign out

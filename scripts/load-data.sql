@@ -8,15 +8,15 @@ WHERE n.nspname = 'public' AND c.relkind = 'r';
 
 -- 30 products x 1 variation x 10 pieces
 INSERT INTO products (id, shop_id, category_id, name, sku)
-SELECT ('d1000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, :shop, 'c0000000-0000-0000-0000-000000000001', 'Load outfit ' || g, 'LD-' || g
+SELECT ('d1000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, :shop, 'c0000000-0000-0000-0000-000000000001', 'Load outfit ' || g, 'LD-' || lpad(g::text, 3, '0')
 FROM generate_series(1, 30) g;
 INSERT INTO product_variations (id, shop_id, product_id, name, sku, turnaround)
-SELECT ('e1000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, :shop, ('d1000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, 'Std', 'LD-' || g || '-S', '1 day'
+SELECT ('e1000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, :shop, ('d1000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, 'Std', 'LD-' || lpad(g::text, 3, '0') || '-S', '1 day'
 FROM generate_series(1, 30) g;
 INSERT INTO variation_rates (shop_id, variation_id, rate_type, amount)
 SELECT :shop, ('e1000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, 'day', 1000 + g * 50 FROM generate_series(1, 30) g;
 INSERT INTO units (shop_id, product_id, variation_id, branch_id, code)
-SELECT :shop, ('d1000000-0000-0000-0000-' || lpad(p::text, 12, '0'))::uuid, ('e1000000-0000-0000-0000-' || lpad(p::text, 12, '0'))::uuid, :branch, 'LD-' || p || '-S-' || u
+SELECT :shop, ('d1000000-0000-0000-0000-' || lpad(p::text, 12, '0'))::uuid, ('e1000000-0000-0000-0000-' || lpad(p::text, 12, '0'))::uuid, :branch, 'LD-' || lpad(p::text, 3, '0') || '-S-' || u
 FROM generate_series(1, 30) p, generate_series(1, 10) u;
 
 INSERT INTO customers (shop_id, full_name, phone, address, id_type, id_number)

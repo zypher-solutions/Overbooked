@@ -1,0 +1,45 @@
+name: database-backup
+
+# A daily, ENCRYPTED copy of the production database, kept as a private workflow artifact for 30 days.
+# It does not replace Supabase's own backups (paid plans); it is a second copy that works on any plan.
+# The dump holds customer phone and ID numbers, so it is encrypted before it leaves the runner.
+# Secrets (Settings > Secrets and variables > Actions): SUPABASE_DB_URL (production connection string),
+# BACKUP_PASSPHRASE (long random text, also stored in the password manager: without it a backup cannot be opened).
+# Set the repository variable BACKUP_ENABLED to true to switch it on. How to restore: docs/RUNBOOKS.md.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *" # daily at midnight UTC
+
+jobs:
+  backup:
+    if: ${{ vars.BACKUP_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Dump roles, schema and data
+        run: |
+          set -euo pipefail
+          mkdir backup
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/data.sql --data-only --use-copy
+      - name: Encrypt (AES-256), then remove the plain files
+        run: |
+          set -euo pipefail
+          test -n "$BACKUP_PASSPHRASE"
+          tar -czf backup.tgz backup
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" --symmetric --cipher-algo AES256 -o backup.tgz.gpg backup.tgz
+          rm -rf backup backup.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: overbooked-db-backup-${{ github.run_id }}
+          path: backup.tgz.gpg
+          retention-days: 30

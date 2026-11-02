@@ -38,6 +38,7 @@ export interface OverviewRow {
   units: number;
   rentals_30d: number;
   created_at: string;
+  trial_ends?: string | null;
 }
 
 export interface Template {
@@ -131,18 +132,24 @@ export function daysBetween(fromIso: string, toIso: string) {
 }
 
 // ---- billing state of a shop ----
-export type BillingState = "paused" | "overdue" | "due_soon" | "paid";
+export type BillingState = "paused" | "trial" | "overdue" | "due_soon" | "paid";
 
-export function billingState(s: { status: string; paid_until: string | null }, today = todayIST()): BillingState {
+export function billingState(s: { status: string; paid_until: string | null; trial_ends?: string | null }, today = todayIST()): BillingState {
   if (s.status === "suspended") return "paused";
+  // inside its free trial and not paid yet: not overdue
+  if (s.trial_ends && s.trial_ends >= today && (!s.paid_until || s.paid_until < today)) return "trial";
   if (!s.paid_until || s.paid_until < today) return "overdue";
   if (daysBetween(today, s.paid_until) <= 7) return "due_soon";
   return "paid";
 }
 
-export function BillingBadge({ shop }: { shop: { status: string; paid_until: string | null } }) {
+export function BillingBadge({ shop }: { shop: { status: string; paid_until: string | null; trial_ends?: string | null } }) {
   const state = billingState(shop);
   if (state === "paused") return <StatusBadge tone="muted">Paused</StatusBadge>;
+  if (state === "trial") {
+    const left = daysBetween(todayIST(), shop.trial_ends as string);
+    return <StatusBadge tone="gold">{left <= 0 ? "Trial ends today" : `Trial · ${left} day${left === 1 ? "" : "s"} left`}</StatusBadge>;
+  }
   if (state === "overdue") return <StatusBadge tone="rust">Overdue</StatusBadge>;
   if (state === "due_soon") return <StatusBadge tone="gold">Due soon</StatusBadge>;
   return <StatusBadge tone="emerald">Paid</StatusBadge>;
