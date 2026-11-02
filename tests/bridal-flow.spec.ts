@@ -17,15 +17,21 @@ const setDates = async (page: Page, from: string, to: string) => {
   await page.getByLabel("Pickup date").fill(dmy(from));
   await page.getByLabel("Return date").fill(dmy(to));
 };
+// the booking takes its items from the cart: open the product on All Rentals, press Rent on the first free branch, then open the booking form
+const rent = async (page: Page, product: RegExp) => {
+  await page.goto("/all-rentals");
+  await page.getByRole("button", { name: product }).first().click();
+  await page.getByRole("button", { name: /to cart$/, disabled: false }).first().click();
+  await page.goto("/book");
+};
 const farDay = () => new Date(Date.now() + (60 + Math.floor(Math.random() * 300)) * 86_400_000).toISOString().slice(0, 10);
 const num = (t: string | null) => Number((t ?? "").replace(/[^0-9.]/g, ""));
 
 test("bridal: a lost piece is charged, a return that leaves money unpaid asks first, and Finance shows what is owed", async ({ page }) => {
   await signIn(page, "owner@groom.test");
-  await page.goto("/book");
+  await rent(page, /Cream sherwani/);
   const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10); // India date
   await setDates(page, today, new Date(Date.parse(today) + 86_400_000).toISOString().slice(0, 10));
-  await page.getByRole("button", { name: /Cream sherwani/ }).click();
   await field(page, "Phone").fill("96" + String(Date.now()).slice(-8));
   await field(page, "Name").fill("Lost Piece Bride");
   await field(page, "Deposit agreed").fill("2000");
@@ -73,10 +79,9 @@ test("bridal: a lost piece is charged, a return that leaves money unpaid asks fi
 test("bridal: Cancel offers a no-show once the pickup date has passed, and refunds the deposit and what was paid less the fee", async ({ page }) => {
   await signIn(page, "owner@groom.test");
   // a booking for today (the start date is allowed today), then the planned start passes only after midnight: so check the plain cancel
-  await page.goto("/book");
+  await rent(page, /Cream sherwani/);
   const day = farDay();
   await setDates(page, day, new Date(Date.parse(day) + 86_400_000).toISOString().slice(0, 10));
-  await page.getByRole("button", { name: /Cream sherwani/ }).click();
   await field(page, "Phone").fill("95" + String(Date.now()).slice(-8));
   await field(page, "Name").fill("Cancelling Bride");
   await field(page, "Advance").fill("800");

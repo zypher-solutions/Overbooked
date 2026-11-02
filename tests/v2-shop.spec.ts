@@ -20,6 +20,13 @@ const setDates = async (page: Page, from: string, to: string) => {
   await page.getByLabel("Pickup date").fill(dmy(from));
   await page.getByLabel("Return date").fill(dmy(to));
 };
+// the booking takes its items from the cart: open the product on All Rentals, press Rent on the first free branch, then open the booking form
+const rent = async (page: Page, product: RegExp) => {
+  await page.goto("/all-rentals");
+  await page.getByRole("button", { name: product }).first().click();
+  await page.getByRole("button", { name: /to cart$/, disabled: false }).first().click();
+  await page.goto("/book");
+};
 
 test("a bridal owner gets the TRENDZ menu", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
@@ -146,12 +153,11 @@ test("Zypher lands in the console and sees every shop", async ({ page }) => {
 
 test("bridal: book, hand over and return with a damage charge", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
-  await page.goto("/book");
+  await rent(page, /Kanjivaram silk saree/);
   // a quiet date far ahead so repeated runs never collide
   const day = new Date(Date.now() + (60 + Math.floor(Math.random() * 300)) * 86_400_000).toISOString().slice(0, 10);
   const end = new Date(Date.parse(day) + 2 * 86_400_000).toISOString().slice(0, 10);
   await setDates(page, day, end);
-  await page.getByRole("button", { name: /Kanjivaram silk saree/ }).click();
   await expect(page.getByText("₹2,400").first()).toBeVisible();
 
   const phone = "98" + String(Date.now()).slice(-8);
@@ -190,14 +196,13 @@ const farDay = () => new Date(Date.now() + (60 + Math.floor(Math.random() * 300)
 
 test("bridal: customer and payment open only when every item is free; the piece and cleaning days are kept", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
-  await page.goto("/book");
+  await rent(page, /Red bridal lehenga/);
   await expect(page.getByText("Select pickup and return dates above to verify product availability")).toBeVisible();
   await expect(field(page, "Phone")).toHaveCount(0);
 
   const day = farDay();
   const end = new Date(Date.parse(day) + 2 * 86_400_000).toISOString().slice(0, 10);
   await setDates(page, day, end);
-  await page.getByRole("button", { name: /Red bridal lehenga/ }).click();
   await expect(page.getByLabel(/^Piece 1 of/)).toHaveValue(/.+/); // the free piece is already chosen
   await expect(field(page, "Phone")).toBeVisible();
 

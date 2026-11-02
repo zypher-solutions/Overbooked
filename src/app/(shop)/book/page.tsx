@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Minus, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -492,7 +493,11 @@ function NewBooking() {
               {allFree ? <span className="inline-flex items-center gap-1 rounded-full border border-emerald/30 bg-emerald/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald"><Check className="h-3.5 w-3.5" /> All Items In Stock</span> : null}
             </div>
             {lines.length === 0 ? (
-              <div className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">The cart is empty. Add items below.</div>
+              <div className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">
+                The cart is empty. Pick items from{" "}
+                <Link href="/all-rentals" className="font-medium text-gold hover:underline">All Rentals</Link> or{" "}
+                <Link href="/scan" className="font-medium text-gold hover:underline">Inventory Search</Link> and press Rent.
+              </div>
             ) : !periodOk ? (
               <div className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">Please select a <strong>Return Date</strong> above to check real-time stock availability.</div>
             ) : checkingStock ? (
@@ -617,13 +622,6 @@ function NewBooking() {
               </div>
             ) : null}
 
-            <details open={lines.length === 0} className="rounded-xl border border-dashed border-border">
-              <summary className="cursor-pointer px-3 py-2 text-sm font-medium">Add more items</summary>
-              <div className="p-2">
-                <ItemPicker products={products} categories={categories} templateOf={templateOf} avail={avail} periodOk={periodOk}
-                  inCart={Object.fromEntries(lines.map((l) => [l.variation_id, l.qty]))} onAdd={addLine} />
-              </div>
-            </details>
           </section>
 
           {/* 2. customer and payment: open once every item is free */}

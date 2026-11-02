@@ -10,7 +10,7 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test:fixtures": "docker exec -i supabase_db_overbooked psql -U postgres -v ON_ERROR_STOP=1 < supabase/test_fixtures.sql",
-    "test:reset": "supabase db reset && npm run test:fixtures",
+    "test:reset": "npx supabase db reset && npm run test:fixtures",
     "test:db": "supabase test db",
     "test:e2e": "playwright test",
     "format": "prettier --write .",
