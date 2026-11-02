@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/shop/DateInput";
 import type { NewCustomer } from "./CustomerPicker";
 import { ID_TYPES } from "./CustomerPicker";
 import { Field, inputClass } from "./ui";
@@ -31,7 +32,7 @@ export function CustomerForm({ value, onChange }: { value: CustomerDraft; onChan
       </Field>
       <Field label="ID number"><input className={inputClass} value={value.id_number} onChange={(e) => set({ id_number: e.target.value })} /></Field>
       <Field label="Driving licence number"><input className={inputClass} value={value.licence_number} onChange={(e) => set({ licence_number: e.target.value })} /></Field>
-      <Field label="Licence valid until"><input type="date" className={inputClass} value={value.licence_expiry} onChange={(e) => set({ licence_expiry: e.target.value })} /></Field>
+      <Field label="Licence valid until"><DateInput value={value.licence_expiry} onChange={(v) => set({ licence_expiry: v })} /></Field>
       <Field label="Notes" className="sm:col-span-2"><textarea className={inputClass} rows={2} value={value.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
     </div>
   );

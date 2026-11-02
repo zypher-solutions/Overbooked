@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/shop/DateInput";
 import { useEffect, useState } from "react";
 import { AlertTriangle, UserCheck, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -80,7 +81,7 @@ export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicenc
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <p className="text-xs text-rust sm:col-span-2">A valid driving licence is needed before the vehicle is handed over. Add it now or at pickup.</p>
             <Field label="Licence number"><input className={inputClass} value={draft.licence_number} onChange={(e) => set({ licence_number: e.target.value })} /></Field>
-            <Field label="Valid until"><input type="date" className={inputClass} value={draft.licence_expiry} onChange={(e) => set({ licence_expiry: e.target.value })} /></Field>
+            <Field label="Valid until"><DateInput value={draft.licence_expiry} onChange={(v) => set({ licence_expiry: v })} /></Field>
           </div>
         ) : null}
       </div>
@@ -121,7 +122,7 @@ export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicenc
           {needsLicence ? (
             <>
               <Field label="Driving licence number"><input className={inputClass} value={draft.licence_number} onChange={(e) => set({ licence_number: e.target.value })} /></Field>
-              <Field label="Licence valid until"><input type="date" className={inputClass} value={draft.licence_expiry} onChange={(e) => set({ licence_expiry: e.target.value })} /></Field>
+              <Field label="Licence valid until"><DateInput value={draft.licence_expiry} onChange={(v) => set({ licence_expiry: v })} /></Field>
             </>
           ) : null}
           <Field label="Email"><input type="email" className={inputClass} value={draft.email} onChange={(e) => set({ email: e.target.value })} /></Field>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DateInput } from "@/components/shop/DateInput";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ArrowUpDown, Filter, MessageCircle, Plus, RefreshCw, Search, X } from "lucide-react";
@@ -403,9 +404,9 @@ export function TrendzDashboard() {
       {showFilters ? (
         <div className="glass mt-4 grid grid-cols-2 gap-3 p-3 sm:flex sm:flex-wrap sm:items-end">
           <label className="text-xs text-muted-foreground"><span className="mb-1 block">Start from</span>
-            <input type="date" className={cn(inputClass, "h-9 w-full text-xs sm:w-40")} value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} /></label>
+            <DateInput className="w-full sm:w-40 [&_input]:h-9 [&_input]:text-xs" value={f.from} onChange={(v) => setF({ ...f, from: v })} /></label>
           <label className="text-xs text-muted-foreground"><span className="mb-1 block">Start to</span>
-            <input type="date" className={cn(inputClass, "h-9 w-full text-xs sm:w-40")} value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} /></label>
+            <DateInput className="w-full sm:w-40 [&_input]:h-9 [&_input]:text-xs" value={f.to} onChange={(v) => setF({ ...f, to: v })} /></label>
           {!myBranchId && activeBranches.length > 1 ? (
             <label className="text-xs text-muted-foreground"><span className="mb-1 block">Branch</span>
               <select className={cn(inputClass, "sm:w-40")} value={f.branch} onChange={(e) => setF({ ...f, branch: e.target.value })}>

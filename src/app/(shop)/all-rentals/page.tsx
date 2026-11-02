@@ -86,14 +86,16 @@ export default function AllRentals() {
       ) : view === "grid" ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">
           {list.map((p) => {
-            const { free } = stockTotals(stock, p, branch || undefined);
+            const { total, free } = stockTotals(stock, p, branch || undefined);
             const variants = (p.product_variations ?? []).filter((v) => v.is_enabled).length;
             return (
               <button key={p.id} type="button" onClick={() => setOpen(p)}
                 className="group flex flex-col overflow-hidden rounded-lg border border-border bg-surface text-left transition-all hover:border-gold/40 hover:shadow-md">
                 <div className="relative aspect-square w-full overflow-hidden bg-muted/60">
                   {p.image_url ? <img src={p.image_url} alt={p.name} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : null}
-                  <span className="absolute right-2 top-2"><StatusBadge tone={free > 0 ? "emerald" : "rust"}>{free > 0 ? "In Stock" : "Out"}</StatusBadge></span>
+                  {stock === null ? null : <span className="absolute right-2 top-2">
+                    <StatusBadge tone={free > 0 ? "emerald" : total === 0 ? "muted" : "rust"}>{free > 0 ? "In Stock" : total === 0 ? "No pieces" : "Out"}</StatusBadge>
+                  </span>}
                 </div>
                 <div className="flex flex-1 flex-col p-3">
                   <h3 className="line-clamp-2 font-display text-sm font-semibold sm:text-base">{p.name}</h3>

@@ -15,6 +15,11 @@ async function signIn(page: Page, email: string) {
 }
 
 const field = (page: Page, label: string) => page.locator("label", { hasText: label }).locator("input, select, textarea").first();
+const dmy = (iso: string) => iso.split("-").reverse().join("/");
+const setDates = async (page: Page, from: string, to: string) => {
+  await page.getByLabel("Pickup date").fill(dmy(from));
+  await page.getByLabel("Return date").fill(dmy(to));
+};
 
 test("a bridal owner gets the TRENDZ menu", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
@@ -145,8 +150,7 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   // a quiet date far ahead so repeated runs never collide
   const day = new Date(Date.now() + (60 + Math.floor(Math.random() * 300)) * 86_400_000).toISOString().slice(0, 10);
   const end = new Date(Date.parse(day) + 2 * 86_400_000).toISOString().slice(0, 10);
-  await field(page, "Pickup").fill(`${day}T10:00`);
-  await field(page, "Return").fill(`${end}T18:00`);
+  await setDates(page, day, end);
   await page.getByRole("button", { name: /Kanjivaram silk saree/ }).click();
   await expect(page.getByText("₹2,400").first()).toBeVisible();
 
@@ -154,8 +158,8 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   await field(page, "Phone").fill(phone);
   await field(page, "Name").fill("Playwright Bride");
   await field(page, "Advance").fill("1000");
-  await page.getByRole("radio", { name: "Cash" }).first().click();
-  await page.getByRole("button", { name: "Confirm booking" }).click();
+  await page.getByLabel("Advance payment method").selectOption("cash");
+  await page.getByRole("button", { name: /^Confirm Booking/ }).click();
 
   await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
   await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).first().click(); // the WhatsApp confirmation
@@ -187,13 +191,12 @@ const farDay = () => new Date(Date.now() + (60 + Math.floor(Math.random() * 300)
 test("bridal: customer and payment open only when every item is free; the piece and cleaning days are kept", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
   await page.goto("/book");
-  await expect(page.getByText("Add the items from the list above first.")).toBeVisible();
+  await expect(page.getByText("Select pickup and return dates above to verify product availability")).toBeVisible();
   await expect(field(page, "Phone")).toHaveCount(0);
 
   const day = farDay();
   const end = new Date(Date.parse(day) + 2 * 86_400_000).toISOString().slice(0, 10);
-  await field(page, "Pickup").fill(`${day}T10:00`);
-  await field(page, "Return").fill(`${end}T18:00`);
+  await setDates(page, day, end);
   await page.getByRole("button", { name: /Red bridal lehenga/ }).click();
   await expect(page.getByLabel(/^Piece 1 of/)).toHaveValue(/.+/); // the free piece is already chosen
   await expect(field(page, "Phone")).toBeVisible();
@@ -202,14 +205,13 @@ test("bridal: customer and payment open only when every item is free; the piece 
   await page.getByRole("button", { name: "One more" }).click();
   await expect(page.getByText("Some cart items are unavailable for the selected dates.")).toBeVisible();
   await expect(field(page, "Phone")).toHaveCount(0);
-  await expect(page.getByText("Payment opens once the dates are set and every item is free.")).toBeVisible();
   await page.getByRole("button", { name: "One less" }).click();
   await expect(field(page, "Phone")).toBeVisible();
 
-  await field(page, "Cleaning days").fill("2");
+  await field(page, "Maintenance Buffer").fill("2");
   await field(page, "Phone").fill("98" + String(Date.now()).slice(-8));
   await field(page, "Name").fill("Playwright Cleaning");
-  await page.getByRole("button", { name: "Confirm booking" }).click();
+  await page.getByRole("button", { name: /^Confirm Booking/ }).click();
   await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
   await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).first().click();
   await expect(page.getByText("BR-001-M-1").first()).toBeVisible(); // the piece that was chosen
@@ -226,11 +228,10 @@ test("bridal: scan a tag into the cart, check out, hand over, then scan it back 
   await expect(page).toHaveURL(/\/book$/);
 
   const day = farDay();
-  await field(page, "Pickup").fill(`${day}T10:00`);
-  await field(page, "Return").fill(`${new Date(Date.parse(day) + 86_400_000).toISOString().slice(0, 10)}T18:00`);
+  await setDates(page, day, new Date(Date.parse(day) + 86_400_000).toISOString().slice(0, 10));
   await field(page, "Phone").fill("97" + String(Date.now()).slice(-8));
   await field(page, "Name").fill("Scanned Bride");
-  await page.getByRole("button", { name: "Confirm booking" }).click();
+  await page.getByRole("button", { name: /^Confirm Booking/ }).click();
   await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
   await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).first().click();
   await expect(page.getByText("BR-002-GOLD-2").first()).toBeVisible(); // the exact piece that was scanned

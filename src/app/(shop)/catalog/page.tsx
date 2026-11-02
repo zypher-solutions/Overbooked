@@ -428,15 +428,17 @@ function Categories({ addSignal }: { addSignal: number }) {
       <ConfirmDialog open={!!deleting} message={`Delete ${deleting?.name}?\n\nA category that still has products cannot be deleted.`}
         onCancel={() => setDeleting(null)} onConfirm={() => { if (deleting) void remove(deleting); setDeleting(null); }} />
       <Modal open={edit !== null} onClose={() => setEdit(null)} title={edit?.id ? "Edit category" : "New category"}
-        description="The type decides how items in it are priced and handed over."
+        description={templates.length > 1 ? "The type decides how items in it are priced and handed over." : undefined}
         footer={<><button className={ghostButtonClass} onClick={() => setEdit(null)}>Cancel</button><button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save"}</button></>}>
         {edit ? <>
           <Field label="Name"><input className={inputClass} value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
-          <Field label="Type" hint={edit.id ? "Fixed once items exist in it" : undefined}>
-            <select className={inputClass} value={edit.template_key} disabled={!!edit.id} onChange={(e) => setEdit({ ...edit, template_key: e.target.value })}>
-              {templates.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
-            </select>
-          </Field>
+          {templates.length > 1 ? (
+            <Field label="Type" hint={edit.id ? "Fixed once items exist in it" : undefined}>
+              <select className={inputClass} value={edit.template_key} disabled={!!edit.id} onChange={(e) => setEdit({ ...edit, template_key: e.target.value })}>
+                {templates.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
+              </select>
+            </Field>
+          ) : null}
           <Field label={trendz ? "Base SKU" : "SKU prefix (optional)"}
             hint={trendz ? "2 to 6 capital letters, e.g. BR. Products in this category are numbered BR-001, BR-002..." : "2 to 6 capital letters, e.g. LEH"}>
             <input className={monoInputClass} maxLength={6} value={edit.sku_prefix ?? ""} onChange={(e) => setEdit({ ...edit, sku_prefix: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") })} />
