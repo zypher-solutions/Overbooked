@@ -22,8 +22,11 @@ const setDates = async (page: Page, from: string, to: string) => {
 };
 // the booking takes its items from the cart: open the product on All Rentals, press Rent on the first free branch, then open the booking form
 const rent = async (page: Page, product: RegExp) => {
-  await page.goto("/all-rentals");
-  await page.getByRole("button", { name: product }).first().click();
+  await page.goto("/catalog");
+  await page.getByRole("row", { name: product }).first().getByRole("button", { name: "Rent", exact: true }).click(); // Rent on the product, then colour and size
+  // a product with colours and sizes first asks which ones: Search shows them all
+  const search = page.getByRole("dialog").getByRole("button", { name: "Show all" });
+  if (await search.isVisible({ timeout: 1500 }).catch(() => false)) await search.click();
   await page.getByRole("button", { name: /to cart$/, disabled: false }).first().click();
   await page.goto("/book");
 };
@@ -38,21 +41,18 @@ test("a bridal owner gets the TRENDZ menu", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   const nav = page.getByLabel("Main navigation");
   await expect(nav.getByText("Kalyani Bridal")).toBeVisible();
-  for (const item of ["Dashboard", "Finance", "Bookings", "Inventory Search", "All Rentals", "Calendar", "Customers", "All Products",
-    "Add New Product", "Categories", "Extras", "CSV Import", "Shop settings"]) {
+  for (const item of ["Dashboard", "Finance", "Bookings", "Inventory Search", "Calendar", "Customers", "All Products",
+    "Add New Product", "Categories", "CSV Import", "Shop settings"]) {
     await expect(nav.getByRole("link", { name: item, exact: true })).toBeVisible();
   }
   // branches, staff and stock locations are set up by Zypher, not by the shop
   for (const item of ["Branch Management", "Staff Management", "Stock Locations"]) {
     await expect(nav.getByRole("link", { name: item, exact: true })).toHaveCount(0);
   }
-  // All Products has no tabs (as in TRENDZ): Categories and Extras are their own menu items
+  // All Products has no tabs (as in TRENDZ): Categories is its own menu item
   await nav.getByRole("link", { name: "All Products", exact: true }).click();
   await expect(page.getByRole("heading", { name: "All Products" })).toBeVisible();
   await expect(page.getByRole("tab")).toBeHidden();
-  await nav.getByRole("link", { name: "Extras", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Extras", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /add extra/i })).toBeVisible();
   // the setup screens live only in the Zypher console: the shop has no such addresses
   for (const path of ["/staff", "/branches"]) {
     const res = await page.goto(path);
@@ -172,6 +172,7 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   await page.getByLabel("Advance payment method").selectOption("cash");
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
 
+  await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click(); // the pop-up, then the list
   await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
   await openBooking(page, "Playwright Bride");
   await expect(page.getByText("Booked", { exact: true })).toBeVisible();
@@ -222,6 +223,7 @@ test("bridal: customer and payment open only when every item is free; the piece 
   await field(page, "Phone").fill("98" + String(Date.now()).slice(-8));
   await field(page, "Name").fill("Playwright Cleaning");
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
+  await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click(); // the pop-up, then the list
   await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
   await openBooking(page, "Playwright Cleaning");
   await expect(page.getByText("BR-001-M-1").first()).toBeVisible(); // the piece that was chosen
@@ -242,6 +244,7 @@ test("bridal: scan a tag into the cart, check out, hand over, then scan it back 
   await field(page, "Phone").fill("97" + String(Date.now()).slice(-8));
   await field(page, "Name").fill("Scanned Bride");
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
+  await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click(); // the pop-up, then the list
   await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
   await openBooking(page, "Scanned Bride");
   await expect(page.getByText("BR-002-GOLD-2").first()).toBeVisible(); // the exact piece that was scanned
@@ -257,7 +260,7 @@ test("bridal: scan a tag into the cart, check out, hand over, then scan it back 
   await page.getByLabel("Scan or type").fill("BR-002-GOLD-2");
   await page.getByLabel("Scan or type").press("Enter");
   const ret = page.getByRole("dialog");
-  await expect(ret.getByText("Pieces received (1 of 1)")).toBeVisible({ timeout: 15_000 });
+  await expect(ret.getByRole("button", { name: "Mark returned" })).toBeVisible({ timeout: 15_000 });
   await ret.getByRole("button", { name: "Mark returned" }).click();
   await expect(page.getByText("Returned", { exact: true })).toBeVisible();
 });
@@ -314,6 +317,7 @@ test("bridal: Edit changes a booking and takes a payment in the same card; the m
   await field(page, "Security Deposit").fill("500");
   await page.getByLabel("Deposit payment method").selectOption("cash");
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
+  await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click(); // the pop-up, then the list
   await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
   await openBooking(page, "Edit Card Bride");
 

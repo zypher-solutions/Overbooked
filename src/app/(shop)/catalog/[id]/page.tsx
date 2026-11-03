@@ -27,7 +27,7 @@ export default function ProductPage() {
       .eq("id", id).maybeSingle();
     if (error) toast.error(errorText(error));
     const product = (data as Product) ?? null;
-    product?.product_variations?.sort((a, b) => a.sku.localeCompare(b.sku));
+    if (product) product.product_variations = (product.product_variations ?? []).filter((v) => !v.archived_at).sort((a, b) => a.sku.localeCompare(b.sku));
     setP(product);
     setVersion((v) => v + 1);
   }, [id]);

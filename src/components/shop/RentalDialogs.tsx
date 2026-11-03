@@ -53,7 +53,7 @@ export function PaymentDialog({ rental, open, onClose, onDone }: DialogProps) {
   // while the piece is out, only the owner can give the deposit back (the database enforces it); staff do it at return
   const refundNow = isOwner || rental.status === "completed";
   const kinds: PaymentKind[] = rental.status === "cancelled" || rental.status === "no_show"
-    ? ["deposit_refund"] : ["payment", "deposit", ...(refundNow ? ["deposit_refund" as const] : []), "deposit_applied"];
+    ? ["deposit_refund"] : ["payment", "deposit", ...(refundNow ? ["deposit_refund" as const] : [])];
 
   // limits the database enforces, shown before the button is pressed
   const limit = kind === "payment" ? { max: m.balance, maxText: `the balance (${rupees(m.balance)})` }

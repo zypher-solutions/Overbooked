@@ -4,10 +4,10 @@ import { DateInput, DateTimeInput } from "@/components/shop/DateInput";
 import { useEffect, useMemo, useState } from "react";
 import { Camera, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
-import { shopModules } from "@/modules/registry";
 import { call, money, uploadPhotos, type RentalDetail } from "@/lib/shop/api";
 import { CHARGE_LABELS, errorText, fmtDate, isoToZoned, num, rupees, zonedToIso } from "@/lib/shop/format";
 import type { ChargeType, Method } from "@/lib/shop/types";
@@ -28,7 +28,7 @@ function useUnits(r: RentalDetail, state: "held" | "out") {
   })), [r, state]);
 }
 
-function CheckForm({ title, kind, value, onChange, allowLost, reference, compact = false }: {
+function CheckForm({ title, kind, value, onChange, allowLost, reference, compact = false, hideCondition = false }: {
   title: string;
   kind: string | undefined;
   value: CheckDraft;
@@ -36,13 +36,15 @@ function CheckForm({ title, kind, value, onChange, allowLost, reference, compact
   allowLost: boolean;
   reference?: { odometer: number | null; fuel_level: number | null } | null;
   compact?: boolean;
+  /** at pickup a piece is always good, so there is nothing to choose; the note and photos stay */
+  hideCondition?: boolean;
 }) {
   const vehicle = kind === "vehicle";
   const set = (patch: Partial<CheckDraft>) => onChange({ ...value, ...patch });
   return (
     <div className="rounded-lg border border-border p-3">
       <p className="mb-2 text-sm font-medium text-foreground">{title}</p>
-      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={`Condition of ${title}`}>
+      {hideCondition ? null : <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={`Condition of ${title}`}>
         {(["good", "damaged", ...(allowLost ? ["lost"] : [])] as CheckDraft["condition"][]).map((c) => (
           <button key={c} type="button" role="radio" aria-checked={value.condition === c} onClick={() => set({ condition: c })}
             className={cn("rounded-full border px-3 py-1 text-xs capitalize", value.condition === c
@@ -51,7 +53,7 @@ function CheckForm({ title, kind, value, onChange, allowLost, reference, compact
             {c === "good" ? "Good" : c === "damaged" ? "Damaged" : "Lost / not returned"}
           </button>
         ))}
-      </div>
+      </div>}
       {vehicle ? (
         <div className="mt-3 grid grid-cols-2 gap-3">
           <Field label="Odometer (km)" hint={reference?.odometer != null ? `At pickup: ${reference.odometer}` : undefined}>
@@ -229,7 +231,7 @@ export function PickupDialog({ rental, open, onClose, onDone }: { rental: Rental
       ) : null}
       {units.map((u) => (
         <CheckForm key={u.reservation.unit_id} title={`${u.reservation.units?.code ?? ""} · ${u.line?.description ?? ""}`} kind={u.line?.kind}
-          compact={u.line?.kind === "wearable"} allowLost={false} value={checks[u.reservation.unit_id] ?? emptyCheck}
+          hideCondition={u.line?.kind === "wearable"} allowLost={false} value={checks[u.reservation.unit_id] ?? emptyCheck}
           onChange={(v) => setChecks({ ...checks, [u.reservation.unit_id]: v })} />
       ))}
       {m.balance > 0 || depDue > 0 ? (
@@ -254,22 +256,18 @@ export function PickupDialog({ rental, open, onClose, onDone }: { rental: Rental
 // ==========================================================================
 interface ChargeRow { type: ChargeType; amount: string; note: string; suggested: boolean }
 
-export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
+export function ReturnDialog({ rental, open, onClose, onDone }: {
   rental: RentalDetail; open: boolean; onClose: () => void; onDone: () => void;
   /** a piece scanned at Inventory Search: it starts ticked as received */
   scannedUnitId?: string;
 }) {
-  const { shop, tz, word, businessModule } = useShop();
+  const { shop, tz, word } = useShop();
   const units = useUnits(rental, "out");
-  // a module may have each piece scanned, typed or ticked as it comes back before the return is saved (clothing)
-  const { ReturnPieces } = shopModules[businessModule];
-  const tickPieces = !!ReturnPieces && units.every((u) => u.line?.kind === "wearable");
-  const [received, setReceived] = useState<Set<string>>(new Set());
   const m = money(rental);
   const [returnedAt, setReturnedAt] = useState("");
   const [checks, setChecks] = useState<Record<string, CheckDraft>>({});
   const [charges, setCharges] = useState<ChargeRow[]>([]);
-  const [kept, setKept] = useState("");
+  const kept = ""; // the deposit is never kept against the balance: it is returned (or stays held)
   const [pay, setPay] = useState({ amount: "", method: "" as Method | "" });
   const [refund, setRefund] = useState({ amount: "", method: "" as Method | "" });
   const [touched, setTouched] = useState(false); // money fields edited by hand
@@ -310,7 +308,6 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
     setChecks(Object.fromEntries(units.map((u) => [u.reservation.unit_id, { ...emptyCheck }])));
     setCharges([]);
     setTouched(false);
-    setReceived(new Set(scannedUnitId ? [scannedUnitId] : []));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -344,8 +341,7 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
   // money defaults follow the charges until edited by hand
   useEffect(() => {
     if (!open || touched) return;
-    const keep = Math.min(m.depositHeld, due);
-    setKept(keep > 0 ? String(keep) : "");
+    const keep = 0;
     setPay((p) => ({ ...p, amount: due - keep > 0 ? String(Math.round((due - keep) * 100) / 100) : "" }));
     const back = Math.round((m.depositHeld - keep) * 100) / 100;
     setRefund((r) => ({ ...r, amount: back > 0 ? String(back) : "" }));
@@ -364,13 +360,11 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
     refundMethod: num(refund.amount) > 0 && !refund.method ? "Choose how the deposit is returned." : null,
   };
   const bad = Object.values(errs).some(Boolean);
-  const submit = async () => {
+  // money left open at return: asked in the app's own card, then the return carries on
+  const [askOpen, setAskOpen] = useState<string | null>(null);
+  const submit = async (confirmed = false) => {
     setTried(true);
     if (errs.returned) return toast.error(errs.returned);
-    const missing = tickPieces ? units.filter((u) => !received.has(u.reservation.unit_id) && checks[u.reservation.unit_id]?.condition !== "lost") : [];
-    if (missing.length) {
-      return toast.error(`Not received yet: ${missing.map((u) => u.reservation.units?.code).join(", ")}. Scan or tick each piece, or mark a missing one as lost.`);
-    }
     for (const u of units) {
       const c = checks[u.reservation.unit_id];
       if (u.line?.kind === "vehicle" && (!c?.odometer || c.fuel === "")) return toast.error(`Record the odometer and fuel of ${u.reservation.units?.code}.`);
@@ -382,7 +376,7 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
     const stillHeld = Math.round((m.depositHeld - num(kept) - num(refund.amount)) * 100) / 100;
     if (unpaid > 0.004 || stillHeld > 0.004) {
       const parts = [unpaid > 0.004 ? `${rupees(unpaid)} will stay unpaid` : "", stillHeld > 0.004 ? `${rupees(stillHeld)} of the deposit will stay held` : ""].filter(Boolean);
-      if (!window.confirm(`${parts.join(" and ")}. Mark ${rental.token} as returned anyway?`)) return;
+      if (!confirmed) { setAskOpen(parts.join("\n")); return; }
     }
     setBusy(true);
     try {
@@ -415,16 +409,17 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
 
   const isRoom = units.every((u) => u.line?.kind === "room");
   return (
+    <>
+    <ConfirmDialog open={askOpen !== null} tone="warn" title="Money is still open"
+      message={`${askOpen ?? ""}\n\nMark ${rental.token} as returned anyway?`} confirmLabel="Return anyway" cancelLabel="Go back"
+      onCancel={() => setAskOpen(null)} onConfirm={() => { setAskOpen(null); void submit(true); }} />
     <Modal open={open} onClose={onClose} wide title={`${isRoom ? "Check out" : word("end")}: ${rental.token}`}
       description={`Due back ${new Date(rental.end_at).toLocaleString("en-IN", { timeZone: tz, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}. Charges below are suggested; change them as agreed.`}
       footer={<>
         <button className={ghostButtonClass} onClick={onClose}>Cancel</button>
-        <button className={goldButtonClass} disabled={busy || (tried && bad)} onClick={submit}>{busy ? "Saving..." : isRoom ? "Check out" : "Mark returned"}</button>
+        <button className={goldButtonClass} disabled={busy || (tried && bad)} onClick={() => void submit()}>{busy ? "Saving..." : isRoom ? "Check out" : "Mark returned"}</button>
       </>}>
       <Field label="Returned at" error={errs.returned ?? undefined}><DateTimeInput value={returnedAt} max={isoToZoned(new Date().toISOString(), tz)} onChange={(v) => setReturnedAt(v)} /></Field>
-      {tickPieces && open ? (
-        <ReturnPieces pieces={units.map((u) => ({ id: u.reservation.unit_id, code: u.reservation.units?.code ?? "" }))} received={received} onChange={setReceived} />
-      ) : null}
       {units.map((u) => (
         <CheckForm key={u.reservation.unit_id} title={`${u.reservation.units?.code ?? ""} · ${u.line?.description ?? ""}`} kind={u.line?.kind}
           allowLost value={checks[u.reservation.unit_id] ?? emptyCheck} reference={u.pickup}
@@ -470,10 +465,7 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
         ["Deposit held", rupees(m.depositHeld), "muted"],
       ]} />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Keep from deposit" hint="Towards the balance" error={errs.kept ?? undefined}>
-          <input className={monoInputClass} inputMode="decimal" maxLength={10} value={kept} onChange={(e) => { setTouched(true); setKept(e.target.value); }} />
-        </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Field label="Payment now" error={errs.pay ?? undefined}><input className={monoInputClass} inputMode="decimal" maxLength={10} value={pay.amount} onChange={(e) => { setTouched(true); setPay({ ...pay, amount: e.target.value }); }} /></Field>
           {num(pay.amount) > 0 ? <MethodPicker value={pay.method} onChange={(method) => setPay({ ...pay, method })} error={tried ? errs.payMethod ?? undefined : undefined} /> : null}
@@ -484,5 +476,6 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
         </div>
       </div>
     </Modal>
+    </>
   );
 }

@@ -132,7 +132,7 @@ export function ProductTable({ list, units, loading, reload }: { list: Product[]
           );
         })}
     </div>
-    <ConfirmDialog open={!!deleting} message={`Delete ${deleting?.name}?\n\nIf it has rental or booking history it will be switched off instead of deleted.`}
+    <ConfirmDialog open={!!deleting} tone="danger" title={`Delete ${deleting?.name ?? "this product"}?`} confirmLabel="Delete" cancelLabel="Keep it" message="If it has rental or booking history it will be switched off instead of deleted."
       onCancel={() => setDeleting(null)} onConfirm={() => { if (deleting) void remove(deleting); setDeleting(null); }} />
     </>
   );

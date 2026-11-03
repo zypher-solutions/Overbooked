@@ -5,12 +5,12 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
-import { FEATURE_LABELS, errorText } from "@/lib/shop/format";
-import { Field, PageHeader, Panel, StatusBadge, goldButtonClass, inputClass, monoInputClass } from "@/components/shop/ui";
+import { errorText } from "@/lib/shop/format";
+import { Field, PageHeader, Panel, goldButtonClass, inputClass, monoInputClass } from "@/components/shop/ui";
 import { SubscriptionPanel } from "@/components/shop/Subscription";
 
 export default function Settings() {
-  const { shop, templates, isOwner, feature, setting } = useShop();
+  const { shop, templates, isOwner, setting, businessModule } = useShop();
   const hasRoom = templates.some((t) => t.kind === "room");
   const hasVehicle = templates.some((t) => t.kind === "vehicle");
   const [f, setF] = useState({
@@ -23,7 +23,6 @@ export default function Settings() {
     sac_code: setting("sac_code", ""),
   });
   const [busy, setBusy] = useState(false);
-  const features = Array.from(new Set(templates.flatMap((t) => Object.keys(t.features))));
 
   if (!isOwner) return <Panel><p className="text-sm text-muted-foreground">Only the owner can change shop settings.</p></Panel>;
 
@@ -34,7 +33,7 @@ export default function Settings() {
     if (!(gst >= 0 && gst <= 28)) return toast.error("GST is a percentage from 0 to 28.");
     const bad = phoneError(f.phone) ?? emailError(f.email, false) ?? addressError(f.address) ?? gstinError(f.gstin)
       ?? textLimitError(f.receipt_note, "receipt note", 200)
-      ?? (f.sac_code.trim() && !/^d{4,8}$/.test(f.sac_code.trim()) ? "The SAC code is 4 to 8 digits." : null)
+      ?? (f.sac_code.trim() && !/^\d{4,8}$/.test(f.sac_code.trim()) ? "The SAC code is 4 to 8 digits." : null)
       ?? (!f.check_in_time || !f.check_out_time ? "Enter the check-in and check-out times." : null);
     if (bad) return toast.error(bad);
     setBusy(true);
@@ -68,7 +67,7 @@ export default function Settings() {
             <Field label="GSTIN (optional)"><input className={monoInputClass} value={f.gstin} onChange={(e) => setF({ ...f, gstin: e.target.value })} /></Field>
           </div>
         </Panel>
-        <Panel title="Rules">
+        {businessModule === "clothing" ? null : <Panel title="Rules">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Grace time before late charges (minutes)" hint="For hourly and nightly rentals" className="sm:col-span-2">
               <input className={monoInputClass} inputMode="numeric" value={f.grace_minutes} onChange={(e) => setF({ ...f, grace_minutes: e.target.value.replace(/\D/g, "") })} />
@@ -84,7 +83,7 @@ export default function Settings() {
               </label>
             ) : null}
           </div>
-        </Panel>
+        </Panel>}
         <Panel title="Receipts">
           <div className="grid gap-3">
             <Field label="GST included in prices (%)" hint="With a GSTIN and a rate above 0, a rental gets a tax invoice (own number and date, CGST and SGST) once it is returned; until then, and without these, a plain receipt prints.">
@@ -93,21 +92,7 @@ export default function Settings() {
             <Field label="SAC code on tax invoices (optional)" hint="The service code your accountant gives you for renting out clothes. Leave empty to print none.">
               <input className={monoInputClass} value={f.sac_code} maxLength={8} onChange={(e) => setF({ ...f, sac_code: e.target.value })} />
             </Field>
-            <Field label="Note printed on every receipt" hint="Terms: deposit, late returns, damage">
-              <textarea className={inputClass} rows={3} value={f.receipt_note} onChange={(e) => setF({ ...f, receipt_note: e.target.value })} />
-            </Field>
           </div>
-        </Panel>
-        <Panel title="Optional features">
-          <ul className="space-y-1.5 text-sm">
-            {features.map((k) => (
-              <li key={k} className="flex items-center justify-between">
-                <span>{FEATURE_LABELS[k] ?? k}</span>
-                <StatusBadge tone={feature(k) ? "emerald" : "muted"}>{feature(k) ? "On" : "Off"}</StatusBadge>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-xs text-muted-foreground">To switch a feature on or off, contact Zypher.</p>
         </Panel>
       </div>
     </>

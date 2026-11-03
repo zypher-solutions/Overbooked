@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { DateInput, isoToDisplay } from "@/components/shop/DateInput";
 import Link from "next/link";
-import { Calendar, Search, X } from "lucide-react";
+import { Calendar, Search } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -42,8 +42,6 @@ export default function Bookings() {
   const [done, setDone] = useState<Row[] | null>(null);
   const [doneCount, setDoneCount] = useState(0);
   const [showDone, setShowDone] = useState(false);
-  // on a wide screen a tap on a booking shows its summary beside the list; on a phone or tablet it opens the booking
-  const [sel, setSel] = useState<Row | null>(null);
   const today = todayLocal(tz);
   const tomorrow = addDays(today, 1);
 
@@ -123,10 +121,9 @@ export default function Bookings() {
     const cancelled = r.status === "cancelled" || r.status === "no_show";
     const items = (r.rental_lines ?? []).map((l) => (l.qty > 1 ? `${l.qty} × ` : "") + l.description).join(", ");
     return (
-      <Link key={r.id} href={`/rentals/${r.id}`}
-        onClick={(e) => { if (window.matchMedia("(min-width: 1440px)").matches) { e.preventDefault(); setSel(r); } }}
-        className={cn("grid gap-x-4 gap-y-1.5 rounded-2xl border bg-surface px-4 py-3.5 shadow-[0_1px_2px_rgb(16_23_21/4%),0_8px_24px_-14px_rgb(16_23_21/12%)] transition-colors hover:bg-accent/40 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto] sm:items-center",
-          sel?.id === r.id ? "border-neon ring-2 ring-neon/40" : pickupToday ? "border-gold/50" : "border-transparent")}>
+      <div key={r.id} className={cn("overflow-hidden rounded-2xl border bg-surface shadow-[0_1px_2px_rgb(16_23_21/4%),0_8px_24px_-14px_rgb(16_23_21/12%)]", pickupToday ? "border-gold/50" : "border-transparent")}>
+      <Link href={`/rentals/${r.id}`}
+        className="grid gap-x-4 gap-y-1.5 px-4 py-3.5 transition-colors hover:bg-accent/40 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto] sm:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-sm font-semibold text-gold">{r.token}</span>
@@ -151,47 +148,15 @@ export default function Bookings() {
           </div>
         ) : null}
       </Link>
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/60 bg-accent/30 px-4 py-2.5">
+        {r.status === "reserved" ? <Link href={`/rentals/${r.id}?handover=1`} className={cn(goldButtonClass, "px-4 py-1.5 text-xs")}>Hand over</Link> : null}
+        {r.status === "active" ? <Link href={`/rentals/${r.id}?receive=1`} className={cn(goldButtonClass, "px-4 py-1.5 text-xs")}>Return</Link> : null}
+        <Link href={`/rentals/${r.id}`} className={ghostButtonClass}>Open booking</Link>
+      </div>
+      </div>
     );
   };
 
-  const panel = (r: Row) => {
-    const due = Math.max(0, Number(r.total) - Number(r.paid));
-    const pcs = (r.rental_lines ?? []).reduce((n, l) => n + l.qty, 0);
-    const line = (k: string, v: string, tone = "") => <div className="flex items-baseline justify-between gap-3 py-2"><span className="text-sm text-muted-foreground">{k}</span><span className={cn("font-mono text-sm font-semibold", tone)}>{v}</span></div>;
-    return (
-      <aside className="glass sticky top-6 hidden self-start p-5 min-[1440px]:block" aria-label="Booking summary">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="font-mono text-sm font-semibold text-gold">{r.token}</p>
-            <h2 className="mt-1 truncate font-display text-xl font-bold">{r.customers?.full_name}</h2>
-            <p className="font-mono text-xs text-muted-foreground">{r.customers?.phone}</p>
-          </div>
-          <button type="button" aria-label="Close summary" onClick={() => setSel(null)} className="rounded-full p-1.5 hover:bg-accent"><X className="h-4 w-4" /></button>
-        </div>
-        <div className="mt-3"><RentalStatusBadge rental={r} /></div>
-        <div className="mt-4 rounded-xl bg-accent/60 p-3 text-sm">
-          <p className="font-mono">{dmy(r.start_at)} <span className="text-muted-foreground">→</span> {dmy(r.end_at)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{plural(pcs, "piece")}{activeBranches.length > 1 ? ` · ${branchName(r.branch_id)}` : ""}</p>
-        </div>
-        <ul className="mt-3 space-y-1 text-sm">
-          {(r.rental_lines ?? []).map((l, i) => <li key={i} className="flex justify-between gap-3"><span className="truncate">{l.description}</span><span className="font-mono text-muted-foreground">× {l.qty}</span></li>)}
-        </ul>
-        {r.pieces?.length ? <p className="mt-2 font-mono text-xs text-emerald">{r.pieces.join(", ")}</p> : null}
-        {canManage ? (
-          <div className="mt-4 divide-y divide-border border-t border-border">
-            {line("Total", rupees(r.total))}
-            {line("Paid", rupees(r.paid))}
-            {line("Balance", due > 0 ? rupees(due) : "Paid", due > 0 ? "text-amber" : "text-emerald")}
-          </div>
-        ) : null}
-        <div className="mt-4 flex flex-wrap gap-2">
-          {r.status === "reserved" ? <Link href={`/rentals/${r.id}?handover=1`} className={goldButtonClass}>Hand over</Link> : null}
-          {r.status === "active" ? <Link href={`/rentals/${r.id}?receive=1`} className={goldButtonClass}>Return</Link> : null}
-          <Link href={`/rentals/${r.id}`} className={cn(ghostButtonClass, "py-2")}>Open booking</Link>
-        </div>
-      </aside>
-    );
-  };
 
   return (
     <>
@@ -237,12 +202,9 @@ export default function Bookings() {
           <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{term || day !== "all" ? "No bookings match the search and filters." : status === "all" && doneCount > 0 ? "There are no current bookings matching your criteria." : "No bookings here yet."}</p>
         </div>
       ) : (
-        <div className={cn("grid gap-4", sel && "min-[1440px]:grid-cols-[minmax(0,1fr)_22rem]")}>
-          <div className="grid content-start gap-4">
-            {rows.map(card)}
-            {more ? <button className={cn(ghostButtonClass, "mx-auto")} onClick={() => void load(rows.length)}>Show more</button> : null}
-          </div>
-          {sel ? panel(sel) : null}
+        <div className="grid gap-4">
+          {rows.map(card)}
+          {more ? <button className={cn(ghostButtonClass, "mx-auto")} onClick={() => void load(rows.length)}>Show more</button> : null}
         </div>
       )}
 

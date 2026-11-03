@@ -12,6 +12,7 @@ import { call } from "@/lib/shop/api";
 import { RATE_LABELS, errorText, fmtInterval, intervalHours, num } from "@/lib/shop/format";
 import type { FieldDef, Product, SetItem, Template } from "@/lib/shop/types";
 import { useCatalog, variationLabel } from "@/lib/shop/useCatalog";
+import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "./ui";
 
 interface VarDraft {
@@ -137,8 +138,10 @@ export function ProductEditor({ product, onSaved, asSet = false }: { product?: P
     }
   };
 
+  const [askRemove, setAskRemove] = useState(false);
   const remove = async () => {
-    if (!d.id || !confirm(`Remove ${d.name}? If it was ever rented it is switched off instead, so history stays.`)) return;
+    if (!d.id) return;
+    setAskRemove(false);
     try {
       const res = await call<{ result: string }>("delete_or_deactivate_product", { p_product_id: d.id });
       toast.success(res.result === "deleted" ? "Deleted" : "Switched off (it has rental history)");
@@ -151,9 +154,12 @@ export function ProductEditor({ product, onSaved, asSet = false }: { product?: P
   const readOnly = !canManage;
   return (
     <>
+      <ConfirmDialog open={askRemove} tone="danger" title={`Remove ${d.name || "this item"}?`} confirmLabel="Remove" cancelLabel="Keep it"
+        message={"If it was ever rented it is switched off instead of deleted, so booking history stays."}
+        onCancel={() => setAskRemove(false)} onConfirm={() => void remove()} />
       <PageHeader title={d.id ? d.name || "Item" : isSet ? "New set" : `New ${word("item").toLowerCase()}`}
         actions={readOnly ? null : <>
-          {d.id && isOwner ? <button className={dangerButtonClass} onClick={remove}><Trash2 className="h-4 w-4" /> Remove</button> : null}
+          {d.id && isOwner ? <button className={dangerButtonClass} onClick={() => setAskRemove(true)}><Trash2 className="h-4 w-4" /> Remove</button> : null}
           <button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save"}</button>
         </>} />
       <fieldset disabled={readOnly} className="space-y-4">
