@@ -68,7 +68,8 @@ function defaultPeriod(kind: Template["kind"] | undefined, tz: string, checkIn: 
 function NewBooking() {
   const router = useRouter();
   const params = useSearchParams();
-  const { shop, tz, myBranchId, activeBranches, categories, templates, addOns, templateOf, feature, setting, word, trendz } = useShop();
+  const { shop, tz, myBranchId, activeBranches, categories, templates, addOns, templateOf, feature, setting, word, businessModule } = useShop();
+  const clothing = businessModule === "clothing";
   const { products } = useCatalog();
   const storageKey = `ob_booking_${shop.id}`;
   // ?edit=<rental id>: change a booking that has not been picked up
@@ -187,11 +188,11 @@ function NewBooking() {
 
   const startIso = d.start ? zonedToIso(d.start, tz) : "";
   const endIso = d.end ? zonedToIso(d.end, tz) : "";
-  const startInPast = trendz && !editId && !!d.start && d.start.slice(0, 10) < todayLocal(tz);
+  const startInPast = clothing && !editId && !!d.start && d.start.slice(0, 10) < todayLocal(tz);
   const periodOk = !!startIso && !!endIso && endIso > startIso && !startInPast;
   // bridal and groom: cleaning days are typed per booking (blank = none), like TRENDZ's maintenance buffer
-  const cleaningBad = trendz && d.cleaningDays.trim() !== "" && num(d.cleaningDays) < 0;
-  const cleaning = trendz ? Math.min(365, Math.max(0, Math.floor(num(d.cleaningDays)))) : undefined;
+  const cleaningBad = clothing && d.cleaningDays.trim() !== "" && num(d.cleaningDays) < 0;
+  const cleaning = clothing ? Math.min(365, Math.max(0, Math.floor(num(d.cleaningDays)))) : undefined;
 
   const cartTemplates = useMemo(() => {
     const keys = new Set<string>();
@@ -232,15 +233,15 @@ function NewBooking() {
   // ---- exact pieces (bridal and groom): the free pieces of every item for these dates, each booked piece
   // is chosen, as in TRENDZ. A set is made of other items, so it only needs enough free sets.
   type Piece = { unit_id: string; code: string };
-  const pieceLines = useMemo(() => (trendz ? lines.filter((l) => {
+  const pieceLines = useMemo(() => (clothing ? lines.filter((l) => {
     const v = variations.get(l.variation_id);
     return v?.template?.kind === "wearable" && !v.product.is_set;
-  }) : []), [trendz, lines, variations]);
+  }) : []), [clothing, lines, variations]);
   const pieceKey = pieceLines.map((l) => l.variation_id).join(",");
   const [pieces, setPieces] = useState<Record<string, Piece[]> | null>(null); // null: not checked for these dates yet
   useEffect(() => {
     setPieces(null);
-    if (!trendz || !periodOk || !branchId || !pieceKey) return;
+    if (!clothing || !periodOk || !branchId || !pieceKey) return;
     let live = true;
     const t = setTimeout(async () => {
       try {
@@ -259,7 +260,7 @@ function NewBooking() {
       }
     }, wait("pieces", 250));
     return () => { live = false; clearTimeout(t); };
-  }, [trendz, periodOk, branchId, pieceKey, startIso, endIso, cleaning, editing]);
+  }, [clothing, periodOk, branchId, pieceKey, startIso, endIso, cleaning, editing]);
 
   // every booked piece starts on the first free one; staff can change it (a piece that is no longer free is replaced)
   const lineSig = lines.map((l) => `${l.variation_id}:${l.qty}`).join(",");
@@ -279,12 +280,12 @@ function NewBooking() {
   // customer and payment open only when every item is free for the dates (TRENDZ: "unlocked when products are available")
   const shortItems = useMemo(() => lines.filter((l) => {
     const v = variations.get(l.variation_id);
-    if (!trendz || !v) return false;
+    if (!clothing || !v) return false;
     if (pieceLines.includes(l)) return pieces !== null && (pieces[l.variation_id]?.length ?? 0) < l.qty;
     return (avail[l.variation_id]?.free ?? 0) < l.qty;
-  }), [trendz, lines, variations, pieceLines, pieces, avail]);
-  const checkingStock = trendz && periodOk && lines.length > 0 && pieceLines.length > 0 && pieces === null;
-  const detailsOpen = !trendz || !!editing || (periodOk && lines.length > 0 && !checkingStock && shortItems.length === 0);
+  }), [clothing, lines, variations, pieceLines, pieces, avail]);
+  const checkingStock = clothing && periodOk && lines.length > 0 && pieceLines.length > 0 && pieces === null;
+  const detailsOpen = !clothing || !!editing || (periodOk && lines.length > 0 && !checkingStock && shortItems.length === 0);
 
   // ---- live quote ----
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -416,7 +417,7 @@ function NewBooking() {
       });
       try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
       cart.clear();
-      if (trendz) {
+      if (clothing) {
         // bridal and groom: back to the Bookings list; the message to the customer is one tap on the notice
         const rental = await loadRental(res.rental_id).catch(() => null);
         const br = rental ? activeBranches.find((x) => x.id === rental.branch_id) : undefined;
@@ -456,7 +457,7 @@ function NewBooking() {
   if (editId && !editing) return <PageSkeleton columns={false} />;
 
   // ---- bridal and groom: the TRENDZ "Create Booking" pop-up (one column, dates first) ----
-  if (trendz) {
+  if (clothing) {
     const pickupDate = d.start.slice(0, 10);
     const returnDate = d.end.slice(0, 10);
     const timeOf = (v: string, fallback: string) => v.slice(11, 16) || fallback;
@@ -774,15 +775,15 @@ function NewBooking() {
 
   return (
     <>
-      <PageHeader title={editing ? `Change booking ${editing.token}` : trendz ? "Create Booking" : "New booking"}
+      <PageHeader title={editing ? `Change booking ${editing.token}` : clothing ? "Create Booking" : "New booking"}
         subtitle={editing ? "Change dates, items, guests or extras. The pieces it already has are kept where possible."
-          : trendz ? "Pick the dates first: each item is checked for them and a free piece is kept for it." : undefined}
+          : clothing ? "Pick the dates first: each item is checked for them and a free piece is kept for it." : undefined}
         actions={editing
           ? <button className={ghostButtonClass} onClick={() => router.push(`/rentals/${editing.id}`)}>Cancel</button>
           : <>
-            {trendz ? <button className={ghostButtonClass} onClick={() => router.push("/scan")}>Close (keep draft)</button> : null}
-            <button className={trendz ? dangerButtonClass : ghostButtonClass} onClick={() => (trendz ? setConfirmDiscard(true) : reset())}>
-              {trendz ? "Discard draft" : "Start over"}
+            {clothing ? <button className={ghostButtonClass} onClick={() => router.push("/scan")}>Close (keep draft)</button> : null}
+            <button className={clothing ? dangerButtonClass : ghostButtonClass} onClick={() => (clothing ? setConfirmDiscard(true) : reset())}>
+              {clothing ? "Discard draft" : "Start over"}
             </button>
           </>} />
       <Modal open={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Discard this draft?"
@@ -797,7 +798,7 @@ function NewBooking() {
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           <Panel title="When">
-            <div className={cn("grid gap-3", trendz ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
+            <div className={cn("grid gap-3", clothing ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
               {activeBranches.length > 1 ? (
                 <Field label="Branch">
                   <select className={inputClass} value={branchId} disabled={!!myBranchId || !!editing}
@@ -815,7 +816,7 @@ function NewBooking() {
                 hint={quote ? periodText(quote, kinds) : undefined}>
                 <input type="datetime-local" className={inputClass} value={d.end} onChange={(e) => set({ end: e.target.value })} />
               </Field>
-              {trendz ? (
+              {clothing ? (
                 <Field label="Cleaning days" hint="Days the piece is kept back for cleaning after the return"
                   error={cleaningBad ? "Cannot be negative" : undefined}>
                   <input type="number" min={0} className={monoInputClass} inputMode="numeric" value={d.cleaningDays}
@@ -823,7 +824,7 @@ function NewBooking() {
                 </Field>
               ) : null}
             </div>
-            {trendz && periodOk ? (
+            {clothing && periodOk ? (
               <p className="mt-3 border-t border-border/40 pt-3 font-mono text-xs text-muted-foreground">
                 Cleaning: <strong className="text-foreground">{plural(cleaning ?? 0, "day")}</strong>
                 {" · "}Free again: <strong className="text-emerald">{fmtDate(addDays(d.end.slice(0, 10), (cleaning ?? 0) + 1))}</strong>
@@ -909,7 +910,7 @@ function NewBooking() {
                         {l.qty === 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
                       </button>
                       <span className="w-6 text-center font-mono text-sm">{l.qty}</span>
-                      <button aria-label="One more" className="rounded border border-border p-1" onClick={() => updateLine(l.variation_id, { qty: l.qty + 1, unit_ids: trendz ? l.unit_ids : [] })}>
+                      <button aria-label="One more" className="rounded border border-border p-1" onClick={() => updateLine(l.variation_id, { qty: l.qty + 1, unit_ids: clothing ? l.unit_ids : [] })}>
                         <Plus className="h-3.5 w-3.5" />
                       </button>
                       <input className={cn(monoInputClass, "ml-auto w-28 py-1 text-xs")} inputMode="decimal" placeholder="Agreed price"
