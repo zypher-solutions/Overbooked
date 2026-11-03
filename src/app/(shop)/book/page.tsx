@@ -1,50 +1,18 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Check, Minus, Plus, Search, Trash2, X } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import { Check, Minus, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
-import { useCart, type CartLine } from "@/modules/clothing/cart";
-import { call, loadRental, money, type RentalDetail } from "@/lib/shop/api";
-import { headlinePrice, useCatalog, variationLabel } from "@/lib/shop/useCatalog";
-import {
-  BASIS_LABELS, METHOD_LABELS, addDays, errorText, fmtDate, isoToZoned, lineMath, num, plural, rupees, todayLocal, zonedToIso,
-} from "@/lib/shop/format";
-import type { Customer, Method, Product, Quote, Template, Variation } from "@/lib/shop/types";
-import { CustomerPicker, emptyCustomer, type NewCustomer } from "@/components/shop/CustomerPicker";
-import { customerProblem } from "@/components/shop/CustomerForm";
-import { moneyError, normalizeEmail, normalizePhone, textLimitError } from "@/lib/validate";
-import { DateInput, isoToDisplay } from "@/components/shop/DateInput";
-import { buildMessage, waLink } from "@/lib/shop/whatsapp";
-import {
-  Field, MethodPicker, Modal, MoneyRows, PageHeader, Panel, StatusBadge, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass, PageSkeleton, Skeleton } from "@/components/shop/ui";
-
-type Line = CartLine;
-interface Draft {
-  branchId: string;
-  start: string;
-  end: string;
-  lines: Line[];
-  adults: number;
-  children: number;
-  withDriver: boolean;
-  wholeProperty: boolean;
-  cleaningDays: string; // bridal and groom: days the pieces are kept back for cleaning after the return
-  addOns: Record<string, number>; // add_on_id -> quantity
-  customer: NewCustomer;
-  customerId: string | null;
-  discount: string;
-  depositAgreed: string;
-  advance: string;
-  advanceMethod: Method | "";
-  deposit: string;
-  depositMethod: Method | "";
-  notes: string;
-}
+import { call, money } from "@/lib/shop/api";
+import { headlinePrice, variationLabel } from "@/lib/shop/useCatalog";
+import { BASIS_LABELS, errorText, lineMath, num, plural, rupees } from "@/lib/shop/format";
+import type { Customer, Product, Quote, Template } from "@/lib/shop/types";
+import { CustomerPicker } from "@/components/shop/CustomerPicker";
+import { Field, MethodPicker, MoneyRows, PageHeader, Panel, StatusBadge, ghostButtonClass, goldButtonClass, inputClass, monoInputClass, PageSkeleton } from "@/components/shop/ui";
+import { useBookingForm, type BookingForm as BookingFormState } from "@/components/shop/useBookingForm";
+import { shopModules } from "@/modules/registry";
 
 export default function NewBookingPage() {
   // defaults (branch, times) come from the shop setup, so wait for it
@@ -53,752 +21,31 @@ export default function NewBookingPage() {
   return <Suspense fallback={<PageSkeleton columns={false} />}><NewBooking /></Suspense>;
 }
 
-function defaultPeriod(kind: Template["kind"] | undefined, tz: string, checkIn: string, checkOut: string) {
-  const today = todayLocal(tz);
-  // clothes: pickup today at the usual hour; the return date is chosen first, so availability is checked for real dates
-  if (kind === "wearable") return { start: `${today}T10:00`, end: "" };
-  if (kind === "room") return { start: `${today}T${checkIn}`, end: `${addDays(today, 1)}T${checkOut}` };
-  if (kind === "vehicle") {
-    const next = isoToZoned(new Date(Date.now() + 60 * 60 * 1000).toISOString(), tz).slice(0, 13) + ":00";
-    return { start: next, end: isoToZoned(new Date(Date.parse(zonedToIso(next, tz)) + 24 * 3600 * 1000).toISOString(), tz) };
-  }
-  return { start: `${addDays(today, 1)}T10:00`, end: `${addDays(today, 3)}T18:00` };
+function NewBooking() {
+  const f = useBookingForm();
+  const { BookingForm } = shopModules[f.businessModule];
+  // changing a booking: nothing half-drawn until the booking has loaded
+  if (f.editId && !f.editing) return <PageSkeleton columns={false} />;
+  return BookingForm ? <BookingForm f={f} /> : <StandardBookingForm f={f} />;
 }
 
-function NewBooking() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const { shop, tz, myBranchId, activeBranches, categories, templates, addOns, templateOf, feature, setting, word, businessModule } = useShop();
-  const clothing = businessModule === "clothing";
-  const { products } = useCatalog();
-  const storageKey = `ob_booking_${shop.id}`;
-  // ?edit=<rental id>: change a booking that has not been picked up
-  const editId = params.get("edit");
-  const [editing, setEditing] = useState<RentalDetail | null>(null);
-
-  const initial = (): Draft => {
-    const p = defaultPeriod(templates[0]?.kind, tz, setting("check_in_time", "14:00"), setting("check_out_time", "11:00"));
-    return {
-      branchId: myBranchId ?? activeBranches[0]?.id ?? "", start: p.start, end: p.end, lines: [], adults: 1, children: 0,
-      withDriver: false, wholeProperty: false, cleaningDays: "", addOns: {}, customer: emptyCustomer, customerId: null, discount: "",
-      depositAgreed: "", advance: "", advanceMethod: "", deposit: "", depositMethod: "", notes: "",
-    };
-  };
-  const [d, setD] = useState<Draft>(initial);
-  const [customer, setCustomer] = useState<Customer | null>(null);
-  const restored = useRef(false);
-
-  // keep a half-filled booking if the page is left by accident (this tab only)
-  useEffect(() => {
-    if (restored.current || editId) return;
-    restored.current = true;
-    try {
-      const saved = sessionStorage.getItem(storageKey);
-      if (saved) {
-        const draft = JSON.parse(saved) as Draft;
-        const fresh = initial();
-        const branchOk = activeBranches.some((b) => b.id === draft.branchId);
-        setD({ ...fresh, ...draft, branchId: myBranchId ?? (branchOk ? draft.branchId : fresh.branchId) });
-        if (draft.customerId) {
-          void createClient().from("customers").select("*").eq("id", draft.customerId).maybeSingle()
-            .then(({ data }) => setCustomer((data as Customer) ?? null));
-        }
-      }
-    } catch { /* storage unavailable */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  useEffect(() => {
-    if (editId) return;
-    try { sessionStorage.setItem(storageKey, JSON.stringify({ ...d, customerId: customer?.id ?? null })); } catch { /* ignore */ }
-  }, [d, customer, storageKey, editId]);
-
-  // the booking being changed, as a draft of this form
-  useEffect(() => {
-    if (!editId) return;
-    void loadRental(editId).then((r) => {
-      if (!r || r.status !== "reserved") {
-        toast.error(r ? "Only a booking that has not been picked up can be changed." : "Booking not found.");
-        router.replace(r ? `/rentals/${r.id}` : "/rentals");
-        return;
-      }
-      const days = Math.max(1, Math.ceil((Date.parse(r.end_at) - Date.parse(r.start_at)) / 86_400_000));
-      setEditing(r);
-      setCustomer(r.customers);
-      setD({
-        ...initial(), branchId: r.branch_id, start: isoToZoned(r.start_at, tz), end: isoToZoned(r.end_at, tz),
-        lines: r.rental_lines.filter((l) => l.rate_type !== "driver_day" && l.rate_type !== "extra_person").map((l) => ({
-          variation_id: l.variation_id, qty: l.qty, amount_override: l.is_override ? String(l.amount) : "", unit_ids: [],
-        })),
-        adults: r.adults, children: r.children, withDriver: r.with_driver, wholeProperty: r.whole_property,
-        cleaningDays: r.cleaning_days ? String(r.cleaning_days) : "",
-        // the form asks "how many" for once-off and per-day extras; the booking stores the worked-out quantity
-        addOns: Object.fromEntries(r.rental_add_ons.map((a) => [a.add_on_id,
-          a.basis === "per_rental" ? Number(a.quantity) : a.basis === "per_day" ? Math.max(1, Math.round(Number(a.quantity) / days)) : 1])),
-        customerId: r.customer_id, discount: Number(r.discount) ? String(r.discount) : "",
-        depositAgreed: Number(r.deposit_agreed) ? String(r.deposit_agreed) : "", notes: r.notes ?? "",
-      });
-    }).catch((e) => toast.error(errorText(e)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editId]);
-
-  const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
-
-  // A new booking takes its items and branch from the cart (filled from Inventory Search, All Rentals or
-  // the list below); changing a booking works on its own copy.
-  const cart = useCart();
-  const lines = editId ? d.lines : cart.lines;
-  const branchId = editId ? d.branchId : (myBranchId ?? (cart.lines.length && cart.branchId ? cart.branchId : d.branchId));
-  const setLines = (fn: (ls: Line[]) => Line[]) => {
-    if (editId) setD((x) => ({ ...x, lines: fn(x.lines).filter((l) => l.qty > 0) }));
-    else cart.setLines(fn);
-  };
-  const setBranch = (id: string) => {
-    set({ branchId: id, lines: d.lines.map((l) => ({ ...l, unit_ids: [] })) });
-    if (!editId) cart.setBranch(id);
-  };
-
-  // ---- catalog lookups ----
-  const variations = useMemo(() => {
-    const map = new Map<string, { product: Product; variation: Variation; template: Template | undefined }>();
-    for (const p of products ?? []) for (const v of p.product_variations ?? []) {
-      if (v.is_enabled) map.set(v.id, { product: p, variation: v, template: templateOf(p.category_id) });
-    }
-    return map;
-  }, [products, templateOf]);
-
-  // ?variation=... from the catalog's "Book" button
-  const prefill = params.get("variation");
-  useEffect(() => {
-    if (prefill && variations.has(prefill)) {
-      if (!lines.some((l) => l.variation_id === prefill)) cart.add(branchId, prefill);
-      router.replace("/book");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefill, variations, router]);
-
-  // ?customer=... from a customer's page
-  const prefillCustomer = params.get("customer");
-  useEffect(() => {
-    if (!prefillCustomer) return;
-    void createClient().from("customers").select("*").eq("id", prefillCustomer).maybeSingle().then(({ data }) => {
-      if (data) { setCustomer(data as Customer); setD((x) => ({ ...x, customerId: (data as Customer).id })); }
-      router.replace("/book");
-    });
-  }, [prefillCustomer, router]);
-
-  const startIso = d.start ? zonedToIso(d.start, tz) : "";
-  const endIso = d.end ? zonedToIso(d.end, tz) : "";
-  const startInPast = clothing && !editId && !!d.start && d.start.slice(0, 10) < todayLocal(tz);
-  const periodOk = !!startIso && !!endIso && endIso > startIso && !startInPast;
-  // bridal and groom: cleaning days are typed per booking (blank = none), like TRENDZ's maintenance buffer
-  const cleaningBad = clothing && d.cleaningDays.trim() !== "" && num(d.cleaningDays) < 0;
-  const cleaning = clothing ? Math.min(365, Math.max(0, Math.floor(num(d.cleaningDays)))) : undefined;
-
-  const cartTemplates = useMemo(() => {
-    const keys = new Set<string>();
-    for (const l of lines) { const t = variations.get(l.variation_id)?.template; if (t) keys.add(t.key); }
-    if (d.wholeProperty) templates.filter((t) => t.kind === "room").forEach((t) => keys.add(t.key));
-    return templates.filter((t) => keys.has(t.key));
-  }, [lines, d.wholeProperty, variations, templates]);
-  const kinds = new Set(cartTemplates.map((t) => t.kind));
-  const hasRoom = kinds.has("room");
-  const hasVehicle = kinds.has("vehicle");
-  const roomShop = templates.some((t) => t.kind === "room");
-
-  // the first check of each kind goes out at once; only later changes (typing a date) wait a moment
-  const firstCheck = useRef({ avail: true, pieces: true, quote: true });
-  const wait = (k: "avail" | "pieces" | "quote", ms: number) => { const w = firstCheck.current[k] ? 0 : ms; firstCheck.current[k] = false; return w; };
-
-  // ---- availability for the period ----
-  const [avail, setAvail] = useState<Record<string, { free: number; total: number }>>({});
-  useEffect(() => {
-    if (!periodOk || !branchId) return;
-    const t = setTimeout(async () => {
-      try {
-        const rows = await call<{ variation_id: string; free: number; total: number }[]>("branch_availability",
-          { p_branch_id: branchId, p_start: startIso, p_end: endIso, ...(cleaning !== undefined ? { p_cleaning_days: cleaning } : {}) });
-        // when changing a booking, the units it already holds count as free for it
-        const own = new Map<string, number>();
-        for (const u of editing?.unit_reservations ?? []) {
-          if (u.state === "held" && u.units) own.set(u.units.variation_id, (own.get(u.units.variation_id) ?? 0) + 1);
-        }
-        setAvail(Object.fromEntries(rows.map((r) => [r.variation_id, { free: Math.min(r.total, r.free + (own.get(r.variation_id) ?? 0)), total: r.total }])));
-      } catch (e) {
-        toast.error(errorText(e));
-      }
-    }, wait("avail", 250));
-    return () => clearTimeout(t);
-  }, [branchId, startIso, endIso, periodOk, editing, cleaning]);
-
-  // ---- exact pieces (bridal and groom): the free pieces of every item for these dates, each booked piece
-  // is chosen, as in TRENDZ. A set is made of other items, so it only needs enough free sets.
-  type Piece = { unit_id: string; code: string };
-  const pieceLines = useMemo(() => (clothing ? lines.filter((l) => {
-    const v = variations.get(l.variation_id);
-    return v?.template?.kind === "wearable" && !v.product.is_set;
-  }) : []), [clothing, lines, variations]);
-  const pieceKey = pieceLines.map((l) => l.variation_id).join(",");
-  const [pieces, setPieces] = useState<Record<string, Piece[]> | null>(null); // null: not checked for these dates yet
-  useEffect(() => {
-    setPieces(null);
-    if (!clothing || !periodOk || !branchId || !pieceKey) return;
-    let live = true;
-    const t = setTimeout(async () => {
-      try {
-        const entries = await Promise.all(pieceKey.split(",").map(async (vid) => {
-          const rows = await call<Piece[]>("find_available_units",
-            { p_branch_id: branchId, p_variation_id: vid, p_start: startIso, p_end: endIso, p_cleaning_days: cleaning });
-          // when changing a booking, the pieces it already holds are free for it
-          const own = (editing?.unit_reservations ?? [])
-            .filter((u) => u.state === "held" && u.units?.variation_id === vid && !rows.some((r) => r.unit_id === u.unit_id))
-            .map((u) => ({ unit_id: u.unit_id, code: u.units!.code }));
-          return [vid, [...own, ...rows].sort((a, b) => a.code.localeCompare(b.code))] as const;
-        }));
-        if (live) setPieces(Object.fromEntries(entries));
-      } catch (e) {
-        if (live) { setPieces({}); toast.error(errorText(e)); }
-      }
-    }, wait("pieces", 250));
-    return () => { live = false; clearTimeout(t); };
-  }, [clothing, periodOk, branchId, pieceKey, startIso, endIso, cleaning, editing]);
-
-  // every booked piece starts on the first free one; staff can change it (a piece that is no longer free is replaced)
-  const lineSig = lines.map((l) => `${l.variation_id}:${l.qty}`).join(",");
-  useEffect(() => {
-    if (!pieces) return;
-    setLines((ls) => ls.map((l) => {
-      const list = pieces[l.variation_id];
-      if (!list) return l;
-      const keep = l.unit_ids.filter((id, i) => list.some((p) => p.unit_id === id) && l.unit_ids.indexOf(id) === i).slice(0, l.qty);
-      const fill = list.filter((p) => !keep.includes(p.unit_id)).slice(0, l.qty - keep.length).map((p) => p.unit_id);
-      const ids = [...keep, ...fill];
-      return ids.length === l.unit_ids.length && ids.every((id, i) => id === l.unit_ids[i]) ? l : { ...l, unit_ids: ids };
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pieces, lineSig]);
-
-  // customer and payment open only when every item is free for the dates (TRENDZ: "unlocked when products are available")
-  const shortItems = useMemo(() => lines.filter((l) => {
-    const v = variations.get(l.variation_id);
-    if (!clothing || !v) return false;
-    if (pieceLines.includes(l)) return pieces !== null && (pieces[l.variation_id]?.length ?? 0) < l.qty;
-    return (avail[l.variation_id]?.free ?? 0) < l.qty;
-  }), [clothing, lines, variations, pieceLines, pieces, avail]);
-  const checkingStock = clothing && periodOk && lines.length > 0 && pieceLines.length > 0 && pieces === null;
-  const detailsOpen = !clothing || !!editing || (periodOk && lines.length > 0 && !checkingStock && shortItems.length === 0);
-
-  // ---- live quote ----
-  const [quote, setQuote] = useState<Quote | null>(null);
-  const [quoteError, setQuoteError] = useState<string | null>(null);
-  const quoteInput = useMemo(() => ({
-    branch_id: branchId, start_at: startIso, end_at: endIso, adults: d.adults, children: d.children,
-    with_driver: d.withDriver && hasVehicle, whole_property: d.wholeProperty,
-    lines: lines.map((l) => ({
-      variation_id: l.variation_id, qty: l.qty,
-      ...(l.amount_override.trim() !== "" ? { amount_override: num(l.amount_override) } : {}),
-      ...(l.unit_ids.length === l.qty ? { unit_ids: l.unit_ids } : {}),
-    })),
-    add_ons: Object.entries(d.addOns).map(([add_on_id, quantity]) => ({ add_on_id, quantity })),
-    ...(cleaning !== undefined ? { cleaning_days: cleaning } : {}),
-  }), [d, branchId, lines, startIso, endIso, hasVehicle, cleaning]);
-
-  useEffect(() => {
-    if (!periodOk || !branchId || (lines.length === 0 && !d.wholeProperty)) {
-      setQuote(null);
-      setQuoteError(null);
-      return;
-    }
-    const t = setTimeout(async () => {
-      try {
-        setQuote(await call<Quote>("quote_rental", { p: quoteInput }));
-        setQuoteError(null);
-      } catch (e) {
-        setQuote(null);
-        setQuoteError(errorText(e));
-      }
-    }, wait("quote", 350));
-    return () => clearTimeout(t);
-  }, [quoteInput, periodOk, branchId, lines.length, d.wholeProperty]);
-
-  // ---- cart ----
-  const addLine = (variationId: string) => {
-    if (!editId) return cart.add(branchId, variationId);
-    setD((x) => {
-      const existing = x.lines.find((l) => l.variation_id === variationId);
-      if (existing) return { ...x, lines: x.lines.map((l) => l === existing ? { ...l, qty: l.qty + 1, unit_ids: [] } : l) };
-      return { ...x, lines: [...x.lines, { variation_id: variationId, qty: 1, amount_override: "", unit_ids: [] }] };
-    });
-  };
-  const updateLine = (variationId: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => l.variation_id === variationId ? { ...l, ...patch } : l));
-
-  // ---- submit ----
-  const [busy, setBusy] = useState(false);
-  // changing a booking can also take money (the balance is the new total less what was paid)
-  const [editPay, setEditPay] = useState<{ amount: string; method: Method | "" }>({ amount: "", method: "" });
-  const total = Math.max(0, (quote?.total_before_discount ?? 0) - num(d.discount));
-
-  // what is wrong with the money fields; shown under a field once something is typed in it, and for all of them after a try to confirm
-  const [tried, setTried] = useState(false);
-  const money_ = {
-    discount: moneyError(d.discount, { label: "discount", max: quote?.total_before_discount ?? 0, maxText: `the rental total (${rupees(quote?.total_before_discount ?? 0)})` }),
-    advance: moneyError(d.advance, { label: "advance", max: total, maxText: `the total (${rupees(total)})` }),
-    deposit: moneyError(d.deposit, { label: "deposit", max: 1_000_000 }),
-    advanceMethod: num(d.advance) > 0 && !d.advanceMethod ? "Choose how the advance was paid." : null,
-    depositMethod: num(d.deposit) > 0 && !d.depositMethod ? "Choose how the deposit was paid." : null,
-    notes: textLimitError(d.notes, "notes", 500),
-    editPay: editing ? moneyError(editPay.amount, { label: "payment", positive: true, max: Math.max(0, total - money(editing).paid), maxText: `the balance after this change (${rupees(Math.max(0, total - money(editing).paid))})` }) : null,
-    editPayMethod: editing && num(editPay.amount) > 0 && !editPay.method ? "Choose how the payment was made." : null,
-  };
-  const shown = (k: keyof typeof money_, typed: string) => (tried || typed.trim() ? money_[k] ?? undefined : undefined);
-
-  const submit = async () => {
-    setTried(true);
-    const moneyBad = Object.values(money_).find(Boolean);
-    if (moneyBad) return toast.error(moneyBad);
-    if (!periodOk) return toast.error(`The ${word("end").toLowerCase()} must be after the ${word("start").toLowerCase()}.`);
-    if (!quote) return toast.error(quoteError ?? "Add at least one item.");
-    if (cleaningBad) return toast.error("Cleaning days cannot be negative.");
-    for (const l of pieceLines) {
-      const label = variations.get(l.variation_id)?.product.name ?? "this item";
-      const free = pieces?.[l.variation_id] ?? [];
-      for (let i = 0; i < l.qty; i++) {
-        const id = l.unit_ids[i];
-        if (!id) return toast.error(`Please choose a piece for ${label} (piece ${i + 1}).`);
-        if (!free.some((p) => p.unit_id === id)) return toast.error(`The piece chosen for ${label} (piece ${i + 1}) is no longer free. Choose another.`);
-      }
-    }
-    if (!customer) { const bad = customerProblem(d.customer); if (bad) return toast.error(bad); }
-    if (num(d.advance) > 0 && !d.advanceMethod) return toast.error("Choose how the advance was paid.");
-    if (num(d.deposit) > 0 && !d.depositMethod) return toast.error("Choose how the deposit was paid.");
-    setBusy(true);
-    try {
-      if (editing) {
-        const { branch_id: _branch, ...change } = quoteInput;
-        void _branch;
-        await call("update_rental", {
-          p_rental_id: editing.id,
-          p: { ...change, discount: num(d.discount), deposit_agreed: num(d.depositAgreed), notes: d.notes },
-        });
-        if (num(editPay.amount) > 0) {
-          await call("record_rental_payment", { p_rental_id: editing.id, p_kind: "payment", p_amount: num(editPay.amount), p_method: editPay.method, p_note: null });
-        }
-        toast.success(`${editing.token} changed`);
-        router.push(`/rentals/${editing.id}`);
-        return;
-      }
-      const supabase = createClient();
-      // a returning customer's licence, filled in here
-      if (customer && hasVehicle && d.customer.licence_number.trim()) {
-        const { error } = await supabase.from("customers").update({
-          licence_number: d.customer.licence_number.trim(), licence_expiry: d.customer.licence_expiry || null,
-        }).eq("id", customer.id);
-        if (error) throw error;
-      }
-      // the same person is not saved twice: a saved customer with this phone and name is used as it is
-      let reuseId: string | null = null;
-      if (!customer) {
-        const { data: same } = await supabase.from("customers").select("id, full_name").eq("phone", normalizePhone(d.customer.phone)).limit(5);
-        const wanted = d.customer.full_name.trim().replace(/\s+/g, " ").toLowerCase();
-        reuseId = (same ?? []).find((c) => c.full_name.trim().replace(/\s+/g, " ").toLowerCase() === wanted)?.id ?? null;
-      }
-      const res = await call<{ rental_id: string; token: string }>("create_rental", {
-        p: {
-          ...quoteInput,
-          customer: customer ? { id: customer.id } : reuseId ? { id: reuseId } : {
-            ...Object.fromEntries(Object.entries(d.customer).map(([k, v]) => [k, v.trim()])),
-            full_name: d.customer.full_name.trim().replace(/\s+/g, " "), phone: normalizePhone(d.customer.phone), email: normalizeEmail(d.customer.email),
-          },
-          discount: num(d.discount),
-          deposit_agreed: num(d.depositAgreed),
-          notes: d.notes,
-          advance: num(d.advance) > 0 ? { amount: num(d.advance), method: d.advanceMethod } : null,
-          deposit: num(d.deposit) > 0 ? { amount: num(d.deposit), method: d.depositMethod } : null,
-        },
-      });
-      try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
-      cart.clear();
-      if (clothing) {
-        // bridal and groom: back to the Bookings list; the message to the customer is one tap on the notice
-        const rental = await loadRental(res.rental_id).catch(() => null);
-        const br = rental ? activeBranches.find((x) => x.id === rental.branch_id) : undefined;
-        const wa = rental ? waLink(rental.customers.phone, buildMessage("confirmation", rental, {
-          shopName: shop.name, branchName: br?.name, branchPhone: br?.phone ?? shop.phone, tz, startWord: word("start"), endWord: word("end"),
-        })) : "";
-        toast.success(`Booked: ${res.token}`, {
-          duration: 12_000,
-          action: rental ? { label: "WhatsApp", onClick: () => { window.open(wa, "_blank", "noopener"); void call("mark_reminder_sent", { p_rental_id: rental.id, p_kind: "confirmation" }).catch(() => undefined); } } : undefined,
-        });
-        router.push("/bookings");
-        return;
-      }
-      toast.success(`Booked: ${res.token}`);
-      router.push(`/rentals/${res.rental_id}?new=1`);
-    } catch (e) {
-      toast.error(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const reset = () => {
-    try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
-    cart.clear();
-    setCustomer(null);
-    setD(initial());
-    setConfirmDiscard(false);
-  };
-
-  const visibleAddOns = addOns.filter((a) => a.is_active
-    && (a.template_keys.length === 0 || a.template_keys.some((k) => cartTemplates.some((t) => t.key === k))));
-  const quoteLineFor = (variationId: string) => quote?.lines.find((l) => l.variation_id === variationId && l.reserve);
-
-  // changing a booking: nothing half-drawn until the booking has loaded
-  if (editId && !editing) return <PageSkeleton columns={false} />;
-
-  // ---- bridal and groom: the TRENDZ "Create Booking" pop-up (one column, dates first) ----
-  if (clothing) {
-    const pickupDate = d.start.slice(0, 10);
-    const returnDate = d.end.slice(0, 10);
-    const timeOf = (v: string, fallback: string) => v.slice(11, 16) || fallback;
-    // pickup and return are dates; the times are the shop's usual ones (10:00 out, 18:00 back)
-    const onPickup = (date: string) => set({
-      start: date ? `${date}T${timeOf(d.start, "10:00")}` : "",
-      end: d.end && date && returnDate < date ? "" : d.end,
-    });
-    const onReturn = (date: string) => set({ end: date ? `${date}T${timeOf(d.end, "18:00")}` : "" });
-    const bookingDays = quote?.days ?? (pickupDate && returnDate ? Math.max(1, Math.round((Date.parse(returnDate) - Date.parse(pickupDate)) / 86_400_000)) : 0);
-    const closeForm = () => {
-      if (editing) router.push(`/rentals/${editing.id}`);
-      else if (window.history.length > 1) router.back();
-      else router.push("/scan");
-    };
-    const methodSelect = (value: Method | "", onChange: (m: Method | "") => void, label: string) => (
-      <select aria-label={label} className={inputClass} value={value} onChange={(e) => onChange(e.target.value as Method | "")}>
-        <option value="">[ Select ]</option>
-        {Object.entries(METHOD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-      </select>
-    );
-    const branchName = activeBranches.find((b) => b.id === branchId)?.name ?? "";
-    const allFree = periodOk && lines.length > 0 && !checkingStock && shortItems.length === 0;
-    const balance = Math.max(0, total - num(d.advance));
-    return (
-      <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Create Booking">
-        <div className="my-0 w-full max-w-2xl glass p-4 shadow-xl sm:p-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="font-display text-2xl font-semibold text-foreground">{editing ? `Change booking ${editing.token}` : "Create Booking"}</h1>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {editing ? "Change dates, items or extras. The pieces it already has are kept where possible." : "Select rental dates first to check product availability."}
-              </p>
-            </div>
-            <button type="button" aria-label="Close" className="rounded-md p-1.5 text-muted-foreground hover:bg-black/5" onClick={closeForm}><X className="h-5 w-5" /></button>
-          </div>
-          <Modal open={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Discard this draft?"
-            description="All cart items and the customer details typed in are cleared."
-            footer={<>
-              <button className={ghostButtonClass} onClick={() => setConfirmDiscard(false)}>Keep it</button>
-              <button className={goldButtonClass} onClick={reset}>Discard</button>
-            </>}>
-            <span />
-          </Modal>
-
-          {/* 1. dates and branch */}
-          <section className="mt-4 space-y-3 rounded-xl border border-gold/30 bg-gold/[0.03] p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-gold">1. Rental Schedule &amp; Branch</span>
-              {periodOk && bookingDays ? <span className="font-mono text-xs text-muted-foreground">Duration: <strong className="text-foreground">{plural(bookingDays, "day")}</strong></span> : null}
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Pickup Date" hint="Walk-in customers use today's date" error={startInPast ? "The pickup cannot be in the past" : undefined}>
-                <DateInput value={pickupDate} min={editing ? undefined : todayLocal(tz)} onChange={onPickup} aria-label="Pickup date" />
-              </Field>
-              <Field label="Return Date" hint={!returnDate ? "Required to check availability" : undefined}
-                error={d.start && d.end && endIso <= startIso ? "Must be after the pickup" : undefined}>
-                <DateInput value={returnDate} min={pickupDate || todayLocal(tz)} onChange={onReturn} aria-label="Return date" />
-              </Field>
-              <Field label="Select Branch">
-                {activeBranches.length > 1 && !myBranchId && !editing ? (
-                  <select className={inputClass} value={branchId} onChange={(e) => setBranch(e.target.value)}>
-                    {activeBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
-                ) : <input className={inputClass} value={branchName} disabled readOnly />}
-              </Field>
-              <Field label="Maintenance Buffer (Days)" hint="Post-return cleaning days" error={cleaningBad ? "Cannot be negative" : undefined}>
-                <input type="number" min={0} className={monoInputClass} inputMode="numeric" value={d.cleaningDays} onChange={(e) => set({ cleaningDays: e.target.value })} />
-              </Field>
-            </div>
-            {periodOk ? (
-              <div className="flex flex-col gap-1.5 border-t border-border/40 pt-3 font-mono text-[11px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:text-xs">
-                <span>Duration: <strong className="text-foreground">{plural(bookingDays, "day")}</strong></span>
-                <span>Buffer: <strong className="text-foreground">{plural(cleaning ?? 0, "day")}</strong></span>
-                <span>Available: <strong className="text-emerald">{isoToDisplay(addDays(returnDate, (cleaning ?? 0) + 1))}</strong></span>
-              </div>
-            ) : null}
-          </section>
-
-          {/* cart items and their availability */}
-          <section className="mt-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Cart Items ({lines.length})</h2>
-              {allFree ? <span className="inline-flex items-center gap-1 rounded-full border border-emerald/30 bg-emerald/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald"><Check className="h-3.5 w-3.5" /> All Items In Stock</span> : null}
-            </div>
-            {lines.length === 0 ? (
-              <div className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">
-                The cart is empty. Pick items from{" "}
-                <Link href="/all-rentals" className="font-medium text-gold hover:underline">All Rentals</Link> or{" "}
-                <Link href="/scan" className="font-medium text-gold hover:underline">Inventory Search</Link> and press Rent.
-              </div>
-            ) : !periodOk ? (
-              <div className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">Please select a <strong>Return Date</strong> above to check real-time stock availability.</div>
-            ) : checkingStock ? (
-              <div className="animate-pulse rounded-lg border border-gold/40 bg-gold/5 p-3 text-xs text-gold">Checking physical piece availability for {isoToDisplay(pickupDate)} → {isoToDisplay(returnDate)}...</div>
-            ) : shortItems.length > 0 ? (
-              <div className="space-y-1.5 rounded-lg border border-rust/60 bg-rust/10 p-3.5 text-xs text-rust">
-                <p className="text-sm font-semibold">Not Available for Selected Dates</p>
-                <ul className="list-inside list-disc space-y-0.5 font-medium text-foreground">
-                  {shortItems.map((l) => {
-                    const v = variations.get(l.variation_id);
-                    const free = pieceLines.includes(l) ? pieces?.[l.variation_id]?.length ?? 0 : avail[l.variation_id]?.free ?? 0;
-                    return <li key={l.variation_id}>{v ? variationLabel(v.product, v.variation) : "Item"} — needed: {l.qty}, available: {free}</li>;
-                  })}
-                </ul>
-                <p className="text-[11px] text-muted-foreground">Please adjust the rental dates above or choose another product before proceeding.</p>
-              </div>
-            ) : null}
-
-            {lines.map((l) => {
-              const info = variations.get(l.variation_id);
-              const ql = quoteLineFor(l.variation_id);
-              const list = pieces?.[l.variation_id];
-              return (
-                <div key={l.variation_id} className="rounded-xl border border-border p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <div className="flex min-w-0 flex-1 items-start gap-3">
-                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md border border-border/50 bg-muted/50">
-                        {info?.product.image_url ? <img src={info.product.image_url} alt="" className="h-full w-full object-cover" /> : null}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="break-words text-sm font-semibold leading-tight">{info?.product.name ?? "…"}</p>
-                        <p className="break-words font-mono text-xs text-foreground/80">{info?.variation.sku}</p>
-                        {info && info.variation.name !== info.product.name ? <p className="break-words text-[11px] text-muted-foreground">{info.variation.name}</p> : null}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center justify-between gap-3 sm:flex-col sm:items-end sm:gap-1.5">
-                      <p className="font-mono text-sm">{ql ? (ql.is_override ? "Agreed price" : lineMath(ql)) : ""}{ql ? <strong className="ml-2">{rupees(ql.amount)}</strong> : null}</p>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center rounded border border-border bg-muted/70">
-                          <button type="button" aria-label="One less" className="px-3 py-1.5 text-muted-foreground hover:bg-black/5" onClick={() => updateLine(l.variation_id, { qty: l.qty - 1, unit_ids: l.unit_ids.slice(0, l.qty - 1) })}>-</button>
-                          <span className="w-8 text-center font-mono text-sm">{l.qty}</span>
-                          <button type="button" aria-label="One more" className="px-3 py-1.5 text-muted-foreground hover:bg-black/5" onClick={() => updateLine(l.variation_id, { qty: l.qty + 1 })}>+</button>
-                        </div>
-                        <button type="button" aria-label="Remove from cart" className="rounded-md p-2 text-muted-foreground hover:bg-rust/15 hover:text-rust" onClick={() => updateLine(l.variation_id, { qty: 0, unit_ids: [] })}><Trash2 className="h-4 w-4" /></button>
-                      </div>
-                    </div>
-                  </div>
-                  {pieceLines.includes(l) && periodOk ? (
-                    <div className="mt-3 space-y-2.5 border-t border-border/40 pt-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-gold">Assign Physical Piece(s) (Mandatory)</span>
-                        <span className="font-mono text-[10px] text-muted-foreground">{list ? `${list.length} Available for dates` : ""}</span>
-                      </div>
-                      {!list ? <Skeleton className="h-10 w-full" />
-                        : list.length === 0 ? <p className="rounded border border-rust/30 bg-rust/10 p-2 text-xs font-medium text-rust">No pieces available for {info?.variation.sku} on the requested dates. Choose another date or variation.</p>
-                        : Array.from({ length: l.qty }, (_, i) => {
-                          const val = l.unit_ids[i] ?? "";
-                          return (
-                            <label key={i} className="flex flex-col gap-1.5 text-xs sm:flex-row sm:items-center">
-                              {l.qty > 1 ? <span className="w-auto font-mono font-medium text-muted-foreground sm:w-14">Piece {i + 1}:</span> : null}
-                              <select className={cn(inputClass, "w-full flex-1 py-2 font-mono text-xs sm:py-1.5")} value={val}
-                                aria-label={`Piece ${i + 1} of ${info ? variationLabel(info.product, info.variation) : "item"}`}
-                                onChange={(e) => {
-                                  const ids = Array.from({ length: l.qty }, (_, k) => l.unit_ids[k] ?? "");
-                                  ids[i] = e.target.value;
-                                  updateLine(l.variation_id, { unit_ids: ids.filter(Boolean) });
-                                }}>
-                                <option value="" disabled>[ Select Physical Piece ]</option>
-                                {list.map((p) => {
-                                  const elsewhere = l.unit_ids.includes(p.unit_id) && val !== p.unit_id;
-                                  return <option key={p.unit_id} value={p.unit_id} disabled={elsewhere}>{p.code}{elsewhere ? " (Selected for another piece)" : ""}</option>;
-                                })}
-                              </select>
-                            </label>
-                          );
-                        })}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-            {quote?.lines.filter((l) => !l.reserve).map((l, i) => (
-              <p key={"x" + i} className="flex justify-between gap-2 text-sm"><span>{l.description}</span><span className="font-mono">{rupees(l.amount)}</span></p>
-            ))}
-            {quoteError ? <p className="text-sm text-rust">{quoteError}</p> : null}
-
-            {visibleAddOns.length ? (
-              <div className="rounded-xl border border-border p-3">
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Extras</p>
-                <ul className="space-y-1.5">
-                  {visibleAddOns.map((a) => {
-                    const on = d.addOns[a.id] !== undefined;
-                    const q = quote?.add_ons.find((x) => x.add_on_id === a.id);
-                    return (
-                      <li key={a.id} className="flex items-center justify-between gap-2 text-sm">
-                        <label className="flex min-w-0 items-center gap-2">
-                          <input type="checkbox" checked={on} onChange={(e) => {
-                            const next = { ...d.addOns };
-                            if (e.target.checked) next[a.id] = 1; else delete next[a.id];
-                            set({ addOns: next });
-                          }} />
-                          <span className="truncate">{a.name} <span className="text-xs text-muted-foreground">{rupees(a.amount)} {BASIS_LABELS[a.basis]}</span></span>
-                        </label>
-                        {on ? (
-                          <span className="flex items-center gap-1.5">
-                            {a.basis === "per_rental" || a.basis === "per_day" ? (
-                              <input type="number" min={1} aria-label={`How many ${a.name}`} className={cn(monoInputClass, "w-14 py-0.5 text-xs")}
-                                value={d.addOns[a.id]} onChange={(e) => set({ addOns: { ...d.addOns, [a.id]: Math.max(1, Math.floor(num(e.target.value))) } })} />
-                            ) : null}
-                            <span className="font-mono">{q ? rupees(q.amount) : ""}</span>
-                          </span>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
-
-          </section>
-
-          {/* 2. customer and payment: open once every item is free */}
-          {checkingStock && !detailsOpen ? (
-            <section aria-label="Checking stock" className="mt-4 space-y-4 rounded-xl border border-border p-4 sm:p-5">
-              <Skeleton className="h-3 w-56" />
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
-              <Skeleton className="h-28" />
-              <Skeleton className="h-12" />
-            </section>
-          ) : !detailsOpen ? (
-            <section className="mt-4 space-y-2 rounded-xl border border-dashed border-border/80 p-6 text-center">
-              <h2 className="text-sm font-semibold">Customer &amp; Payment Details</h2>
-              <p className="mx-auto max-w-md text-xs text-muted-foreground">
-                {!periodOk ? "Select pickup and return dates above to verify product availability before entering customer details."
-                  : lines.length === 0 ? "Add the items first."
-                  : checkingStock ? "Checking stock availability across physical pieces..."
-                  : "Some cart items are unavailable for the selected dates. Please adjust dates or cart items to unlock customer details."}
-              </p>
-            </section>
-          ) : (
-            <section className="mt-4 space-y-4 rounded-xl border border-border p-4 sm:p-5">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-gold">2. Customer Information &amp; Payment</h2>
-              {editing ? (
-                <p className="text-sm"><span className="font-medium">{editing.customers.full_name}</span> · {editing.customers.phone}</p>
-              ) : (
-                <CustomerPicker selected={customer} onSelect={(c) => { setCustomer(c); set({ customerId: c?.id ?? null }); }}
-                  draft={d.customer} onDraft={(c) => set({ customer: c })} needsLicence={false} />
-              )}
-              {!editing ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Advance Paid (₹)" hint="Amount collected upfront from customer" error={shown("advance", d.advance)}>
-                    <input className={monoInputClass} inputMode="decimal" maxLength={10} value={d.advance} onChange={(e) => set({ advance: e.target.value })} />
-                  </Field>
-                  <Field label="Advance Payment Method" error={shown("advanceMethod", d.advance)}>{methodSelect(d.advanceMethod, (m) => set({ advanceMethod: m }), "Advance payment method")}</Field>
-                </div>
-              ) : null}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Discount (₹)" hint="Negotiated reduction on the rental charge" error={shown("discount", d.discount)}>
-                  <input className={monoInputClass} inputMode="decimal" maxLength={10} value={d.discount} onChange={(e) => set({ discount: e.target.value })} />
-                </Field>
-                {/* one deposit: what is agreed is what is taken now (a change to an unpicked booking changes the agreed amount) */}
-                <Field label="Security Deposit (₹)" hint="Tracked separately from rental charge"
-                  error={editing ? moneyError(d.depositAgreed, { label: "deposit", max: 1_000_000 }) ?? undefined : shown("deposit", d.deposit)}>
-                  {editing
-                    ? <input className={monoInputClass} inputMode="decimal" maxLength={10} value={d.depositAgreed} onChange={(e) => set({ depositAgreed: e.target.value })} />
-                    : <input className={monoInputClass} inputMode="decimal" maxLength={10} value={d.deposit} onChange={(e) => set({ deposit: e.target.value, depositAgreed: e.target.value })} />}
-                </Field>
-                {!editing ? <Field label="Deposit Payment Method" error={shown("depositMethod", d.deposit)}>{methodSelect(d.depositMethod, (m) => set({ depositMethod: m }), "Deposit payment method")}</Field> : null}
-              </div>
-
-              {editing ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Take a payment now (₹)" hint="Optional" error={shown("editPay", editPay.amount)}>
-                    <input className={monoInputClass} inputMode="decimal" maxLength={10} value={editPay.amount} onChange={(e) => setEditPay({ ...editPay, amount: e.target.value })} />
-                  </Field>
-                  <Field label="Payment Method" error={shown("editPayMethod", editPay.amount)}>{methodSelect(editPay.method, (m) => setEditPay({ ...editPay, method: m }), "Payment method")}</Field>
-                </div>
-              ) : null}
-
-              <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-gold">Payment Summary</p>
-                <div className="space-y-2 font-mono text-sm">
-                  <div className="flex items-center justify-between"><span className="font-sans text-muted-foreground">Rental Total{num(d.discount) > 0 ? ` (after ${rupees(num(d.discount))} discount)` : ""}</span><strong>{rupees(total)}</strong></div>
-                  {editing ? (
-                    <>
-                      <div className="flex items-center justify-between"><span className="font-sans text-muted-foreground">Paid so far</span><strong className="text-emerald">{rupees(money(editing).paid)}</strong></div>
-                      <div className="flex items-center justify-between border-t border-border/40 pt-3"><span className="font-sans font-semibold">Balance after this</span><strong className="text-base text-gold">{rupees(Math.max(0, total - money(editing).paid - num(editPay.amount)))}</strong></div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between"><span className="font-sans text-muted-foreground">Advance Paid</span><strong className="text-emerald">{rupees(num(d.advance))}</strong></div>
-                      <div className="flex items-center justify-between border-t border-border/40 pt-3"><span className="font-sans font-semibold">Remaining Amount</span><strong className="text-base text-gold">{rupees(balance)}</strong></div>
-                      <div className="flex items-center justify-between pt-1 text-xs"><span className="font-sans text-muted-foreground">Security Deposit (tracked separately)</span><strong className="text-muted-foreground">{rupees(num(d.deposit))}</strong></div>
-                    </>
-                  )}
-                </div>
-                {editing && total < money(editing).paid ? <p className="text-xs text-rust">The new total is less than what was paid. Record a refund on the booking first.</p> : null}
-              </div>
-
-              <Field label="Notes" error={shown("notes", d.notes)}><textarea rows={2} maxLength={600} className={inputClass} placeholder="Anything staff should remember…" value={d.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
-
-              <button className={cn(goldButtonClass, "mt-1 w-full")} disabled={busy || !quote} onClick={submit}>
-                {busy ? "Processing Booking..." : editing ? "Save change" : `Confirm Booking (${rupees(total)})`}
-              </button>
-            </section>
-          )}
-
-          <div className="mt-3 flex gap-2">
-            {!editing ? (
-              <button type="button" disabled={busy} onClick={() => setConfirmDiscard(true)}
-                className="flex-1 rounded-lg border border-rust/40 bg-rust/10 py-2.5 text-xs font-semibold text-rust transition-colors hover:bg-rust/20">Discard Draft</button>
-            ) : null}
-            <button type="button" disabled={busy} onClick={closeForm}
-              className="flex-1 rounded-lg border border-border py-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground">
-              {editing ? "Cancel" : "Close (Keep Draft)"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+// cars, bikes and resorts (and any shop without a booking form of its own)
+function StandardBookingForm({ f }: { f: BookingFormState }) {
+  const { router, myBranchId, activeBranches, categories, addOns, templateOf, feature, word, products, editing, d, customer, setCustomer, set, lines, branchId, setBranch, variations, startIso, endIso, periodOk, kinds, hasRoom, hasVehicle, roomShop, avail, pieces, quote, quoteError, addLine, updateLine, busy, total, submit, reset, visibleAddOns, quoteLineFor } = f;
   return (
     <>
-      <PageHeader title={editing ? `Change booking ${editing.token}` : clothing ? "Create Booking" : "New booking"}
-        subtitle={editing ? "Change dates, items, guests or extras. The pieces it already has are kept where possible."
-          : clothing ? "Pick the dates first: each item is checked for them and a free piece is kept for it." : undefined}
+      <PageHeader title={editing ? `Change booking ${editing.token}` : "New booking"}
+        subtitle={editing ? "Change dates, items, guests or extras. The pieces it already has are kept where possible." : undefined}
         actions={editing
           ? <button className={ghostButtonClass} onClick={() => router.push(`/rentals/${editing.id}`)}>Cancel</button>
           : <>
-            {clothing ? <button className={ghostButtonClass} onClick={() => router.push("/scan")}>Close (keep draft)</button> : null}
-            <button className={clothing ? dangerButtonClass : ghostButtonClass} onClick={() => (clothing ? setConfirmDiscard(true) : reset())}>
-              {clothing ? "Discard draft" : "Start over"}
-            </button>
+            <button className={ghostButtonClass} onClick={reset}>Start over</button>
           </>} />
-      <Modal open={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Discard this draft?"
-        description="All cart items and the customer details typed in are cleared."
-        footer={<>
-          <button className={ghostButtonClass} onClick={() => setConfirmDiscard(false)}>Keep it</button>
-          <button className={goldButtonClass} onClick={reset}>Discard</button>
-        </>}>
-        <span />
-      </Modal>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-4">
           <Panel title="When">
-            <div className={cn("grid gap-3", clothing ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
+            <div className={"grid gap-3 sm:grid-cols-3"}>
               {activeBranches.length > 1 ? (
                 <Field label="Branch">
                   <select className={inputClass} value={branchId} disabled={!!myBranchId || !!editing}
@@ -808,7 +55,7 @@ function NewBooking() {
                 </Field>
               ) : null}
               <Field label={hasRoom ? "Check-in" : word("start")}
-                error={startInPast ? `The ${word("start").toLowerCase()} cannot be in the past` : undefined}>
+                >
                 <input type="datetime-local" className={inputClass} value={d.start} onChange={(e) => set({ start: e.target.value })} />
               </Field>
               <Field label={hasRoom ? "Check-out" : word("end")}
@@ -816,20 +63,7 @@ function NewBooking() {
                 hint={quote ? periodText(quote, kinds) : undefined}>
                 <input type="datetime-local" className={inputClass} value={d.end} onChange={(e) => set({ end: e.target.value })} />
               </Field>
-              {clothing ? (
-                <Field label="Cleaning days" hint="Days the piece is kept back for cleaning after the return"
-                  error={cleaningBad ? "Cannot be negative" : undefined}>
-                  <input type="number" min={0} className={monoInputClass} inputMode="numeric" value={d.cleaningDays}
-                    onChange={(e) => set({ cleaningDays: e.target.value })} />
-                </Field>
-              ) : null}
             </div>
-            {clothing && periodOk ? (
-              <p className="mt-3 border-t border-border/40 pt-3 font-mono text-xs text-muted-foreground">
-                Cleaning: <strong className="text-foreground">{plural(cleaning ?? 0, "day")}</strong>
-                {" · "}Free again: <strong className="text-emerald">{fmtDate(addDays(d.end.slice(0, 10), (cleaning ?? 0) + 1))}</strong>
-              </p>
-            ) : null}
             {(hasRoom || (roomShop && feature("guests"))) ? (
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Field label="Adults"><input type="number" min={0} className={monoInputClass} value={d.adults} onChange={(e) => set({ adults: Math.max(0, Math.floor(num(e.target.value))) })} /></Field>
@@ -851,27 +85,6 @@ function NewBooking() {
               inCart={Object.fromEntries(lines.map((l) => [l.variation_id, l.qty]))} onAdd={addLine} />
           ) : null}
 
-          {!detailsOpen ? (
-            <div className="glass rounded-xl border border-dashed border-border/80 p-6 text-center">
-              <h2 className="text-sm font-semibold">Customer and payment</h2>
-              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                {!periodOk
-                  ? "Select the pickup and return dates above to check availability before entering customer details."
-                  : lines.length === 0 ? "Add the items from the list above first."
-                  : checkingStock ? "Checking stock across the pieces..."
-                  : "Some cart items are unavailable for the selected dates. Change the dates or the cart items to unlock customer details."}
-              </p>
-              {periodOk && shortItems.length > 0 ? (
-                <ul className="mx-auto mt-3 max-w-md space-y-0.5 text-left text-xs font-medium text-rust">
-                  {shortItems.map((l) => {
-                    const v = variations.get(l.variation_id);
-                    const free = pieceLines.includes(l) ? pieces?.[l.variation_id]?.length ?? 0 : avail[l.variation_id]?.free ?? 0;
-                    return <li key={l.variation_id}>{v ? variationLabel(v.product, v.variation) : "Item"}: needed {l.qty}, free {free}</li>;
-                  })}
-                </ul>
-              ) : null}
-            </div>
-          ) : (
           <Panel title="Customer">
             {editing ? (
               <p className="text-sm"><span className="font-medium">{editing.customers.full_name}</span> · {editing.customers.phone}</p>
@@ -880,7 +93,6 @@ function NewBooking() {
                 draft={d.customer} onDraft={(c) => set({ customer: c })} needsLicence={hasVehicle} />
             )}
           </Panel>
-          )}
         </div>
 
         <div id="booking-summary" className="space-y-4 lg:sticky lg:top-6 lg:self-start">
@@ -910,7 +122,7 @@ function NewBooking() {
                         {l.qty === 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
                       </button>
                       <span className="w-6 text-center font-mono text-sm">{l.qty}</span>
-                      <button aria-label="One more" className="rounded border border-border p-1" onClick={() => updateLine(l.variation_id, { qty: l.qty + 1, unit_ids: clothing ? l.unit_ids : [] })}>
+                      <button aria-label="One more" className="rounded border border-border p-1" onClick={() => updateLine(l.variation_id, { qty: l.qty + 1, unit_ids: [] })}>
                         <Plus className="h-3.5 w-3.5" />
                       </button>
                       <input className={cn(monoInputClass, "ml-auto w-28 py-1 text-xs")} inputMode="decimal" placeholder="Agreed price"
@@ -920,31 +132,6 @@ function NewBooking() {
                     {periodOk && (info?.template?.kind === "vehicle" || info?.template?.kind === "room") ? (
                       <UnitChooser branchId={branchId} variationId={l.variation_id} startIso={startIso} endIso={endIso}
                         qty={l.qty} chosen={l.unit_ids} onChange={(ids) => updateLine(l.variation_id, { unit_ids: ids })} />
-                    ) : null}
-                    {pieceLines.includes(l) && pieces?.[l.variation_id] ? (
-                      <div className="mt-2 space-y-1.5">
-                        {Array.from({ length: l.qty }, (_, i) => {
-                          const val = l.unit_ids[i] ?? "";
-                          return (
-                            <label key={i} className="flex items-center gap-2 text-xs">
-                              <span className="w-14 shrink-0 text-muted-foreground">Piece {i + 1}</span>
-                              <select className={cn(inputClass, "py-1 text-xs")} value={val}
-                                aria-label={`Piece ${i + 1} of ${info ? variationLabel(info.product, info.variation) : "item"}`}
-                                onChange={(e) => {
-                                  const ids = Array.from({ length: l.qty }, (_, k) => l.unit_ids[k] ?? "");
-                                  ids[i] = e.target.value;
-                                  updateLine(l.variation_id, { unit_ids: ids.filter(Boolean) });
-                                }}>
-                                <option value="" disabled>Choose a piece</option>
-                                {pieces[l.variation_id].map((p) => {
-                                  const elsewhere = l.unit_ids.includes(p.unit_id) && val !== p.unit_id;
-                                  return <option key={p.unit_id} value={p.unit_id} disabled={elsewhere}>{p.code}{elsewhere ? " (chosen for another piece)" : ""}</option>;
-                                })}
-                              </select>
-                            </label>
-                          );
-                        })}
-                      </div>
                     ) : null}
                   </li>
                 );
@@ -1021,10 +208,6 @@ function NewBooking() {
                   {busy ? "Saving..." : "Save change"}
                 </button>
               </div>
-            </Panel>
-          ) : !detailsOpen ? (
-            <Panel title="Paid now">
-              <p className="text-sm text-muted-foreground">Payment opens once the dates are set and every item is free.</p>
             </Panel>
           ) : (
           <Panel title="Paid now">

@@ -1,0 +1,452 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
+import { useShop } from "@/lib/shop/ShopContext";
+import { useCart, type CartLine } from "@/modules/clothing/cart";
+import { call, loadRental, money, type RentalDetail } from "@/lib/shop/api";
+import { useCatalog } from "@/lib/shop/useCatalog";
+import { addDays, errorText, isoToZoned, num, rupees, todayLocal, zonedToIso } from "@/lib/shop/format";
+import type { Customer, Method, Product, Quote, Template, Variation } from "@/lib/shop/types";
+import { emptyCustomer, type NewCustomer } from "@/components/shop/CustomerPicker";
+import { customerProblem } from "@/components/shop/CustomerForm";
+import { moneyError, normalizeEmail, normalizePhone, textLimitError } from "@/lib/validate";
+import { buildMessage, waLink } from "@/lib/shop/whatsapp";
+import { shopModules } from "@/modules/registry";
+
+// The booking form's state and rules, shared by every kind of shop. The screens are in src/app/(shop)/book/page.tsx
+// and, for a module with its own (clothing), in its folder.
+export type Line = CartLine;
+interface Draft {
+  branchId: string;
+  start: string;
+  end: string;
+  lines: Line[];
+  adults: number;
+  children: number;
+  withDriver: boolean;
+  wholeProperty: boolean;
+  cleaningDays: string; // bridal and groom: days the pieces are kept back for cleaning after the return
+  addOns: Record<string, number>; // add_on_id -> quantity
+  customer: NewCustomer;
+  customerId: string | null;
+  discount: string;
+  depositAgreed: string;
+  advance: string;
+  advanceMethod: Method | "";
+  deposit: string;
+  depositMethod: Method | "";
+  notes: string;
+}
+
+
+function defaultPeriod(kind: Template["kind"] | undefined, tz: string, checkIn: string, checkOut: string) {
+  const today = todayLocal(tz);
+  // clothes: pickup today at the usual hour; the return date is chosen first, so availability is checked for real dates
+  if (kind === "wearable") return { start: `${today}T10:00`, end: "" };
+  if (kind === "room") return { start: `${today}T${checkIn}`, end: `${addDays(today, 1)}T${checkOut}` };
+  if (kind === "vehicle") {
+    const next = isoToZoned(new Date(Date.now() + 60 * 60 * 1000).toISOString(), tz).slice(0, 13) + ":00";
+    return { start: next, end: isoToZoned(new Date(Date.parse(zonedToIso(next, tz)) + 24 * 3600 * 1000).toISOString(), tz) };
+  }
+  return { start: `${addDays(today, 1)}T10:00`, end: `${addDays(today, 3)}T18:00` };
+}
+
+export type Piece = { unit_id: string; code: string };
+
+/** everything the booking form knows and does; the shared form and a module's own form draw it */
+export function useBookingForm() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { shop, tz, myBranchId, activeBranches, categories, templates, addOns, templateOf, feature, setting, word, businessModule } = useShop();
+  // TRENDZ rules for clothes: dates first, each booked piece chosen, cleaning days, no pickup in the past, back to Bookings
+  const byPiece = !!shopModules[businessModule].bookingByPiece;
+  const { products } = useCatalog();
+  const storageKey = `ob_booking_${shop.id}`;
+  // ?edit=<rental id>: change a booking that has not been picked up
+  const editId = params.get("edit");
+  const [editing, setEditing] = useState<RentalDetail | null>(null);
+
+  const initial = (): Draft => {
+    const p = defaultPeriod(templates[0]?.kind, tz, setting("check_in_time", "14:00"), setting("check_out_time", "11:00"));
+    return {
+      branchId: myBranchId ?? activeBranches[0]?.id ?? "", start: p.start, end: p.end, lines: [], adults: 1, children: 0,
+      withDriver: false, wholeProperty: false, cleaningDays: "", addOns: {}, customer: emptyCustomer, customerId: null, discount: "",
+      depositAgreed: "", advance: "", advanceMethod: "", deposit: "", depositMethod: "", notes: "",
+    };
+  };
+  const [d, setD] = useState<Draft>(initial);
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const restored = useRef(false);
+
+  // keep a half-filled booking if the page is left by accident (this tab only)
+  useEffect(() => {
+    if (restored.current || editId) return;
+    restored.current = true;
+    try {
+      const saved = sessionStorage.getItem(storageKey);
+      if (saved) {
+        const draft = JSON.parse(saved) as Draft;
+        const fresh = initial();
+        const branchOk = activeBranches.some((b) => b.id === draft.branchId);
+        setD({ ...fresh, ...draft, branchId: myBranchId ?? (branchOk ? draft.branchId : fresh.branchId) });
+        if (draft.customerId) {
+          void createClient().from("customers").select("*").eq("id", draft.customerId).maybeSingle()
+            .then(({ data }) => setCustomer((data as Customer) ?? null));
+        }
+      }
+    } catch { /* storage unavailable */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (editId) return;
+    try { sessionStorage.setItem(storageKey, JSON.stringify({ ...d, customerId: customer?.id ?? null })); } catch { /* ignore */ }
+  }, [d, customer, storageKey, editId]);
+
+  // the booking being changed, as a draft of this form
+  useEffect(() => {
+    if (!editId) return;
+    void loadRental(editId).then((r) => {
+      if (!r || r.status !== "reserved") {
+        toast.error(r ? "Only a booking that has not been picked up can be changed." : "Booking not found.");
+        router.replace(r ? `/rentals/${r.id}` : "/rentals");
+        return;
+      }
+      const days = Math.max(1, Math.ceil((Date.parse(r.end_at) - Date.parse(r.start_at)) / 86_400_000));
+      setEditing(r);
+      setCustomer(r.customers);
+      setD({
+        ...initial(), branchId: r.branch_id, start: isoToZoned(r.start_at, tz), end: isoToZoned(r.end_at, tz),
+        lines: r.rental_lines.filter((l) => l.rate_type !== "driver_day" && l.rate_type !== "extra_person").map((l) => ({
+          variation_id: l.variation_id, qty: l.qty, amount_override: l.is_override ? String(l.amount) : "", unit_ids: [],
+        })),
+        adults: r.adults, children: r.children, withDriver: r.with_driver, wholeProperty: r.whole_property,
+        cleaningDays: r.cleaning_days ? String(r.cleaning_days) : "",
+        // the form asks "how many" for once-off and per-day extras; the booking stores the worked-out quantity
+        addOns: Object.fromEntries(r.rental_add_ons.map((a) => [a.add_on_id,
+          a.basis === "per_rental" ? Number(a.quantity) : a.basis === "per_day" ? Math.max(1, Math.round(Number(a.quantity) / days)) : 1])),
+        customerId: r.customer_id, discount: Number(r.discount) ? String(r.discount) : "",
+        depositAgreed: Number(r.deposit_agreed) ? String(r.deposit_agreed) : "", notes: r.notes ?? "",
+      });
+    }).catch((e) => toast.error(errorText(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
+  const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
+
+  // A new booking takes its items and branch from the cart (filled from Inventory Search, All Rentals or
+  // the list below); changing a booking works on its own copy.
+  const cart = useCart();
+  const lines = editId ? d.lines : cart.lines;
+  const branchId = editId ? d.branchId : (myBranchId ?? (cart.lines.length && cart.branchId ? cart.branchId : d.branchId));
+  const setLines = (fn: (ls: Line[]) => Line[]) => {
+    if (editId) setD((x) => ({ ...x, lines: fn(x.lines).filter((l) => l.qty > 0) }));
+    else cart.setLines(fn);
+  };
+  const setBranch = (id: string) => {
+    set({ branchId: id, lines: d.lines.map((l) => ({ ...l, unit_ids: [] })) });
+    if (!editId) cart.setBranch(id);
+  };
+
+  // ---- catalog lookups ----
+  const variations = useMemo(() => {
+    const map = new Map<string, { product: Product; variation: Variation; template: Template | undefined }>();
+    for (const p of products ?? []) for (const v of p.product_variations ?? []) {
+      if (v.is_enabled) map.set(v.id, { product: p, variation: v, template: templateOf(p.category_id) });
+    }
+    return map;
+  }, [products, templateOf]);
+
+  // ?variation=... from the catalog's "Book" button
+  const prefill = params.get("variation");
+  useEffect(() => {
+    if (prefill && variations.has(prefill)) {
+      if (!lines.some((l) => l.variation_id === prefill)) cart.add(branchId, prefill);
+      router.replace("/book");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill, variations, router]);
+
+  // ?customer=... from a customer's page
+  const prefillCustomer = params.get("customer");
+  useEffect(() => {
+    if (!prefillCustomer) return;
+    void createClient().from("customers").select("*").eq("id", prefillCustomer).maybeSingle().then(({ data }) => {
+      if (data) { setCustomer(data as Customer); setD((x) => ({ ...x, customerId: (data as Customer).id })); }
+      router.replace("/book");
+    });
+  }, [prefillCustomer, router]);
+
+  const startIso = d.start ? zonedToIso(d.start, tz) : "";
+  const endIso = d.end ? zonedToIso(d.end, tz) : "";
+  const startInPast = byPiece && !editId && !!d.start && d.start.slice(0, 10) < todayLocal(tz);
+  const periodOk = !!startIso && !!endIso && endIso > startIso && !startInPast;
+  // bridal and groom: cleaning days are typed per booking (blank = none), like TRENDZ's maintenance buffer
+  const cleaningBad = byPiece && d.cleaningDays.trim() !== "" && num(d.cleaningDays) < 0;
+  const cleaning = byPiece ? Math.min(365, Math.max(0, Math.floor(num(d.cleaningDays)))) : undefined;
+
+  const cartTemplates = useMemo(() => {
+    const keys = new Set<string>();
+    for (const l of lines) { const t = variations.get(l.variation_id)?.template; if (t) keys.add(t.key); }
+    if (d.wholeProperty) templates.filter((t) => t.kind === "room").forEach((t) => keys.add(t.key));
+    return templates.filter((t) => keys.has(t.key));
+  }, [lines, d.wholeProperty, variations, templates]);
+  const kinds = new Set(cartTemplates.map((t) => t.kind));
+  const hasRoom = kinds.has("room");
+  const hasVehicle = kinds.has("vehicle");
+  const roomShop = templates.some((t) => t.kind === "room");
+
+  // the first check of each kind goes out at once; only later changes (typing a date) wait a moment
+  const firstCheck = useRef({ avail: true, pieces: true, quote: true });
+  const wait = (k: "avail" | "pieces" | "quote", ms: number) => { const w = firstCheck.current[k] ? 0 : ms; firstCheck.current[k] = false; return w; };
+
+  // ---- availability for the period ----
+  const [avail, setAvail] = useState<Record<string, { free: number; total: number }>>({});
+  useEffect(() => {
+    if (!periodOk || !branchId) return;
+    const t = setTimeout(async () => {
+      try {
+        const rows = await call<{ variation_id: string; free: number; total: number }[]>("branch_availability",
+          { p_branch_id: branchId, p_start: startIso, p_end: endIso, ...(cleaning !== undefined ? { p_cleaning_days: cleaning } : {}) });
+        // when changing a booking, the units it already holds count as free for it
+        const own = new Map<string, number>();
+        for (const u of editing?.unit_reservations ?? []) {
+          if (u.state === "held" && u.units) own.set(u.units.variation_id, (own.get(u.units.variation_id) ?? 0) + 1);
+        }
+        setAvail(Object.fromEntries(rows.map((r) => [r.variation_id, { free: Math.min(r.total, r.free + (own.get(r.variation_id) ?? 0)), total: r.total }])));
+      } catch (e) {
+        toast.error(errorText(e));
+      }
+    }, wait("avail", 250));
+    return () => clearTimeout(t);
+  }, [branchId, startIso, endIso, periodOk, editing, cleaning]);
+
+  // ---- exact pieces (bridal and groom): the free pieces of every item for these dates, each booked piece
+  // is chosen, as in TRENDZ. A set is made of other items, so it only needs enough free sets.
+  const pieceLines = useMemo(() => (byPiece ? lines.filter((l) => {
+    const v = variations.get(l.variation_id);
+    return v?.template?.kind === "wearable" && !v.product.is_set;
+  }) : []), [byPiece, lines, variations]);
+  const pieceKey = pieceLines.map((l) => l.variation_id).join(",");
+  const [pieces, setPieces] = useState<Record<string, Piece[]> | null>(null); // null: not checked for these dates yet
+  useEffect(() => {
+    setPieces(null);
+    if (!byPiece || !periodOk || !branchId || !pieceKey) return;
+    let live = true;
+    const t = setTimeout(async () => {
+      try {
+        const entries = await Promise.all(pieceKey.split(",").map(async (vid) => {
+          const rows = await call<Piece[]>("find_available_units",
+            { p_branch_id: branchId, p_variation_id: vid, p_start: startIso, p_end: endIso, p_cleaning_days: cleaning });
+          // when changing a booking, the pieces it already holds are free for it
+          const own = (editing?.unit_reservations ?? [])
+            .filter((u) => u.state === "held" && u.units?.variation_id === vid && !rows.some((r) => r.unit_id === u.unit_id))
+            .map((u) => ({ unit_id: u.unit_id, code: u.units!.code }));
+          return [vid, [...own, ...rows].sort((a, b) => a.code.localeCompare(b.code))] as const;
+        }));
+        if (live) setPieces(Object.fromEntries(entries));
+      } catch (e) {
+        if (live) { setPieces({}); toast.error(errorText(e)); }
+      }
+    }, wait("pieces", 250));
+    return () => { live = false; clearTimeout(t); };
+  }, [byPiece, periodOk, branchId, pieceKey, startIso, endIso, cleaning, editing]);
+
+  // every booked piece starts on the first free one; staff can change it (a piece that is no longer free is replaced)
+  const lineSig = lines.map((l) => `${l.variation_id}:${l.qty}`).join(",");
+  useEffect(() => {
+    if (!pieces) return;
+    setLines((ls) => ls.map((l) => {
+      const list = pieces[l.variation_id];
+      if (!list) return l;
+      const keep = l.unit_ids.filter((id, i) => list.some((p) => p.unit_id === id) && l.unit_ids.indexOf(id) === i).slice(0, l.qty);
+      const fill = list.filter((p) => !keep.includes(p.unit_id)).slice(0, l.qty - keep.length).map((p) => p.unit_id);
+      const ids = [...keep, ...fill];
+      return ids.length === l.unit_ids.length && ids.every((id, i) => id === l.unit_ids[i]) ? l : { ...l, unit_ids: ids };
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pieces, lineSig]);
+
+  // customer and payment open only when every item is free for the dates (TRENDZ: "unlocked when products are available")
+  const shortItems = useMemo(() => lines.filter((l) => {
+    const v = variations.get(l.variation_id);
+    if (!byPiece || !v) return false;
+    if (pieceLines.includes(l)) return pieces !== null && (pieces[l.variation_id]?.length ?? 0) < l.qty;
+    return (avail[l.variation_id]?.free ?? 0) < l.qty;
+  }), [byPiece, lines, variations, pieceLines, pieces, avail]);
+  const checkingStock = byPiece && periodOk && lines.length > 0 && pieceLines.length > 0 && pieces === null;
+  const detailsOpen = !byPiece || !!editing || (periodOk && lines.length > 0 && !checkingStock && shortItems.length === 0);
+
+  // ---- live quote ----
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const quoteInput = useMemo(() => ({
+    branch_id: branchId, start_at: startIso, end_at: endIso, adults: d.adults, children: d.children,
+    with_driver: d.withDriver && hasVehicle, whole_property: d.wholeProperty,
+    lines: lines.map((l) => ({
+      variation_id: l.variation_id, qty: l.qty,
+      ...(l.amount_override.trim() !== "" ? { amount_override: num(l.amount_override) } : {}),
+      ...(l.unit_ids.length === l.qty ? { unit_ids: l.unit_ids } : {}),
+    })),
+    add_ons: Object.entries(d.addOns).map(([add_on_id, quantity]) => ({ add_on_id, quantity })),
+    ...(cleaning !== undefined ? { cleaning_days: cleaning } : {}),
+  }), [d, branchId, lines, startIso, endIso, hasVehicle, cleaning]);
+
+  useEffect(() => {
+    if (!periodOk || !branchId || (lines.length === 0 && !d.wholeProperty)) {
+      setQuote(null);
+      setQuoteError(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        setQuote(await call<Quote>("quote_rental", { p: quoteInput }));
+        setQuoteError(null);
+      } catch (e) {
+        setQuote(null);
+        setQuoteError(errorText(e));
+      }
+    }, wait("quote", 350));
+    return () => clearTimeout(t);
+  }, [quoteInput, periodOk, branchId, lines.length, d.wholeProperty]);
+
+  // ---- cart ----
+  const addLine = (variationId: string) => {
+    if (!editId) return cart.add(branchId, variationId);
+    setD((x) => {
+      const existing = x.lines.find((l) => l.variation_id === variationId);
+      if (existing) return { ...x, lines: x.lines.map((l) => l === existing ? { ...l, qty: l.qty + 1, unit_ids: [] } : l) };
+      return { ...x, lines: [...x.lines, { variation_id: variationId, qty: 1, amount_override: "", unit_ids: [] }] };
+    });
+  };
+  const updateLine = (variationId: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => l.variation_id === variationId ? { ...l, ...patch } : l));
+
+  // ---- submit ----
+  const [busy, setBusy] = useState(false);
+  // changing a booking can also take money (the balance is the new total less what was paid)
+  const [editPay, setEditPay] = useState<{ amount: string; method: Method | "" }>({ amount: "", method: "" });
+  const total = Math.max(0, (quote?.total_before_discount ?? 0) - num(d.discount));
+
+  // what is wrong with the money fields; shown under a field once something is typed in it, and for all of them after a try to confirm
+  const [tried, setTried] = useState(false);
+  const money_ = {
+    discount: moneyError(d.discount, { label: "discount", max: quote?.total_before_discount ?? 0, maxText: `the rental total (${rupees(quote?.total_before_discount ?? 0)})` }),
+    advance: moneyError(d.advance, { label: "advance", max: total, maxText: `the total (${rupees(total)})` }),
+    deposit: moneyError(d.deposit, { label: "deposit", max: 1_000_000 }),
+    advanceMethod: num(d.advance) > 0 && !d.advanceMethod ? "Choose how the advance was paid." : null,
+    depositMethod: num(d.deposit) > 0 && !d.depositMethod ? "Choose how the deposit was paid." : null,
+    notes: textLimitError(d.notes, "notes", 500),
+    editPay: editing ? moneyError(editPay.amount, { label: "payment", positive: true, max: Math.max(0, total - money(editing).paid), maxText: `the balance after this change (${rupees(Math.max(0, total - money(editing).paid))})` }) : null,
+    editPayMethod: editing && num(editPay.amount) > 0 && !editPay.method ? "Choose how the payment was made." : null,
+  };
+  const shown = (k: keyof typeof money_, typed: string) => (tried || typed.trim() ? money_[k] ?? undefined : undefined);
+
+  const submit = async () => {
+    setTried(true);
+    const moneyBad = Object.values(money_).find(Boolean);
+    if (moneyBad) return toast.error(moneyBad);
+    if (!periodOk) return toast.error(`The ${word("end").toLowerCase()} must be after the ${word("start").toLowerCase()}.`);
+    if (!quote) return toast.error(quoteError ?? "Add at least one item.");
+    if (cleaningBad) return toast.error("Cleaning days cannot be negative.");
+    for (const l of pieceLines) {
+      const label = variations.get(l.variation_id)?.product.name ?? "this item";
+      const free = pieces?.[l.variation_id] ?? [];
+      for (let i = 0; i < l.qty; i++) {
+        const id = l.unit_ids[i];
+        if (!id) return toast.error(`Please choose a piece for ${label} (piece ${i + 1}).`);
+        if (!free.some((p) => p.unit_id === id)) return toast.error(`The piece chosen for ${label} (piece ${i + 1}) is no longer free. Choose another.`);
+      }
+    }
+    if (!customer) { const bad = customerProblem(d.customer); if (bad) return toast.error(bad); }
+    if (num(d.advance) > 0 && !d.advanceMethod) return toast.error("Choose how the advance was paid.");
+    if (num(d.deposit) > 0 && !d.depositMethod) return toast.error("Choose how the deposit was paid.");
+    setBusy(true);
+    try {
+      if (editing) {
+        const { branch_id: _branch, ...change } = quoteInput;
+        void _branch;
+        await call("update_rental", {
+          p_rental_id: editing.id,
+          p: { ...change, discount: num(d.discount), deposit_agreed: num(d.depositAgreed), notes: d.notes },
+        });
+        if (num(editPay.amount) > 0) {
+          await call("record_rental_payment", { p_rental_id: editing.id, p_kind: "payment", p_amount: num(editPay.amount), p_method: editPay.method, p_note: null });
+        }
+        toast.success(`${editing.token} changed`);
+        router.push(`/rentals/${editing.id}`);
+        return;
+      }
+      const supabase = createClient();
+      // a returning customer's licence, filled in here
+      if (customer && hasVehicle && d.customer.licence_number.trim()) {
+        const { error } = await supabase.from("customers").update({
+          licence_number: d.customer.licence_number.trim(), licence_expiry: d.customer.licence_expiry || null,
+        }).eq("id", customer.id);
+        if (error) throw error;
+      }
+      // the same person is not saved twice: a saved customer with this phone and name is used as it is
+      let reuseId: string | null = null;
+      if (!customer) {
+        const { data: same } = await supabase.from("customers").select("id, full_name").eq("phone", normalizePhone(d.customer.phone)).limit(5);
+        const wanted = d.customer.full_name.trim().replace(/\s+/g, " ").toLowerCase();
+        reuseId = (same ?? []).find((c) => c.full_name.trim().replace(/\s+/g, " ").toLowerCase() === wanted)?.id ?? null;
+      }
+      const res = await call<{ rental_id: string; token: string }>("create_rental", {
+        p: {
+          ...quoteInput,
+          customer: customer ? { id: customer.id } : reuseId ? { id: reuseId } : {
+            ...Object.fromEntries(Object.entries(d.customer).map(([k, v]) => [k, v.trim()])),
+            full_name: d.customer.full_name.trim().replace(/\s+/g, " "), phone: normalizePhone(d.customer.phone), email: normalizeEmail(d.customer.email),
+          },
+          discount: num(d.discount),
+          deposit_agreed: num(d.depositAgreed),
+          notes: d.notes,
+          advance: num(d.advance) > 0 ? { amount: num(d.advance), method: d.advanceMethod } : null,
+          deposit: num(d.deposit) > 0 ? { amount: num(d.deposit), method: d.depositMethod } : null,
+        },
+      });
+      try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
+      cart.clear();
+      if (byPiece) {
+        // bridal and groom: back to the Bookings list; the message to the customer is one tap on the notice
+        const rental = await loadRental(res.rental_id).catch(() => null);
+        const br = rental ? activeBranches.find((x) => x.id === rental.branch_id) : undefined;
+        const wa = rental ? waLink(rental.customers.phone, buildMessage("confirmation", rental, {
+          shopName: shop.name, branchName: br?.name, branchPhone: br?.phone ?? shop.phone, tz, startWord: word("start"), endWord: word("end"),
+        })) : "";
+        toast.success(`Booked: ${res.token}`, {
+          duration: 12_000,
+          action: rental ? { label: "WhatsApp", onClick: () => { window.open(wa, "_blank", "noopener"); void call("mark_reminder_sent", { p_rental_id: rental.id, p_kind: "confirmation" }).catch(() => undefined); } } : undefined,
+        });
+        router.push("/bookings");
+        return;
+      }
+      toast.success(`Booked: ${res.token}`);
+      router.push(`/rentals/${res.rental_id}?new=1`);
+    } catch (e) {
+      toast.error(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const reset = () => {
+    try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
+    cart.clear();
+    setCustomer(null);
+    setD(initial());
+    setConfirmDiscard(false);
+  };
+
+  const visibleAddOns = addOns.filter((a) => a.is_active
+    && (a.template_keys.length === 0 || a.template_keys.some((k) => cartTemplates.some((t) => t.key === k))));
+  const quoteLineFor = (variationId: string) => quote?.lines.find((l) => l.variation_id === variationId && l.reserve);
+
+  return {
+    router, shop, tz, myBranchId, activeBranches, categories, addOns, templateOf, feature, word, businessModule, products, editId, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, kinds, hasRoom, hasVehicle, roomShop, avail, pieceLines, pieces, shortItems, checkingStock, detailsOpen, quote, quoteError, addLine, updateLine, busy, editPay, setEditPay, total, shown, submit, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, quoteLineFor,
+  };
+}
+export type BookingForm = ReturnType<typeof useBookingForm>;
