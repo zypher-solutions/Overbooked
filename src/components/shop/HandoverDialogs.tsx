@@ -1,13 +1,13 @@
 "use client";
 
 import { DateInput, DateTimeInput } from "@/components/shop/DateInput";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Camera, Check, Plus, ScanLine, Trash2 } from "lucide-react";
-import { CameraScanner } from "@/components/overbooked/CameraScanner";
+import { useEffect, useMemo, useState } from "react";
+import { Camera, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
+import { shopModules } from "@/modules/registry";
 import { call, money, uploadPhotos, type RentalDetail } from "@/lib/shop/api";
 import { CHARGE_LABELS, errorText, fmtDate, isoToZoned, num, rupees, zonedToIso } from "@/lib/shop/format";
 import type { ChargeType, Method } from "@/lib/shop/types";
@@ -260,24 +260,11 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
   scannedUnitId?: string;
 }) {
   const { shop, tz, word, businessModule } = useShop();
-  const clothing = businessModule === "clothing";
   const units = useUnits(rental, "out");
-  // Clothes (TRENDZ): every piece is scanned, typed or ticked as it comes back before the return is saved
-  const tickPieces = clothing && units.every((u) => u.line?.kind === "wearable");
+  // a module may have each piece scanned, typed or ticked as it comes back before the return is saved (clothing)
+  const { ReturnPieces } = shopModules[businessModule];
+  const tickPieces = !!ReturnPieces && units.every((u) => u.line?.kind === "wearable");
   const [received, setReceived] = useState<Set<string>>(new Set());
-  const [code, setCode] = useState("");
-  const [camera, setCamera] = useState(false);
-  const receive = useCallback((text: string) => {
-    const t = text.trim().toLowerCase();
-    if (!t) return;
-    const u = units.find((x) => x.reservation.units?.code.toLowerCase() === t);
-    if (!u) { toast.error(`${text.trim()} is not on this booking.`); return; }
-    setReceived((s) => new Set(s).add(u.reservation.unit_id));
-    toast.success(`${u.reservation.units?.code} received`);
-    setCode("");
-  }, [units]);
-  const onCameraScan = useCallback((text: string) => { setCamera(false); receive(text); }, [receive]);
-  const onCameraError = useCallback(() => { setCamera(false); toast.error("Could not open the camera. Type the code instead."); }, []);
   const m = money(rental);
   const [returnedAt, setReturnedAt] = useState("");
   const [checks, setChecks] = useState<Record<string, CheckDraft>>({});
@@ -324,8 +311,6 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
     setCharges([]);
     setTouched(false);
     setReceived(new Set(scannedUnitId ? [scannedUnitId] : []));
-    setCode("");
-    setCamera(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -437,32 +422,8 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
         <button className={goldButtonClass} disabled={busy || (tried && bad)} onClick={submit}>{busy ? "Saving..." : isRoom ? "Check out" : "Mark returned"}</button>
       </>}>
       <Field label="Returned at" error={errs.returned ?? undefined}><DateTimeInput value={returnedAt} max={isoToZoned(new Date().toISOString(), tz)} onChange={(v) => setReturnedAt(v)} /></Field>
-      {tickPieces ? (
-        <div className="rounded-lg border border-gold/30 bg-gold/[0.03] p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gold">Pieces received ({received.size} of {units.length})</p>
-            <button type="button" className="text-xs text-gold hover:underline" onClick={() => setReceived(new Set(units.map((u) => u.reservation.unit_id)))}>All received</button>
-          </div>
-          <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); receive(code); }}>
-            <input className={cn(inputClass, "flex-1")} placeholder="Scan or type the piece code" aria-label="Piece code received" value={code} onChange={(e) => setCode(e.target.value)} />
-            <button type="submit" className={ghostButtonClass}>Received</button>
-            <button type="button" className={ghostButtonClass} aria-label="Scan with the camera" onClick={() => setCamera((c) => !c)}><ScanLine className="h-4 w-4" /></button>
-          </form>
-          {camera ? <div className="mt-2"><CameraScanner inline onClose={() => setCamera(false)} onScan={onCameraScan} onError={onCameraError} /></div> : null}
-          <ul className="mt-2 flex flex-wrap gap-1.5">
-            {units.map((u) => {
-              const on = received.has(u.reservation.unit_id);
-              return (
-                <li key={u.reservation.unit_id}>
-                  <button type="button" aria-pressed={on} onClick={() => setReceived((s) => { const n = new Set(s); if (on) n.delete(u.reservation.unit_id); else n.add(u.reservation.unit_id); return n; })}
-                    className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs", on ? "border-emerald/50 bg-emerald/10 text-emerald" : "border-border text-muted-foreground")}>
-                    {on ? <Check className="h-3.5 w-3.5" /> : null}<span className="font-mono">{u.reservation.units?.code}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+      {tickPieces && open ? (
+        <ReturnPieces pieces={units.map((u) => ({ id: u.reservation.unit_id, code: u.reservation.units?.code ?? "" }))} received={received} onChange={setReceived} />
       ) : null}
       {units.map((u) => (
         <CheckForm key={u.reservation.unit_id} title={`${u.reservation.units?.code ?? ""} · ${u.line?.description ?? ""}`} kind={u.line?.kind}
