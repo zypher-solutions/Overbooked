@@ -259,10 +259,11 @@ export function ReturnDialog({ rental, open, onClose, onDone, scannedUnitId }: {
   /** a piece scanned at Inventory Search: it starts ticked as received */
   scannedUnitId?: string;
 }) {
-  const { shop, tz, word, trendz } = useShop();
+  const { shop, tz, word, businessModule } = useShop();
+  const clothing = businessModule === "clothing";
   const units = useUnits(rental, "out");
   // Clothes (TRENDZ): every piece is scanned, typed or ticked as it comes back before the return is saved
-  const tickPieces = trendz && units.every((u) => u.line?.kind === "wearable");
+  const tickPieces = clothing && units.every((u) => u.line?.kind === "wearable");
   const [received, setReceived] = useState<Set<string>>(new Set());
   const [code, setCode] = useState("");
   const [camera, setCamera] = useState(false);

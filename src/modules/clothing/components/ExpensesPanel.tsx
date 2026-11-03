@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
 import { errorText, fmtDate, num, rupees, todayLocal } from "@/lib/shop/format";
-import { Field, Modal, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass } from "./ui";
+import { Field, Modal, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
 
 // Money going out of the shop, so Finance can show profit. The owner and a branch manager add; only the owner
 // corrects or deletes (with a reason, kept in the audit log). Staff do not see this panel.

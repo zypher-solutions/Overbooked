@@ -23,6 +23,8 @@ There is no Python in this project.
 - src/app/(shop): the shop app (Today, booking, bookings, customers, catalog, money, branches, staff, settings)
 - src/app/zypher: the Zypher console (server-guarded); src/app/actions: server actions (invites, new shops)
 - src/components/shop, src/components/zypher: their components; src/lib/shop: types, formats, data helpers
+- src/modules/<business>: code for ONE business type (clothing now; vehicle, stay later). Modules never import each other;
+  src/modules/registry.ts picks a shop's module. Read src/modules/README.md before adding or moving screens
 - src/lib/overbooked/AuthContext.tsx: sign-in, profile, current shop
 - supabase/migrations: database schema v2, in order (see docs/DATABASE.md); supabase/tests: database tests
 - supabase/seed.sql: local demo data and logins

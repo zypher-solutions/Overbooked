@@ -25,7 +25,8 @@ export default function CatalogPage() {
 }
 
 function Catalog() {
-  const { canManage, word, feature, templates, trendz } = useShop();
+  const { canManage, word, feature, templates, businessModule } = useShop();
+  const clothing = businessModule === "clothing";
   // ?tab=categories: the sidebar's Categories item
   const asked = useSearchParams().get("tab");
   const [adding, setAdding] = useState(0);
@@ -33,7 +34,7 @@ function Catalog() {
   useEffect(() => { setTab(asked === "categories" || asked === "extras" ? asked : "items"); }, [asked]);
   return (
     <>
-      <PageHeader title={trendz ? (tab === "categories" ? "Categories" : tab === "extras" ? "Extras" : "All Products") : word("items", "Catalog")}
+      <PageHeader title={clothing ? (tab === "categories" ? "Categories" : tab === "extras" ? "Extras" : "All Products") : word("items", "Catalog")}
         actions={!canManage || tab === "extras" ? null : tab === "categories" ? (
           <button className={goldButtonClass} onClick={() => setAdding((n) => n + 1)}><Plus className="h-4 w-4" /> Add Category</button>
         ) : <>
@@ -44,7 +45,7 @@ function Catalog() {
           ) : null}
           <Link href="/catalog/new" className={goldButtonClass}><Plus className="h-4 w-4" /> Add {word("item").toLowerCase()}</Link>
         </>} />
-      <div className={cn("mb-4 flex gap-1.5", trendz && "hidden")} role="tablist">
+      <div className={cn("mb-4 flex gap-1.5", clothing && "hidden")} role="tablist">
         {([["items", word("items")], ["extras", "Extras"], ["categories", "Categories"]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
             className={cn("rounded-full border px-3 py-1 text-xs", tab === k ? "border-gold/60 bg-gold/10 font-medium" : "border-border text-muted-foreground")}>
@@ -58,7 +59,8 @@ function Catalog() {
 }
 
 function Items() {
-  const { categories, branches, templateOf, word, trendz } = useShop();
+  const { categories, branches, templateOf, word, businessModule } = useShop();
+  const clothing = businessModule === "clothing";
   const { products, reload } = useCatalog({ includeInactive: true });
   const [units, setUnits] = useState<Pick<Unit, "variation_id" | "branch_id" | "status">[]>([]);
   const [q, setQ] = useState("");
@@ -95,7 +97,7 @@ function Items() {
 
   const term = q.trim().toLowerCase();
   const stockOf = (p: Product) => (p.product_variations ?? []).filter((v) => v.is_enabled).reduce((s, v) => s + (count.get(v.id)?.total ?? 0), 0);
-  const list = (products ?? []).filter((p) => (showInactive || p.is_active || trendz) && (!cat || p.category_id === cat)
+  const list = (products ?? []).filter((p) => (showInactive || p.is_active || clothing) && (!cat || p.category_id === cat)
     && (!stockFilter || p.is_set || (stockFilter === "in") === (stockOf(p) > 0))
     && (!term || `${p.name} ${p.sku} ${(p.product_variations ?? []).map((v) => `${v.name} ${v.sku}`).join(" ")}`.toLowerCase().includes(term)));
 
@@ -112,7 +114,7 @@ function Items() {
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         ) : null}
-        {trendz ? (
+        {clothing ? (
           <select className={cn(inputClass, "w-auto")} aria-label="Stock status" value={stockFilter} onChange={(e) => setStockFilter(e.target.value as typeof stockFilter)}>
             <option value="">Filter by stock status</option><option value="in">In stock</option><option value="out">Out of stock</option>
           </select>
@@ -122,7 +124,7 @@ function Items() {
           </label>
         )}
       </div>
-      {trendz ? <ProductTable list={list} units={units} loading={products === null} reload={reload} /> : (
+      {clothing ? <ProductTable list={list} units={units} loading={products === null} reload={reload} /> : (
       <div className={tableWrap}>
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className={theadClass}>
@@ -160,7 +162,7 @@ function Items() {
         </table>
       </div>
       )}
-      {branches.length > 1 && !trendz ? <p className="mt-2 text-xs text-muted-foreground">Counts cover all branches; open an item to see each branch.</p> : null}
+      {branches.length > 1 && !clothing ? <p className="mt-2 text-xs text-muted-foreground">Counts cover all branches; open an item to see each branch.</p> : null}
     </>
   );
 }
@@ -363,7 +365,8 @@ function Extras() {
 }
 
 function Categories({ addSignal }: { addSignal: number }) {
-  const { shop, categories, templates, canManage, refresh, trendz } = useShop();
+  const { shop, categories, templates, canManage, refresh, businessModule } = useShop();
+  const clothing = businessModule === "clothing";
   const [edit, setEdit] = useState<Partial<Category> | null>(null);
   const [deleting, setDeleting] = useState<Category | null>(null);
   // the page header's "Add Category" button counts up; each count opens the new-category form
@@ -384,7 +387,7 @@ function Categories({ addSignal }: { addSignal: number }) {
     if (nameBad) return toast.error(nameBad);
     const prefix = (edit.sku_prefix ?? "").trim().toUpperCase();
     // bridal and groom shops number their products from the category's base SKU, as in TRENDZ
-    if (trendz && !prefix) return toast.error("Enter the base SKU: 2 to 6 capital letters, e.g. BR.");
+    if (clothing && !prefix) return toast.error("Enter the base SKU: 2 to 6 capital letters, e.g. BR.");
     if (prefix && !/^[A-Z]{2,6}$/.test(prefix)) return toast.error("The SKU prefix needs 2 to 6 capital letters.");
     setBusy(true);
     const row = { name: (edit.name ?? "").trim().replace(/s+/g, " "), template_key: edit.template_key, sku_prefix: prefix || null };
@@ -402,7 +405,7 @@ function Categories({ addSignal }: { addSignal: number }) {
       <div className={tableWrap}>
         <table className="w-full text-left text-sm">
           <thead className={theadClass}>
-            <tr><th className="px-6 py-3">Name</th>{trendz ? null : <th className="px-6 py-3">Type</th>}<th className="px-6 py-3">Base SKU</th>{canManage ? <th className="px-6 py-3 text-right">Actions</th> : null}</tr>
+            <tr><th className="px-6 py-3">Name</th>{clothing ? null : <th className="px-6 py-3">Type</th>}<th className="px-6 py-3">Base SKU</th>{canManage ? <th className="px-6 py-3 text-right">Actions</th> : null}</tr>
           </thead>
           <tbody className="divide-y divide-border">
             {categories.map((c) => (
@@ -413,7 +416,7 @@ function Categories({ addSignal }: { addSignal: number }) {
                     <span className="font-medium">{c.name}</span>
                   </span>
                 </td>
-                {trendz ? null : <td className="px-6 py-3 text-muted-foreground">{templates.find((t) => t.key === c.template_key)?.name}</td>}
+                {clothing ? null : <td className="px-6 py-3 text-muted-foreground">{templates.find((t) => t.key === c.template_key)?.name}</td>}
                 <td className="px-6 py-3">{c.sku_prefix ? <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{c.sku_prefix}</span> : <span className="text-muted-foreground">-</span>}</td>
                 {canManage ? (
                   <td className="px-6 py-3">
@@ -443,8 +446,8 @@ function Categories({ addSignal }: { addSignal: number }) {
               </select>
             </Field>
           ) : null}
-          <Field label={trendz ? "Base SKU" : "SKU prefix (optional)"}
-            hint={trendz ? "2 to 6 capital letters, e.g. BR. Products in this category are numbered BR-001, BR-002..." : "2 to 6 capital letters, e.g. LEH"}>
+          <Field label={clothing ? "Base SKU" : "SKU prefix (optional)"}
+            hint={clothing ? "2 to 6 capital letters, e.g. BR. Products in this category are numbered BR-001, BR-002..." : "2 to 6 capital letters, e.g. LEH"}>
             <input className={monoInputClass} maxLength={6} value={edit.sku_prefix ?? ""} onChange={(e) => setEdit({ ...edit, sku_prefix: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") })} />
           </Field>
         </> : null}

@@ -3,6 +3,8 @@ import { CalendarClock, CalendarDays, CalendarPlus, ClipboardList, Home, LayoutG
 // The side menus. Each business type module supplies its own (src/modules/<name>/nav.ts); this file holds the shared ones.
 export type NavItem = { href: string; label: string; icon: LucideIcon; show: boolean };
 export type NavGroup = { title?: string; items: NavItem[] };
+/** the set of screens a shop uses; each key has an entry in src/modules/registry.ts */
+export type ModuleKey = "clothing" | "standard";
 
 /** what a menu needs to know about the signed-in person and shop */
 export interface NavContext {

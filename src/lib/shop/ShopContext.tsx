@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth, type Shop } from "@/lib/overbooked/AuthContext";
 import { DEFAULT_TZ } from "./format";
+import type { ModuleKey } from "./nav";
 import type { AddOn, Branch, Category, Role, Template } from "./types";
 
 // What every shop screen needs and rarely changes: the shop, who is signed in, branches,
@@ -30,8 +31,8 @@ interface ShopContextValue {
   setting: <T>(key: string, fallback: T) => T;
   /** wording for the whole shop: one business type uses its own words, mixed shops use neutral ones */
   word: (key: "item" | "items" | "unit" | "units" | "start" | "end", fallback?: string) => string;
-  /** bridal and groom shops use the TRENDZ screens (sidebar, scanner, cart); other businesses keep theirs */
-  trendz: boolean;
+  /** which module's screens this shop uses (src/modules/registry.ts): bridal and groom shops use clothing, the rest standard */
+  businessModule: ModuleKey;
   loading: boolean;
   refresh: () => Promise<void>;
 }
@@ -106,7 +107,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       feature,
       setting,
       word,
-      trendz: shopTemplates.length > 0 && shopTemplates.every((t) => t.kind === "wearable"),
+      businessModule: shopTemplates.length > 0 && shopTemplates.every((t) => t.kind === "wearable") ? "clothing" : "standard",
       loading,
       refresh,
     };

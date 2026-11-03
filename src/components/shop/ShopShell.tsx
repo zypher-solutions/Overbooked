@@ -17,15 +17,16 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { OfflineBanner } from "@/components/overbooked/OfflineBanner";
 import { Field, Modal, goldButtonClass, ghostButtonClass, inputClass } from "./ui";
 import { SubscriptionBanner } from "./Subscription";
-import { clothingNav } from "@/modules/clothing/nav";
-import { standardNav, type NavGroup } from "@/lib/shop/nav";
+import { shopModules } from "@/modules/registry";
+import type { NavGroup } from "@/lib/shop/nav";
 
 
 export function ShopShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { profile, signOut } = useAuth();
-  const { shop, role, isSupport, isOwner, canManage, branches, myBranchId, word, feature, trendz, loading } = useShop();
+  const { shop, role, isSupport, isOwner, canManage, branches, myBranchId, word, feature, businessModule, loading } = useShop();
+  const mod = shopModules[businessModule];
 
   // An error or warning is about the page it came from: it is cleared when the person moves to another page
   // (otherwise "Enter the product name." follows them to Inventory Search). Confirmations stay.
@@ -37,18 +38,17 @@ export function ShopShell({ children }: { children: ReactNode }) {
   // so a bridal shop never lands on the old lists and a car shop never lands on the clothing screens.
   useEffect(() => {
     if (loading) return;
-    const to = trendz
-      ? pathname === "/rentals" ? "/bookings" : pathname === "/dashboard" ? (canManage ? "/finance" : "/") : null
-      : ["/finance", "/bookings", "/all-rentals", "/scan"].includes(pathname) ? "/" : null;
+    const otherModules = Object.values(shopModules).filter((m) => m !== mod);
+    const to = mod.replace?.(pathname, canManage) ?? (otherModules.some((m) => m.screens.includes(pathname)) ? "/" : null);
     if (to) router.replace(to);
-  }, [loading, trendz, canManage, pathname, router]);
+  }, [loading, mod, canManage, pathname, router]);
   const cart = useCart();
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   const navCtx = { isOwner, canManage, isSupport, feature, word };
-  const groups: NavGroup[] = loading ? [] : trendz ? clothingNav(navCtx) : standardNav(navCtx);
+  const groups: NavGroup[] = loading ? [] : mod.nav(navCtx);
   const visible = groups.map((g) => ({ ...g, items: g.items.filter((n) => n.show) })).filter((g) => g.items.length);
 
   const myBranch = branches.find((b) => b.id === myBranchId)?.name;
@@ -69,7 +69,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
         <div className="flex items-start justify-between px-5 pb-4 pt-6">
           <div className="min-w-0">
             <p className="truncate font-display text-xl font-semibold text-white">{shop.name}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-neon">{isSupport ? "Zypher support" : trendz ? "Rental Studio" : "Overbooked"}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-neon">{isSupport ? "Zypher support" : mod.tagline}</p>
           </div>
           <button aria-label="Close menu" onClick={() => setOpen(false)} className="rounded-md p-2 hover:bg-white/10 lg:hidden"><X className="h-4 w-4" /></button>
         </div>
@@ -93,7 +93,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
               <LogOut className="h-3.5 w-3.5" /> Sign out
             </button>
           </div>
-          {trendz ? <p className="font-mono text-[10px] text-white/45">Staff panel v2.0</p> : null}
+          {businessModule === "clothing" ? <p className="font-mono text-[10px] text-white/45">Staff panel v2.0</p> : null}
         </div>
       </aside>
 
