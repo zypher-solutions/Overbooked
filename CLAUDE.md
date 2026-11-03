@@ -12,6 +12,9 @@ Goal: turn it into a sellable product for many rental shops. See docs/PROJECT_RE
   Never run `db reset`, `seed.sql`, `test:fixtures`, bulk inserts or destructive SQL against it: it holds everyone's work.
 - Every database change is a migration file in supabase/migrations, committed to git, even though it is applied to the
   shared cloud project. Never change the cloud schema by hand without the matching migration.
+- Before applying a migration to the shared project, ask the person how they want it applied: they run it by hand
+  (SQL Editor), with the CLI (`npx supabase db push`), or Claude applies it through their connected Supabase account.
+  Each person works differently; never assume. Check the connected account is this project before applying.
 - Docker (local Supabase) is only for throwaway checks: Playwright and pgTAP runs, bulk shop data, load and
   performance tests, and estimating Supabase cost. Nothing done there is shared.
 - Never read or print .env files or keys. Only .env.example (names, no values) is committed.

@@ -48,11 +48,13 @@ npx supabase migration new add_something   # creates supabase/migrations/<timest
 # write the SQL
 ```
 Before applying it, prove it on a local copy if Docker is available (`npx supabase db reset` builds the whole chain
-from zero; see below). Then apply it to the shared project and commit the file:
-```bash
-npx supabase link --project-ref <shared-project-ref>   # once per computer
-npx supabase db push                                   # applies migrations the shared project has not had yet
-```
+from zero; see below). Then apply it to the shared project in whichever way suits you, and commit the file:
+- **By hand:** paste the file's SQL into the shared project's SQL Editor and run it.
+- **With the CLI:** `npx supabase link --project-ref <shared-project-ref>` (once per computer), then `npx supabase db push`.
+- **Through Claude:** with your Supabase account connected to Claude, let Claude apply it.
+
+Whichever way, the SQL that runs on the shared project is exactly the committed migration file, nothing more.
+Claude asks you which way before it applies anything.
 After a database change, regenerate the types against the shared project
 (`npx supabase gen types typescript --project-id <shared-project-ref> > src/lib/database.types.ts`).
 `npm run types` reads the local Docker database instead.
