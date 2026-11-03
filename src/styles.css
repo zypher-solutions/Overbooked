@@ -5,8 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Overbooked design system: the Zypher palette (Ink, Mist, Neon Green, Slate, Dark Green).
- * Accent: Dark Green. Highlight: Neon. Warning: amber. Danger: rust. Success: emerald.
+ * Overbooked design system: soft sage surfaces, dark green actions, and muted semantic accents.
+ * Warning: amber. Danger: rust. Success: emerald.
  * All colors in oklch. Never hardcode colors in components.
  */
 
@@ -17,9 +17,9 @@
   --radius-xl: 16px;
   --radius-2xl: 20px;
 
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -63,29 +63,30 @@
 
   --shadow-glow-gold: 0 0 0 1px color-mix(in oklab, var(--gold) 28%, transparent),
     0 12px 40px -18px color-mix(in oklab, var(--gold) 55%, transparent);
-  --shadow-glow-soft: 0 18px 60px -30px oklch(0 0 0 / 0.9);
+  --shadow-glow-soft: 0 14px 40px -22px rgb(27 48 39 / 20%);
 }
 
 :root {
+  color-scheme: light;
   --radius: 20px;
 
-  /* Zypher palette: Ink #101715, Mist #F4F8F6, Neon #15C196, Slate #5C6B67, Dark Green #0F4743 */
-  --background: #f4f8f6;
-  --foreground: #101715;
+  /* Soft sage canvas and surfaces with dark pine actions keep the interface light and brand-led. */
+  --background: #f4f8f5;
+  --foreground: #1c2b23;
 
   --surface: #ffffff;
-  --surface-2: #eaf1ee;
+  --surface-2: #eaf2ec;
 
   --card: #ffffff;
-  --card-foreground: #101715;
+  --card-foreground: #1c2b23;
   --popover: #ffffff;
-  --popover-foreground: #101715;
+  --popover-foreground: #1c2b23;
 
   /* "gold" is the accent name used all over the app; it is now Dark Green */
   --gold: #0f4743;
-  --gold-soft: #bfe3d8;
-  /* Neon is a fill or glow with Ink on top, never text on white */
-  --neon: #15c196;
+  --gold-soft: #d5e7dd;
+  /* Kept as a semantic alias for existing utilities; use only as a pale sage fill. */
+  --neon: #d8eadf;
   --amber: #8a5800;
   --rust: oklch(0.57 0.135 42);
   --emerald: #157a55;
@@ -93,27 +94,27 @@
 
   --primary: #0f4743;
   --primary-foreground: #ffffff;
-  --secondary: #eaf1ee;
-  --secondary-foreground: #101715;
-  --muted: #e8efec;
-  --muted-foreground: #5c6b67;
-  --accent: #e3ede9;
-  --accent-foreground: #101715;
+  --secondary: #eaf2ec;
+  --secondary-foreground: #1c2b23;
+  --muted: #eaf2ec;
+  --muted-foreground: #53675e;
+  --accent: #e4efe8;
+  --accent-foreground: #1b3027;
   --destructive: oklch(0.57 0.135 42);
   --destructive-foreground: #ffffff;
 
-  --border: rgb(16 23 21 / 11%);
-  --input: rgb(16 23 21 / 8%);
-  --ring: rgb(21 193 150 / 60%);
+  --border: rgb(27 48 39 / 12%);
+  --input: rgb(27 48 39 / 14%);
+  --ring: rgb(15 71 67 / 42%);
 
-  --sidebar: #101715;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #15c196;
-  --sidebar-primary-foreground: #101715;
-  --sidebar-accent: #1d2724;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgb(255 255 255 / 10%);
-  --sidebar-ring: rgb(21 193 150 / 50%);
+  --sidebar: #f8faf8;
+  --sidebar-foreground: #1b3027;
+  --sidebar-primary: #0f4743;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e4efe8;
+  --sidebar-accent-foreground: #1b3027;
+  --sidebar-border: rgb(27 48 39 / 12%);
+  --sidebar-ring: rgb(15 71 67 / 42%);
 }
 
 @layer base {

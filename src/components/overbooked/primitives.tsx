@@ -7,7 +7,7 @@ const toneClasses: Record<Tone, string> = {
   gold: "border-amber/35 bg-amber/10 text-amber",
   emerald: "border-emerald/40 bg-emerald/12 text-emerald",
   rust: "border-rust/45 bg-rust/14 text-rust",
-  muted: "border-border bg-white/5 text-muted-foreground",
+  muted: "border-border bg-muted text-muted-foreground",
   indigo: "border-indigo/45 bg-indigo/14 text-indigo",
 };
 
@@ -92,14 +92,14 @@ export function Field({
 }
 
 export const inputClass =
-  "w-full rounded-xl border border-input bg-white px-3 py-2.5 sm:py-2 text-sm text-foreground outline-none transition-all duration-200 placeholder:text-muted-foreground/60 focus:border-neon focus:ring-2 focus:ring-ring disabled:opacity-60 read-only:text-muted-foreground";
+  "w-full rounded-xl border border-input bg-white px-3 py-2.5 sm:py-2 text-sm text-foreground outline-none transition-all duration-200 placeholder:text-muted-foreground focus:border-gold focus:ring-2 focus:ring-ring disabled:opacity-60 read-only:text-muted-foreground";
 
 export const monoInputClass = cn(inputClass, "font-mono");
 
 export const labelClass = "mb-1.5 block text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase";
 
 export const goldButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-full bg-[#101715] px-5 py-2.5 sm:py-2 text-sm font-semibold text-white transition-all duration-200 hover:bg-gold hover:shadow-lg disabled:opacity-50 disabled:hover:shadow-none";
+  "inline-flex items-center justify-center gap-2 rounded-full bg-gold px-5 py-2.5 sm:py-2 text-sm font-semibold text-primary-foreground transition-all duration-200 hover:bg-gold/90 hover:shadow-lg disabled:opacity-50 disabled:hover:shadow-none";
 
 export const ghostButtonClass =
   "inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2 sm:py-1.5 text-xs font-medium text-foreground transition-colors duration-200 hover:border-gold/40 hover:bg-accent";

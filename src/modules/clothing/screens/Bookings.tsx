@@ -126,7 +126,7 @@ export default function Bookings() {
       <Link key={r.id} href={`/rentals/${r.id}`}
         onClick={(e) => { if (window.matchMedia("(min-width: 1440px)").matches) { e.preventDefault(); setSel(r); } }}
         className={cn("grid gap-x-4 gap-y-1.5 rounded-2xl border bg-surface px-4 py-3.5 shadow-[0_1px_2px_rgb(16_23_21/4%),0_8px_24px_-14px_rgb(16_23_21/12%)] transition-colors hover:bg-accent/40 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_auto] sm:items-center",
-          sel?.id === r.id ? "border-neon ring-2 ring-neon/40" : pickupToday ? "border-gold/50" : "border-transparent")}>
+          sel?.id === r.id ? "border-gold ring-2 ring-gold/25" : pickupToday ? "border-gold/50" : "border-transparent")}>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-sm font-semibold text-gold">{r.token}</span>

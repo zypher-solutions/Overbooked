@@ -1,5 +1,20 @@
-// The Finance "Export PDF": the listed records with totals, as in TRENDZ. The PDF library loads only when
-// the button is pressed, so it stays out of the normal pages.
+import { Font } from "@react-pdf/renderer";
+
+// The Finance "Export PDF": the listed records with totals, as in TRENDZ. This module loads on demand.
+Font.register({
+  family: "DM Sans",
+  fonts: [
+    { src: "/fonts/dm-sans-400.ttf", fontWeight: 400 },
+    { src: "/fonts/dm-sans-700.ttf", fontWeight: 700 },
+  ],
+});
+
+Font.register({
+  family: "Outfit",
+  src: "/fonts/outfit-700.ttf",
+  fontWeight: 700,
+});
+
 export interface LedgerPdfRow {
   token: string; customer: string; phone: string; item: string; branch: string;
   start: string; due: string; total: number; paid: number; balance: number; status: string; late: boolean; cancelled: boolean; fee: number;
@@ -18,18 +33,18 @@ export async function generateLedgerPDF(shopName: string, rows: LedgerPdfRow[], 
   const h = React.createElement;
 
   const s = StyleSheet.create({
-    page: { backgroundColor: C.white, paddingTop: 24, paddingBottom: 28, paddingHorizontal: 24, fontFamily: "Helvetica", fontSize: 8, color: C.dark },
+    page: { backgroundColor: C.white, paddingTop: 24, paddingBottom: 28, paddingHorizontal: 24, fontFamily: "DM Sans", fontSize: 8, color: C.dark },
     header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", borderBottomWidth: 2.5, borderBottomColor: C.gold, paddingBottom: 10, marginBottom: 14 },
-    brand: { fontSize: 20, fontFamily: "Helvetica-Bold", color: C.gold },
-    title: { fontSize: 16, fontFamily: "Helvetica-Bold", color: C.black, textAlign: "right", textTransform: "uppercase" },
+    brand: { fontSize: 20, fontFamily: "Outfit", fontWeight: 700, color: C.gold },
+    title: { fontSize: 16, fontFamily: "Outfit", fontWeight: 700, color: C.black, textAlign: "right", textTransform: "uppercase" },
     meta: { fontSize: 7, color: C.gray, textAlign: "right", marginTop: 3 },
     cards: { flexDirection: "row", marginBottom: 14 },
     card: { flex: 1, borderRadius: 5, borderWidth: 1, borderColor: C.border, backgroundColor: C.grayLight, paddingHorizontal: 10, paddingVertical: 7, marginRight: 8 },
     cardLabel: { fontSize: 6.5, color: C.gray, textTransform: "uppercase", marginBottom: 3 },
-    cardValue: { fontSize: 13, fontFamily: "Helvetica-Bold", color: C.black },
+    cardValue: { fontSize: 13, fontFamily: "DM Sans", fontWeight: 700, color: C.black },
     box: { borderRadius: 4, borderWidth: 1, borderColor: C.border },
     head: { flexDirection: "row", backgroundColor: C.black, paddingVertical: 6, paddingHorizontal: 4 },
-    th: { fontFamily: "Helvetica-Bold", fontSize: 7, color: C.gold, textTransform: "uppercase", paddingHorizontal: 4 },
+    th: { fontFamily: "Outfit", fontWeight: 700, fontSize: 7, color: C.gold, textTransform: "uppercase", paddingHorizontal: 4 },
     row: { flexDirection: "row", paddingVertical: 5, borderBottomWidth: 0.5, borderBottomColor: C.border },
     td: { fontSize: 7.5, color: C.dark, paddingHorizontal: 4 },
     sub: { fontSize: 6, color: C.gray, marginTop: 1.5, paddingHorizontal: 4 },
@@ -37,7 +52,7 @@ export async function generateLedgerPDF(shopName: string, rows: LedgerPdfRow[], 
     footer: { flexDirection: "row", justifyContent: "space-between", marginTop: 12, paddingTop: 6, borderTopWidth: 0.5, borderTopColor: C.border },
     foot: { fontSize: 7, color: C.gray },
     right: { textAlign: "right" },
-    bold: { fontFamily: "Helvetica-Bold" },
+    bold: { fontFamily: "DM Sans", fontWeight: 700 },
   });
   const W = { token: "12%", cust: "16%", item: "15%", branch: "8%", start: "8%", due: "8%", total: "9%", paid: "9%", bal: "9%", status: "10%" };
   const cell = (w: string, ...children: unknown[]) => h(View, { style: { width: w, paddingRight: 4 } }, ...(children as never[]));

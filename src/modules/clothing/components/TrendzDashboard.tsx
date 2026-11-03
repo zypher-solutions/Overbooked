@@ -86,7 +86,7 @@ function MiniCalendar({ today, marks }: { today: string; marks: Set<string> }) {
         {WEEK.map((w, i) => <span key={i} className="pb-1 font-medium text-muted-foreground">{w}</span>)}
         {cells.map((c, i) => c === null ? <span key={i} /> : (
           <span key={c} className="flex flex-col items-center">
-            <span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-sm", c === today ? "bg-neon font-semibold text-[#101715]" : "text-foreground")}>{Number(c.slice(8))}</span>
+            <span className={cn("flex h-8 w-8 items-center justify-center rounded-full text-sm", c === today ? "bg-gold font-semibold text-primary-foreground" : "text-foreground")}>{Number(c.slice(8))}</span>
             <span className={cn("mt-0.5 h-1 w-1 rounded-full", marks.has(c) ? "bg-gold" : "bg-transparent")} />
           </span>
         ))}
@@ -208,8 +208,8 @@ export function TrendzDashboard() {
 
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "";
   const cards: { key: Queue; label: string; count: number; tone: string; box: string; label2: string }[] = [
-    { key: "pickups", label: "Pickups today", count: pickups?.length ?? 0, tone: "text-neon", box: "border-transparent bg-[#101715] text-white", label2: "text-white/70" },
-    { key: "returns", label: "Returns due today", count: dueToday.length, tone: "text-[#101715]", box: "border-transparent bg-neon text-[#101715]", label2: "text-[#101715]/75" },
+    { key: "pickups", label: "Pickups today", count: pickups?.length ?? 0, tone: "text-gold", box: "border-border bg-surface text-foreground", label2: "text-muted-foreground" },
+    { key: "returns", label: "Returns due today", count: dueToday.length, tone: "text-gold", box: "border-transparent bg-neon text-foreground", label2: "text-muted-foreground" },
     { key: "overdue", label: "Overdue", count: overdue.length, tone: "text-rust", box: "border-border bg-surface", label2: "text-muted-foreground" },
   ];
   // the calendar dots and the next few returns come from what is already loaded

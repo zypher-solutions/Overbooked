@@ -39,8 +39,8 @@ export function ZypherShell({ children }: { children: ReactNode }) {
           <li key={item.href}>
             <Link href={item.href} onClick={() => setOpen(false)} aria-current={isActive(item) ? "page" : undefined}
               className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                isActive(item) ? "bg-gold/10 font-medium text-foreground" : "text-muted-foreground hover:bg-black/5 hover:text-foreground")}>
-              <item.icon className={cn("h-4 w-4", isActive(item) && "text-gold")} />
+                isActive(item) ? "bg-gold font-medium text-primary-foreground" : "text-muted-foreground hover:bg-black/5 hover:text-foreground")}>
+              <item.icon className={cn("h-4 w-4", isActive(item) && "text-primary-foreground")} />
               {item.label}
             </Link>
           </li>
