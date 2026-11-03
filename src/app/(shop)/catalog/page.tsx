@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { ProductTable } from "@/modules/clothing/components/ProductTable";
+import AllProducts from "@/modules/clothing/screens/AllRentals";
 import { BASIS_LABELS, errorText, num, rupees } from "@/lib/shop/format";
 import { headlinePrice, useCatalog, variationLabel } from "@/lib/shop/useCatalog";
 import type { AddOn, AddOnBasis, Category, Product, Unit } from "@/lib/shop/types";
@@ -30,8 +31,8 @@ function Catalog() {
   // ?tab=categories: the sidebar's Categories item
   const asked = useSearchParams().get("tab");
   const [adding, setAdding] = useState(0);
-  const [tab, setTab] = useState<Tab>(asked === "categories" || asked === "extras" ? asked : "items");
-  useEffect(() => { setTab(asked === "categories" || asked === "extras" ? asked : "items"); }, [asked]);
+  const [tab, setTab] = useState<Tab>(asked === "categories" || (asked === "extras" && !clothing) ? asked : "items");
+  useEffect(() => { setTab(asked === "categories" || (asked === "extras" && !clothing) ? asked : "items"); }, [asked, clothing]);
   return (
     <>
       <PageHeader title={clothing ? (tab === "categories" ? "Categories" : tab === "extras" ? "Extras" : "All Products") : word("items", "Catalog")}
@@ -53,7 +54,7 @@ function Catalog() {
           </button>
         ))}
       </div>
-      {tab === "items" ? <Items /> : tab === "extras" ? <Extras /> : <Categories addSignal={adding} />}
+      {tab === "items" ? (clothing ? <AllProducts /> : <Items />) : tab === "extras" ? <Extras /> : <Categories addSignal={adding} />}
     </>
   );
 }

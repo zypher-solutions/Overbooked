@@ -106,13 +106,13 @@
   --input: rgb(16 23 21 / 8%);
   --ring: rgb(21 193 150 / 60%);
 
-  --sidebar: #101715;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #15c196;
-  --sidebar-primary-foreground: #101715;
-  --sidebar-accent: #1d2724;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgb(255 255 255 / 10%);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #101715;
+  --sidebar-primary: #0f4743;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e3ede9;
+  --sidebar-accent-foreground: #101715;
+  --sidebar-border: rgb(16 23 21 / 10%);
   --sidebar-ring: rgb(21 193 150 / 50%);
 }
 

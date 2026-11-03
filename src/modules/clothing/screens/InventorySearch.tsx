@@ -198,7 +198,7 @@ export default function InventorySearch() {
         </Panel>
       ) : null}
 
-      {product ? <StockCard product={product.p} stock={stock} highlight={product.variationId} /> : null}
+      {product ? <StockCard product={product.p} stock={stock} only={product.variationId} /> : null}
 
       {product ? (
         <Panel className="mt-4" title={`Active rentals${active ? ` (${active.length})` : ""}`}>

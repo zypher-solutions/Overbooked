@@ -45,6 +45,8 @@ export interface Variation {
   km_included_per_day: number | null;
   turnaround: string;
   is_enabled: boolean;
+  /** set when the variation was removed but has booking history: it is hidden everywhere */
+  archived_at?: string | null;
   variation_rates?: Rate[];
 }
 export interface Product {

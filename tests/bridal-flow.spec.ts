@@ -19,8 +19,11 @@ const setDates = async (page: Page, from: string, to: string) => {
 };
 // the booking takes its items from the cart: open the product on All Rentals, press Rent on the first free branch, then open the booking form
 const rent = async (page: Page, product: RegExp) => {
-  await page.goto("/all-rentals");
-  await page.getByRole("button", { name: product }).first().click();
+  await page.goto("/catalog");
+  await page.getByRole("row", { name: product }).first().getByRole("button", { name: "Rent", exact: true }).click(); // Rent on the product, then colour and size
+  // a product with colours and sizes first asks which ones: Search shows them all
+  const search = page.getByRole("dialog").getByRole("button", { name: "Show all" });
+  if (await search.isVisible({ timeout: 1500 }).catch(() => false)) await search.click();
   await page.getByRole("button", { name: /to cart$/, disabled: false }).first().click();
   await page.goto("/book");
 };
@@ -44,6 +47,7 @@ test("bridal: a lost piece is charged, a return that leaves money unpaid asks fi
   await field(page, "Advance").fill("1000");
   await page.getByLabel("Advance payment method").selectOption("cash");
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
+  await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click(); // the pop-up, then the list
   await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
   await openBooking(page, "Lost Piece Bride");
 
@@ -92,6 +96,7 @@ test("bridal: Cancel offers a no-show once the pickup date has passed, and refun
   await field(page, "Advance").fill("800");
   await page.getByLabel("Advance payment method").selectOption("cash");
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
+  await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click(); // the pop-up, then the list
   await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
   await openBooking(page, "Cancelling Bride");
 

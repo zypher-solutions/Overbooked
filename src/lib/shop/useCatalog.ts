@@ -27,7 +27,7 @@ export function useCatalog({ includeInactive = false } = {}) {
       if (!data || data.length < 500) break;
     }
     for (const p of all) {
-      p.product_variations = (p.product_variations ?? []).sort((a, b) => a.sku.localeCompare(b.sku));
+      p.product_variations = (p.product_variations ?? []).filter((v) => !v.archived_at).sort((a, b) => a.sku.localeCompare(b.sku));
       for (const v of p.product_variations) v.variation_rates = (v.variation_rates ?? []).map((r) => ({ ...r, amount: Number(r.amount) }));
     }
     setProducts(all);

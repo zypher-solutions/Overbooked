@@ -68,10 +68,10 @@ export function ShopShell({ children }: { children: ReactNode }) {
         open ? "translate-x-0 shadow-2xl" : "-translate-x-full")} aria-label="Main navigation">
         <div className="flex items-start justify-between px-5 pb-4 pt-6">
           <div className="min-w-0">
-            <p className="truncate font-display text-xl font-semibold text-white">{shop.name}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-neon">{isSupport ? "Zypher support" : mod.tagline}</p>
+            <p className="truncate font-display text-xl font-semibold text-foreground">{shop.name}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-gold">{isSupport ? "Zypher support" : mod.tagline}</p>
           </div>
-          <button aria-label="Close menu" onClick={() => setOpen(false)} className="rounded-md p-2 hover:bg-white/10 lg:hidden"><X className="h-4 w-4" /></button>
+          <button aria-label="Close menu" onClick={() => setOpen(false)} className="rounded-md p-2 hover:bg-black/5 lg:hidden"><X className="h-4 w-4" /></button>
         </div>
         <nav className="flex-1 px-3 pb-4">
           {/* which item is active depends on ?tab= too (Categories), so it reads the address in its own boundary */}
@@ -79,21 +79,21 @@ export function ShopShell({ children }: { children: ReactNode }) {
             <NavWithTab groups={visible} pathname={pathname} onPick={() => setOpen(false)} />
           </Suspense>
         </nav>
-        <div className="space-y-2 border-t border-white/10 p-4 text-xs">
+        <div className="space-y-2 border-t border-border p-4 text-xs">
           <div>
-            <p className="truncate font-medium text-white">{profile?.full_name}</p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-neon">{isSupport ? "Zypher support" : role}</p>
-            <p className="text-white/65">{myBranch ?? "All branches"}</p>
+            <p className="truncate font-medium text-foreground">{profile?.full_name}</p>
+            <p className="mt-0.5 text-[10px] uppercase tracking-widest text-gold">{isSupport ? "Zypher support" : role}</p>
+            <p className="text-muted-foreground">{myBranch ?? "All branches"}</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => setPwOpen(true)} className="inline-flex items-center gap-1.5 text-white/65 hover:text-white">
+            <button onClick={() => setPwOpen(true)} className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
               <KeyRound className="h-3.5 w-3.5" /> Change password
             </button>
-            <button onClick={leave} className="inline-flex items-center gap-1.5 text-orange-300 hover:text-orange-200">
+            <button onClick={leave} className="inline-flex items-center gap-1.5 text-rust hover:text-rust/80">
               <LogOut className="h-3.5 w-3.5" /> Sign out
             </button>
           </div>
-          {businessModule === "clothing" ? <p className="font-mono text-[10px] text-white/45">Staff panel v2.0</p> : null}
+          {businessModule === "clothing" ? <p className="font-mono text-[10px] text-muted-foreground/70">Staff panel v2.0</p> : null}
         </div>
       </aside>
 
@@ -148,7 +148,7 @@ function NavGroups({ groups, pathname, tab, onPick }: { groups: NavGroup[]; path
         <div key={g.title ?? gi}>
           {g.title ? (
             <button type="button" onClick={() => setClosed((c) => ({ ...c, [g.title!]: !c[g.title!] }))} aria-expanded={!closed[g.title]}
-              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-white/55 hover:text-white">
+              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
               {g.title}
               <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !closed[g.title] && "rotate-180")} />
             </button>
@@ -161,8 +161,8 @@ function NavGroups({ groups, pathname, tab, onPick }: { groups: NavGroup[]; path
                   <li key={n.href}>
                     <Link href={n.href} onClick={onPick} aria-current={on ? "page" : undefined}
                       className={cn("relative flex items-center gap-3 rounded-full px-4 py-2.5 text-sm transition-colors lg:py-2",
-                        on ? "bg-neon font-semibold text-[#101715]" : "text-white/75 hover:bg-white/10 hover:text-white")}>
-                      <n.icon className="h-4 w-4" />
+                        on ? "bg-gold/10 font-semibold text-foreground" : "text-muted-foreground hover:bg-black/5 hover:text-foreground")}>
+                      <n.icon className={cn("h-4 w-4", on && "text-gold")} />
                       {n.label}
                     </Link>
                   </li>

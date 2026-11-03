@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { Check, Search, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { money } from "@/lib/shop/api";
+import { call, money } from "@/lib/shop/api";
 import { variationLabel } from "@/lib/shop/useCatalog";
-import { BASIS_LABELS, METHOD_LABELS, addDays, lineMath, num, plural, rupees, todayLocal } from "@/lib/shop/format";
+import { BASIS_LABELS, METHOD_LABELS, addDays, isoToZoned, lineMath, num, plural, rupees, todayLocal } from "@/lib/shop/format";
 import type { Customer, Method } from "@/lib/shop/types";
 import { CustomerPicker } from "@/components/shop/CustomerPicker";
 import { moneyError } from "@/lib/validate";
@@ -15,7 +15,7 @@ import type { BookingForm as BookingFormState, Piece } from "@/components/shop/u
 
 // The bridal and groom "Create Booking" screen, as in TRENDZ: one column, dates first
 export function BookingForm({ f }: { f: BookingFormState }) {
-  const { router, shop, tz, myBranchId, activeBranches, addOns, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, avail, pieceLines, pieces, shortItems, checkingStock, detailsOpen, quote, quoteError, updateLine, busy, editPay, setEditPay, total, shown, submit, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, quoteLineFor } = f;
+  const { router, shop, tz, myBranchId, activeBranches, addOns, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, avail, pieceLines, pieces, shortItems, checkingStock, detailsOpen, quote, quoteError, updateLine, busy, editPay, setEditPay, total, shown, submit, booked, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, quoteLineFor } = f;
   const pickupDate = d.start.slice(0, 10);
   const returnDate = d.end.slice(0, 10);
   const timeOf = (v: string, fallback: string) => v.slice(11, 16) || fallback;
@@ -52,6 +52,22 @@ export function BookingForm({ f }: { f: BookingFormState }) {
           </div>
           <button type="button" aria-label="Close" className="rounded-md p-1.5 text-muted-foreground hover:bg-black/5" onClick={closeForm}><X className="h-5 w-5" /></button>
         </div>
+        <Modal open={!!booked} onClose={() => router.push("/bookings")} title="Booking confirmed"
+          description={booked ? `${booked.customer} · ${booked.phone}` : undefined}
+          footer={<>
+            {booked ? <Link href={`/print/rental/${booked.rentalId}`} target="_blank" className={ghostButtonClass}>Print receipt</Link> : null}
+            {booked?.wa ? <a href={booked.wa} target="_blank" rel="noopener noreferrer" className={ghostButtonClass}
+              onClick={() => { void call("mark_reminder_sent", { p_rental_id: booked.rentalId, p_kind: "confirmation" }).catch(() => undefined); }}>WhatsApp</a> : null}
+            <button className={goldButtonClass} onClick={() => router.push("/bookings")}>Done</button>
+          </>}>
+          {booked ? (
+            <div className="rounded-xl bg-accent/60 p-4 text-center">
+              <p className="font-mono text-2xl font-bold text-gold">{booked.token}</p>
+              <p className="mt-2 font-mono text-sm">{isoToDisplay(isoToZoned(booked.start, tz).slice(0, 10))} <span className="text-muted-foreground">→</span> {isoToDisplay(isoToZoned(booked.end, tz).slice(0, 10))}</p>
+              <p className="mt-2 text-sm text-muted-foreground">Total {rupees(booked.total)} · Paid {rupees(booked.paid)}{booked.total - booked.paid > 0 ? ` · Due ${rupees(booked.total - booked.paid)}` : ""}</p>
+            </div>
+          ) : <span />}
+        </Modal>
         <Modal open={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Discard this draft?"
           description="All cart items and the customer details typed in are cleared."
           footer={<>
@@ -104,8 +120,8 @@ export function BookingForm({ f }: { f: BookingFormState }) {
           {lines.length === 0 ? (
             <div className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">
               The cart is empty. Pick items from{" "}
-              <Link href="/all-rentals" className="font-medium text-gold hover:underline">All Rentals</Link> or{" "}
-              <Link href="/scan" className="font-medium text-gold hover:underline">Inventory Search</Link> and press Rent.
+              <Link href="/scan" className="font-medium text-gold hover:underline">Inventory Search</Link> or{" "}
+              <Link href="/catalog" className="font-medium text-gold hover:underline">All Products</Link> and press Rent.
             </div>
           ) : !periodOk ? (
             <div className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">Please select a <strong>Return Date</strong> above to check real-time stock availability.</div>

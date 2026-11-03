@@ -325,6 +325,7 @@ export function useBookingForm() {
 
   // ---- submit ----
   const [busy, setBusy] = useState(false);
+  const [booked, setBooked] = useState<{ rentalId: string; token: string; wa: string; customer: string; phone: string; start: string; end: string; total: number; paid: number } | null>(null);
   // changing a booking can also take money (the balance is the new total less what was paid)
   const [editPay, setEditPay] = useState<{ amount: string; method: Method | "" }>({ amount: "", method: "" });
   const total = Math.max(0, (quote?.total_before_discount ?? 0) - num(d.discount));
@@ -416,11 +417,13 @@ export function useBookingForm() {
         const wa = rental ? waLink(rental.customers.phone, buildMessage("confirmation", rental, {
           shopName: shop.name, branchName: br?.name, branchPhone: br?.phone ?? shop.phone, tz, startWord: word("start"), endWord: word("end"),
         })) : "";
-        toast.success(`Booked: ${res.token}`, {
-          duration: 12_000,
-          action: rental ? { label: "WhatsApp", onClick: () => { window.open(wa, "_blank", "noopener"); void call("mark_reminder_sent", { p_rental_id: rental.id, p_kind: "confirmation" }).catch(() => undefined); } } : undefined,
+        // a pop-up says it is done; closing it opens the Bookings list
+        setBooked({
+          rentalId: res.rental_id, token: res.token, wa,
+          customer: rental?.customers.full_name ?? d.customer.full_name.trim(), phone: rental?.customers.phone ?? d.customer.phone,
+          start: rental?.start_at ?? startIso, end: rental?.end_at ?? endIso,
+          total: rental ? Number(rental.total) : total, paid: rental ? Number(rental.paid) : num(d.advance),
         });
-        router.push("/bookings");
         return;
       }
       toast.success(`Booked: ${res.token}`);
@@ -446,7 +449,7 @@ export function useBookingForm() {
   const quoteLineFor = (variationId: string) => quote?.lines.find((l) => l.variation_id === variationId && l.reserve);
 
   return {
-    router, shop, tz, myBranchId, activeBranches, categories, addOns, templateOf, feature, word, businessModule, products, editId, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, kinds, hasRoom, hasVehicle, roomShop, avail, pieceLines, pieces, shortItems, checkingStock, detailsOpen, quote, quoteError, addLine, updateLine, busy, editPay, setEditPay, total, shown, submit, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, quoteLineFor,
+    router, shop, tz, myBranchId, activeBranches, categories, addOns, templateOf, feature, word, businessModule, products, editId, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, kinds, hasRoom, hasVehicle, roomShop, avail, pieceLines, pieces, shortItems, checkingStock, detailsOpen, quote, quoteError, addLine, updateLine, busy, editPay, setEditPay, total, shown, submit, booked, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, quoteLineFor,
   };
 }
 export type BookingForm = ReturnType<typeof useBookingForm>;

@@ -11,6 +11,7 @@ import { call } from "@/lib/shop/api";
 import { errorText } from "@/lib/shop/format";
 import { variationLabel } from "@/lib/shop/useCatalog";
 import type { Product, Template, Unit, UnitStatus } from "@/lib/shop/types";
+import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { Empty, Field, Modal, Panel, StatusBadge, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "./ui";
 
 const STATUS: Record<UnitStatus | "alteration", string> = {
@@ -91,8 +92,9 @@ export function UnitsPanel({ product, template }: { product: Product; template: 
     }
   };
 
+  const [askDelete, setAskDelete] = useState<Unit | null>(null);
   const remove = async (u: Unit) => {
-    if (!confirm(`Delete ${u.code}? Only possible if it was never booked; otherwise retire it.`)) return;
+    setAskDelete(null);
     const { error } = await createClient().from("units").delete().eq("id", u.id);
     if (error) return toast.error(error.code === "23503" ? "It has bookings, so it cannot be deleted. Retire it instead." : errorText(error));
     toast.success("Deleted");
@@ -133,7 +135,7 @@ export function UnitsPanel({ product, template }: { product: Product; template: 
                   ) : null}
                   {canEdit(u.branch_id) ? <>
                     <button className={ghostButtonClass} onClick={() => setStatusFor({ unit: u, status: u.status === "available" ? "maintenance" : "available", reason: "" })}>Status</button>
-                    <button className="text-xs text-muted-foreground hover:text-rust" onClick={() => remove(u)}>Delete</button>
+                    <button className="text-xs text-muted-foreground hover:text-rust" onClick={() => setAskDelete(u)}>Delete</button>
                   </> : null}
                 </div>
               </li>
@@ -197,6 +199,9 @@ export function UnitsPanel({ product, template }: { product: Product; template: 
           ) : null}
         </> : null}
       </Modal>
+      <ConfirmDialog open={askDelete !== null} tone="danger" title={`Delete ${askDelete?.code ?? "this piece"}?`} confirmLabel="Delete" cancelLabel="Keep it"
+        message="This only works if it was never booked. Otherwise retire it instead."
+        onCancel={() => setAskDelete(null)} onConfirm={() => { if (askDelete) void remove(askDelete); }} />
     </Panel>
   );
 }

@@ -68,7 +68,7 @@ test("each kind of shop is sent to its own screens", async ({ page }) => {
   await page.context().clearCookies();
   await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
   await signIn(page, "owner@resort.test");
-  for (const path of ["/finance", "/bookings", "/all-rentals", "/scan"]) {
+  for (const path of ["/finance", "/bookings", "/scan"]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/$/);
   }

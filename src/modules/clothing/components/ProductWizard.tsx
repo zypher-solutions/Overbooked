@@ -15,7 +15,7 @@ import { businessNameError, moneyError, textLimitError } from "@/lib/validate";
 import { errorText, num, rupees } from "@/lib/shop/format";
 import type { Product, Template, Unit } from "@/lib/shop/types";
 import { SKU_PATTERN } from "../sku";
-import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "@/components/shop/ui";
+import { Field, Modal, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "@/components/shop/ui";
 
 // Add New Product, as in TRENDZ: three steps on one page.
 //   1. Basic info  2. Attributes (Colour, Size... with their values)  3. Variations & stock
@@ -74,8 +74,27 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   const [attrsTouched, setAttrsTouched] = useState(false);
   const setAttrs = (a: Attr[]) => { setAttrsRaw(a); setAttrsTouched(true); };
   const [rows, setRows] = useState<VarRow[]>([]);
+  // mixes taken out by hand (Black / L does not exist): going back to the attributes does not bring them back
+  const [dropped, setDropped] = useState<string[]>([]);
+  // a saved variation that cannot be removed now (out with a customer, or booked): said before anything is asked
+  const [blocked, setBlocked] = useState<{ label: string; out: string[]; booked: string[] } | null>(null);
+  const askRemove = async (r: VarRow) => {
+    if (!r.id) { setAsking({ kind: "variation", key: r.key }); return; }
+    const supabase = createClient();
+    const { data: lines } = await supabase.from("rental_lines").select("rental_id").eq("variation_id", r.id).limit(1000);
+    const ids = Array.from(new Set((lines ?? []).map((l) => l.rental_id))).slice(0, 300);
+    const out: string[] = []; const booked: string[] = [];
+    if (ids.length) {
+      const { data } = await supabase.from("rentals").select("token, status").in("id", ids).in("status", ["active", "reserved"]);
+      for (const x of data ?? []) (x.status === "active" ? out : booked).push(x.token);
+    }
+    if (out.length || booked.length) setBlocked({ label: r.name || autoName(r.attributes), out, booked });
+    else setAsking({ kind: "variation", key: r.key });
+  };
   const [sameQty, setSameQty] = useState(false);
   const [askEmpty, setAskEmpty] = useState(false);
+  // the "Remove ...?" card: a variation row (by its key) or the whole product
+  const [asking, setAsking] = useState<{ kind: "variation"; key: string } | { kind: "product" } | null>(null);
   const [bulk, setBulk] = useState<Record<string, string>>({});
   const restored = useRef(false);
 
@@ -160,7 +179,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   const buildRows = () => {
     // changing a product: its variations stay as they are unless the attributes were changed
     if (product && !attrsTouched) { setStep("variations"); return; }
-    const wanted = combos(attrs.filter((a) => a.key));
+    const wanted = combos(attrs.filter((a) => a.key)).filter((a) => !dropped.includes(comboKey(a)));
     setRows((prev) => {
       const byKey = new Map(prev.map((r) => [r.key, r]));
       const next: VarRow[] = wanted.map((a) => {
@@ -271,7 +290,8 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   };
 
   const remove = async () => {
-    if (!product || !confirm(`Remove ${product.name}? If it was ever rented it is switched off instead, so history stays.`)) return;
+    if (!product) return;
+    setAsking(null);
     try {
       const res = await call<{ result: string }>("delete_or_deactivate_product", { p_product_id: product.id });
       toast.success(res.result === "deleted" ? "Deleted" : "Switched off (it has rental history)");
@@ -297,7 +317,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     <>
       <PageHeader title={product ? product.name : "Add New Product"}
         actions={<>
-          {product && isOwner ? <button className={dangerButtonClass} onClick={remove}><Trash2 className="h-4 w-4" /> Remove</button> : null}
+          {product && isOwner ? <button className={dangerButtonClass} onClick={() => setAsking({ kind: "product" })}><Trash2 className="h-4 w-4" /> Remove</button> : null}
           {!product ? <button className={ghostButtonClass} onClick={discard}>Clear form</button> : null}
           <button className={goldButtonClass} disabled={busy} onClick={() => (step === "variations" ? void save() : step === "basic" ? goAttributes() : buildRows())}>
             {busy ? "Saving..." : step === "variations" ? (product ? "Save changes" : "Save product") : "Next"}
@@ -403,32 +423,36 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
             ) : <p className="mt-1 text-xs text-muted-foreground">Tick to give every variation the same number of pieces in a branch. Leave it unticked to type each one.</p>}
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="text-[11px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="py-2 pr-2">Variation</th><th className="py-2 pr-2">SKU</th><th className="py-2 pr-2">₹ / day</th>
-                  {activeBranches.map((b) => <th key={b.id} className="py-2 pr-2">{b.name}</th>)}<th className="py-2">Bookable</th>
+                  {activeBranches.map((b) => <th key={b.id} className="py-2 pr-2">{b.name}</th>)}<th className="py-2 pr-2">Bookable</th><th className="py-2" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.map((r, i) => (
-                  <tr key={r.key + (r.id ?? "")} className={cn(!r.enabled && "opacity-50")}>
+                  <tr key={r.key + (r.id ?? "")}>
                     {/* name, code and price follow from the attributes and Basic Info: shown, not typed */}
-                    <td className="py-2 pr-2 text-sm font-medium text-foreground">{r.name || autoName(r.attributes)}</td>
-                    <td className="py-2 pr-2 font-mono text-xs text-foreground">{r.sku || autoSku(r.attributes)}</td>
-                    <td className="py-2 pr-2 font-mono text-sm text-foreground">{rupees(num(r.rate || basic.rate))}</td>
+                    <td className={cn("py-2 pr-2 text-sm font-medium text-foreground", !r.enabled && "opacity-50")}>{r.name || autoName(r.attributes)}</td>
+                    <td className={cn("py-2 pr-2 font-mono text-xs text-foreground", !r.enabled && "opacity-50")}>{r.sku || autoSku(r.attributes)}</td>
+                    <td className={cn("py-2 pr-2 font-mono text-sm text-foreground", !r.enabled && "opacity-50")}>{rupees(num(r.rate || basic.rate))}</td>
                     {activeBranches.map((b) => {
                       const have = r.id ? counts[`${r.id}:${b.id}`] ?? 0 : 0;
                       return (
-                        <td key={b.id} className="py-2 pr-2">
+                        <td key={b.id} className={cn("py-2 pr-2", !r.enabled && "opacity-50")}>
                           <input type="number" min={have} className={cn(monoInputClass, "w-20 py-1.5")} aria-label={`Pieces at ${b.name}`} disabled={!canStock(b.id) || !r.enabled || (sameQty && bulk[b.id] !== undefined && bulk[b.id] !== "")}
                             value={stockOf(r, b.id)} placeholder={have ? String(have) : "qty"}
                             onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, stock: { ...x.stock, [b.id]: e.target.value } } : x))} />
-                          {have ? <span className="mt-0.5 block text-[10px] text-muted-foreground">has {have}</span> : null}
+                          {have ? <span className="mt-1 block whitespace-nowrap text-[11px] text-muted-foreground">Current stock: <strong className="font-semibold text-foreground">{have}</strong></span> : null}
                         </td>
                       );
                     })}
-                    <td className="py-2"><input type="checkbox" aria-label="Bookable" checked={r.enabled} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, enabled: e.target.checked } : x))} /></td>
+                    <td className="py-2 pr-2"><input type="checkbox" aria-label="Bookable" checked={r.enabled} onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, enabled: e.target.checked } : x))} /></td>
+                    <td className="py-2 text-right">
+                      <button type="button" aria-label={`Remove ${r.name || autoName(r.attributes)}`} className="inline-flex items-center gap-1 rounded-full border border-rust/40 px-3 py-1 text-xs font-medium text-rust hover:bg-rust/10"
+                        onClick={() => void askRemove(r)}><Trash2 className="h-3.5 w-3.5" /> Remove</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -438,6 +462,41 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
         </Panel>
       ) : null}
 
+      {(() => {
+        const row = asking?.kind === "variation" ? rows.find((x) => x.key === asking.key) : undefined;
+        const label = row ? row.name || autoName(row.attributes) : "";
+        const have = row?.id ? activeBranches.reduce((n, br) => n + (counts[`${row.id}:${br.id}`] ?? 0), 0) : 0;
+        const takeOut = () => {
+          if (!row) return;
+          setDropped((d) => [...d, row.key]);
+          setRows((rs) => rs.filter((x) => x.key !== row.key));
+          setAsking(null);
+        };
+        return (
+          <Modal open={asking?.kind === "product" || !!row} onClose={() => setAsking(null)}
+            title={asking?.kind === "product" ? `Remove ${product?.name ?? "this product"}?` : `Remove ${label}?`}
+            description={asking?.kind === "product" ? "The product and all its variations and pieces are removed." : "This variation is taken out of the product."}
+            footer={<>
+              <button className={ghostButtonClass} onClick={() => setAsking(null)}>Keep it</button>
+              <button className={dangerButtonClass} onClick={asking?.kind === "product" ? () => void remove() : takeOut}><Trash2 className="h-4 w-4" /> {asking?.kind === "product" ? "Remove product" : "Remove variation"}</button>
+            </>}>
+            <ul className="space-y-2 text-sm">
+              {asking?.kind === "variation" && have ? <li className="rounded-lg bg-rust/10 p-3 text-rust">Its {have} piece{have === 1 ? "" : "s"} will be removed too.</li> : null}
+              {asking?.kind === "product" ? <li className="rounded-lg bg-accent/60 p-3 text-muted-foreground">If it was ever rented it is switched off instead of deleted, so booking history stays correct.</li> : null}
+              {row?.id ? <li className="rounded-lg bg-accent/60 p-3 text-muted-foreground">If it has booking history it is archived: it disappears from your lists, and the old bookings and the ledger keep their record. Adding the same variation again brings it back.</li> : null}
+              {asking?.kind === "variation" && row?.id ? <li className="text-xs text-muted-foreground">It is removed when you press Save changes.</li> : null}
+            </ul>
+          </Modal>
+        );
+      })()}
+      <Modal open={blocked !== null} onClose={() => setBlocked(null)} title={`Can't remove ${blocked?.label ?? "this variation"}`}
+        description="It is still part of an open booking."
+        footer={<button className={goldButtonClass} onClick={() => setBlocked(null)}>OK</button>}>
+        <ul className="space-y-2 text-sm">
+          {blocked?.out.length ? <li className="rounded-lg bg-rust/10 p-3 text-rust">It is out with a customer on <strong>{blocked.out.join(", ")}</strong>. Take it back first, then remove it.</li> : null}
+          {blocked?.booked.length ? <li className="rounded-lg bg-amber/15 p-3 text-amber">It is booked on <strong>{blocked.booked.join(", ")}</strong>. Finish or cancel those bookings first.</li> : null}
+        </ul>
+      </Modal>
       <ConfirmDialog open={askEmpty} confirmLabel="Save anyway" message={"No pieces were added.\n\nWithout pieces nobody can book this product. Save it anyway?"}
         onCancel={() => setAskEmpty(false)} onConfirm={() => { setAskEmpty(false); void save(true); }} />
       <div className="mt-4 flex justify-between">

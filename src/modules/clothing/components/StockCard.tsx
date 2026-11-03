@@ -54,11 +54,16 @@ const attributeText = (attrs: Record<string, unknown> | null | undefined, order:
 // One product, as TRENDZ shows it when a card is opened: the photo, name, code, price, then each size / colour with
 // Total / Avail / Rented in every branch and a RENT button (adds to the cart). Staff and managers can rent only from their own
 // branch; the other branches are view only.
-export function StockCard({ product, stock, highlight }: { product: Product; stock: Map<string, StockRow> | null; highlight?: string }) {
+export function StockCard({ product, stock, highlight, pick, only }: { product: Product; stock: Map<string, StockRow> | null; highlight?: string; pick?: Record<string, string[]>; only?: string }) {
   const { activeBranches, myBranchId, templateOf } = useShop();
   const cart = useCart();
   const attributeOrder = (templateOf(product.category_id)?.variation_fields ?? []).map((f) => f.key);
   const variations = (product.product_variations ?? []).filter((v) => v.is_enabled);
+  // the colour / size chosen before this card opened (All Products asks first); nothing chosen shows every variation
+  // "only": one exact variation (a typed SKU or a scanned piece) shows just that one
+  const shown = only && variations.some((v) => v.id === only) ? variations.filter((v) => v.id === only) : pick && Object.values(pick).some((a) => a.length)
+    ? variations.filter((v) => Object.entries(pick).every(([k, vals]) => !vals.length || vals.includes(String(v.attributes?.[k] ?? "").trim())))
+    : variations;
   const price = variations.map((v) => headlinePrice(v)?.amount).filter((x): x is number => x !== undefined);
   const lo = price.length ? Math.min(...price) : 0;
   const hi = price.length ? Math.max(...price) : 0;
@@ -86,7 +91,7 @@ export function StockCard({ product, stock, highlight }: { product: Product; sto
         <div className="hidden grid-cols-[minmax(0,260px)_1fr] gap-4 px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:grid">
           <span>Variation</span><span>Stock by branch</span>
         </div>
-        {variations.map((v, i) => (
+        {shown.map((v, i) => (
           <div key={v.id} className={cn("grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,260px)_1fr] sm:gap-4", i % 2 === 1 ? "bg-muted/50" : "", highlight === v.id && "bg-gold/10")}>
             <div className="self-center">
               <p className="text-base font-medium text-foreground">{attributeText(v.attributes, attributeOrder) || v.name}</p>
