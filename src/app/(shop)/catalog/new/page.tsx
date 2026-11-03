@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { useShop } from "@/lib/shop/ShopContext";
 import { ProductEditor } from "@/components/shop/ProductEditor";
-import { ProductWizard } from "@/modules/clothing/components/ProductWizard";
+import { shopModules } from "@/modules/registry";
 import { Panel } from "@/components/shop/ui";
 
 export default function NewProductPage() {
@@ -16,14 +16,14 @@ export default function NewProductPage() {
 function NewProduct() {
   const asSet = useSearchParams().get("set") === "1";
   const { canManage, categories, loading, businessModule } = useShop();
-  const clothing = businessModule === "clothing";
+  const { ProductForm, productsTitle } = shopModules[businessModule];
   if (loading) return null;
   return (
     <>
-      <Link href="/catalog" className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ChevronLeft className="h-3.5 w-3.5" /> {clothing ? "All Products" : "Catalog"}</Link>
+      <Link href="/catalog" className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ChevronLeft className="h-3.5 w-3.5" /> {productsTitle ?? "Catalog"}</Link>
       {!canManage ? <Panel><p className="text-sm text-muted-foreground">Only owners and managers can add items.</p></Panel>
         : categories.length === 0 ? <Panel><p className="text-sm text-muted-foreground">Add a category first (Catalog, Categories).</p></Panel>
-        : clothing && !asSet ? <ProductWizard /> : <ProductEditor asSet={asSet} />}
+        : ProductForm && !asSet ? <ProductForm /> : <ProductEditor asSet={asSet} />}
     </>
   );
 }

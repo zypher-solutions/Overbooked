@@ -4,7 +4,7 @@ Code that belongs to ONE kind of business lives in its own folder here, so a cha
 
 | Module | Business | Holds |
 |---|---|---|
-| `clothing` | bridal, groom and other clothing rental | its own screens in `screens/` (Bookings, Inventory Search, All Rentals, Finance, Stock Locations), the dashboard, product wizard, stock cards, expenses, cart, ledger PDF, menu (`nav.ts`) |
+| `clothing` | bridal, groom and other clothing rental | its own screens in `screens/` (Bookings, Inventory Search, All Rentals, Finance, Stock Locations), the dashboard, product wizard, stock cards, expenses, product table, SKU rules (`sku.ts`), cart, ledger PDF, menu (`nav.ts`) |
 | `vehicle` (to come) | cars and bikes | odometer, fuel, licence screens |
 | `stay` (to come) | resorts | nights, guests, meal plans |
 
@@ -12,7 +12,8 @@ Layout of a module:
 - `screens/`: whole pages only this module has. The route file in `src/app/(shop)` is one line (`export { default } from "@/modules/<name>/screens/X"`), so URLs stay flat and the code lives here.
 - `components/`: pieces used by its screens or picked by a shared screen.
 - `nav.ts`: its side menu.
-- An entry in `registry.ts` (menu, home screen, side-menu tagline, its own screens, shared screens it replaces). Shops pick their module in `ShopContext` (`businessModule`).
+- An entry in `registry.ts` (menu, home screen, side-menu tagline, its own screens, shared screens it replaces, and optional
+  hooks such as its own product form, product list title and CSV SKU numbering). Shops pick their module in `ShopContext` (`businessModule`).
 
 Shops without a module of their own (`standard`: cars, bikes, resorts for now) use the shared screens in `src/app/(shop)` and `src/components/shop/Today.tsx`.
 
@@ -25,5 +26,7 @@ Rules (the first is enforced by `npm run lint`, see `eslint.config.js`):
 5. A request from one client: first a template setting, then a per-shop feature switch (`shops.settings.features`), and only then module code
    behind a switch that is off by default. Never a branch or copy for one client.
 
-Still mixed (to split later, one file at a time with the tests green): `src/app/(shop)/book/page.tsx`, `catalog/page.tsx`,
-`catalog/import/page.tsx`, `HandoverDialogs.tsx`, `ProductEditor.tsx` and `UnitsPanel.tsx` branch on `businessModule` (or the template kind) inside shared files. Stage 2 moves those clothing parts into this module.
+Still mixed: `src/app/(shop)/book/page.tsx` (piece availability, cleaning days, cart) and the return dialog in
+`HandoverDialogs.tsx` (ticking each piece as it comes back) hold clothing logic inside shared files; they move here next.
+`catalog/page.tsx` keeps a few clothing wording and layout switches, which is fine for wording.
+`ProductEditor.tsx` and `UnitsPanel.tsx` branch on the template kind for rooms and vehicles: they move to `vehicle` and `stay` when those start.

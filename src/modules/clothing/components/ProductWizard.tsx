@@ -14,6 +14,7 @@ import { useCatalog } from "@/lib/shop/useCatalog";
 import { businessNameError, moneyError, textLimitError } from "@/lib/validate";
 import { errorText, num, rupees } from "@/lib/shop/format";
 import type { Product, Template, Unit } from "@/lib/shop/types";
+import { SKU_PATTERN } from "../sku";
 import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "@/components/shop/ui";
 
 // Add New Product, as in TRENDZ: three steps on one page.
@@ -23,8 +24,6 @@ import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButt
 // Changing a product uses the same form: pieces can be added here, and removed from the Pieces list.
 interface Attr { key: string; label: string; values: string[] }
 interface VarRow { id?: string; key: string; attributes: Record<string, string>; name: string; sku: string; savedSku?: string; rate: string; enabled: boolean; stock: Record<string, string> }
-// product and variation SKUs of bridal and groom shops, as in TRENDZ: BR-001, BR-001-GOLD-M
-const SKU_PATTERN = /^[A-Z]{2,6}-[0-9]{3,4}(-[A-Za-z0-9]+)*$/;
 interface Basic { category_id: string; name: string; sku: string; rate: string; replacement_value: string; description: string; image_url: string; is_active: boolean }
 type Step = "basic" | "attributes" | "variations";
 
