@@ -23,7 +23,7 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-[11px] font-medium",
+        "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium",
         toneClasses[tone],
         className,
       )}
@@ -53,12 +53,21 @@ export function SummaryCard({
           ? "text-emerald"
           : "text-foreground";
   return (
-    <div className="glass p-5 transition-colors duration-300 hover:border-gold/25">
-      <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+    <div className="glass p-4 transition-colors duration-150 hover:border-gold/25 sm:p-5">
+      <p className="text-xs font-semibold tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className={cn("mt-2 font-sans text-2xl font-semibold tabular-nums", valueTone)}>{value}</p>
-      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+      <p
+        className={cn(
+          "mt-2 font-sans text-2xl font-semibold tabular-nums sm:text-[26px]",
+          valueTone,
+        )}
+      >
+        {value}
+      </p>
+      {hint ? (
+        <p className="mt-1 text-[13px] text-muted-foreground">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -78,7 +87,7 @@ export function Field({
 }) {
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1.5 block text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">
+      <span className="mb-1.5 block text-xs font-semibold tracking-wide text-muted-foreground">
         {label}
       </span>
       {children}
@@ -96,10 +105,11 @@ export const inputClass =
 
 export const monoInputClass = cn(inputClass, "font-sans tabular-nums");
 
-export const labelClass = "mb-1.5 block text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase";
+export const labelClass =
+  "mb-1.5 block text-xs font-semibold tracking-wide text-muted-foreground";
 
 export const goldButtonClass =
   "inline-flex items-center justify-center gap-2 rounded-full bg-[#101715] px-5 py-2.5 sm:py-2 text-sm font-semibold text-white transition-all duration-200 hover:bg-gold hover:shadow-lg disabled:opacity-50 disabled:hover:shadow-none";
 
 export const ghostButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2 sm:py-1.5 text-xs font-medium text-foreground transition-colors duration-200 hover:border-gold/40 hover:bg-accent";
+  "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-[13px] font-medium text-foreground transition-colors duration-150 hover:border-gold/40 hover:bg-accent";

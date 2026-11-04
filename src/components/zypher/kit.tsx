@@ -1,13 +1,23 @@
 "use client";
 
-import { emailError, moneyError, normalizeEmail, personNameError, textLimitError } from "@/lib/validate";
+import {
+  emailError,
+  moneyError,
+  normalizeEmail,
+  personNameError,
+  textLimitError,
+} from "@/lib/validate";
 import { DateInput } from "@/components/shop/DateInput";
 import { useState, type ReactNode } from "react";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { inviteShopOwner } from "@/app/actions/zypher";
-import { StatusBadge, Field, inputClass } from "@/components/overbooked/primitives";
+import {
+  StatusBadge,
+  Field,
+  inputClass,
+} from "@/components/overbooked/primitives";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,8 +58,18 @@ export interface Template {
   name: string;
   kind: "wearable" | "vehicle" | "room";
   labels: Record<string, string>;
-  variation_fields: { key: string; label: string; type: string; options?: string[] }[];
-  unit_fields: { key: string; label: string; type: string; required?: boolean }[];
+  variation_fields: {
+    key: string;
+    label: string;
+    type: string;
+    options?: string[];
+  }[];
+  unit_fields: {
+    key: string;
+    label: string;
+    type: string;
+    required?: boolean;
+  }[];
   checks: { pickup?: string[]; return?: string[] };
   rate_types: string[];
   turnaround: string;
@@ -76,17 +96,28 @@ export const FEATURE_LABELS: Record<string, string> = {
 };
 
 export const RATE_LABELS: Record<string, string> = {
-  hour: "Per hour", day: "Per day", night: "Per night", extra_km: "Extra km", extra_hour: "Extra hour",
-  extra_person: "Extra person", driver_day: "Driver per day", late_penalty: "Late penalty",
+  hour: "Per hour",
+  day: "Per day",
+  night: "Per night",
+  extra_km: "Extra km",
+  extra_hour: "Extra hour",
+  extra_person: "Extra person",
+  driver_day: "Driver per day",
+  late_penalty: "Late penalty",
 };
 
 export const METHOD_LABELS: Record<string, string> = {
-  bank_transfer: "Bank transfer", upi: "UPI", cash: "Cash", cheque: "Cheque",
+  bank_transfer: "Bank transfer",
+  upi: "UPI",
+  cash: "Cash",
+  cheque: "Cheque",
 };
 
 // ---- dates and money (India time) ----
 export function todayIST() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(
+    new Date(),
+  );
 }
 
 export function addMonths(iso: string, months: number) {
@@ -100,12 +131,23 @@ export function addMonths(iso: string, months: number) {
 export function fmtDay(iso: string | null | undefined) {
   if (!iso) return "—";
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 export function fmtWhen(iso: string | null | undefined) {
   if (!iso) return "Never";
-  return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  return new Date(iso).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+  });
 }
 
 // Postgres interval text ("1 day", "03:00:00", "1 day 02:00:00") in words
@@ -136,45 +178,95 @@ export function daysBetween(fromIso: string, toIso: string) {
 // ---- billing state of a shop ----
 export type BillingState = "paused" | "trial" | "overdue" | "due_soon" | "paid";
 
-export function billingState(s: { status: string; paid_until: string | null; trial_ends?: string | null }, today = todayIST()): BillingState {
+export function billingState(
+  s: { status: string; paid_until: string | null; trial_ends?: string | null },
+  today = todayIST(),
+): BillingState {
   if (s.status === "suspended") return "paused";
   // inside its free trial and not paid yet: not overdue
-  if (s.trial_ends && s.trial_ends >= today && (!s.paid_until || s.paid_until < today)) return "trial";
+  if (
+    s.trial_ends &&
+    s.trial_ends >= today &&
+    (!s.paid_until || s.paid_until < today)
+  )
+    return "trial";
   if (!s.paid_until || s.paid_until < today) return "overdue";
   if (daysBetween(today, s.paid_until) <= 7) return "due_soon";
   return "paid";
 }
 
-export function BillingBadge({ shop }: { shop: { status: string; paid_until: string | null; trial_ends?: string | null } }) {
+export function BillingBadge({
+  shop,
+}: {
+  shop: {
+    status: string;
+    paid_until: string | null;
+    trial_ends?: string | null;
+  };
+}) {
   const state = billingState(shop);
   if (state === "paused") return <StatusBadge tone="muted">Paused</StatusBadge>;
   if (state === "trial") {
     const left = daysBetween(todayIST(), shop.trial_ends as string);
-    return <StatusBadge tone="gold">{left <= 0 ? "Trial ends today" : `Trial · ${left} day${left === 1 ? "" : "s"} left`}</StatusBadge>;
+    return (
+      <StatusBadge tone="gold">
+        {left <= 0
+          ? "Trial ends today"
+          : `Trial · ${left} day${left === 1 ? "" : "s"} left`}
+      </StatusBadge>
+    );
   }
-  if (state === "overdue") return <StatusBadge tone="rust">Overdue</StatusBadge>;
-  if (state === "due_soon") return <StatusBadge tone="gold">Due soon</StatusBadge>;
+  if (state === "overdue")
+    return <StatusBadge tone="rust">Overdue</StatusBadge>;
+  if (state === "due_soon")
+    return <StatusBadge tone="gold">Due soon</StatusBadge>;
   return <StatusBadge tone="emerald">Paid</StatusBadge>;
 }
 
-export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
+}) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="font-display text-2xl font-semibold text-foreground">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+        <h1 className="font-display text-[26px] font-semibold leading-tight text-foreground sm:text-3xl">
+          {title}
+        </h1>
+        {subtitle ? (
+          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+        ) : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
     </div>
   );
 }
 
-export function Panel({ title, actions, children, className }: { title?: string; actions?: ReactNode; children: ReactNode; className?: string }) {
+export function Panel({
+  title,
+  actions,
+  children,
+  className,
+}: {
+  title?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <section className={"glass p-4 shadow-sm " + (className ?? "")}>
       {title || actions ? (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          {title ? <h2 className="text-sm font-semibold text-foreground">{title}</h2> : <span />}
+          {title ? (
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+          ) : (
+            <span />
+          )}
           {actions}
         </div>
       ) : null}
@@ -184,27 +276,50 @@ export function Panel({ title, actions, children, className }: { title?: string;
 }
 
 export const tableWrap = "overflow-x-auto glass";
-export const theadClass = "bg-muted/70 text-xs font-medium uppercase tracking-wider text-muted-foreground";
+export const theadClass =
+  "bg-muted/70 text-xs font-semibold tracking-wide text-muted-foreground";
 
 // ---- dialogs ----
-export function ShareLinkDialog({ share, onClose }: { share: { name: string; link: string } | null; onClose: () => void }) {
+export function ShareLinkDialog({
+  share,
+  onClose,
+}: {
+  share: { name: string; link: string } | null;
+  onClose: () => void;
+}) {
   return (
-    <AlertDialog open={share !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <AlertDialog
+      open={share !== null}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Invite link for {share?.name}</AlertDialogTitle>
           <AlertDialogDescription>
-            Send this link to them (WhatsApp is fine). It works once and expires in one hour; they set their own password.
+            Send this link to them (WhatsApp is fine). It works once and expires
+            in one hour; they set their own password.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <textarea readOnly value={share?.link ?? ""} aria-label="Invite link" rows={3}
-          className="w-full rounded-md border border-border bg-background p-2 font-mono text-xs text-foreground" />
+        <textarea
+          readOnly
+          value={share?.link ?? ""}
+          aria-label="Invite link"
+          rows={3}
+          className="w-full rounded-md border border-border bg-background p-2 font-mono text-xs text-foreground"
+        />
         <AlertDialogFooter>
           <AlertDialogCancel>Close</AlertDialogCancel>
-          <AlertDialogAction onClick={(e) => {
-            e.preventDefault();
-            navigator.clipboard.writeText(share?.link ?? "").then(() => toast.success("Link copied"), () => toast.error("Could not copy"));
-          }}>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              navigator.clipboard.writeText(share?.link ?? "").then(
+                () => toast.success("Link copied"),
+                () => toast.error("Could not copy"),
+              );
+            }}
+          >
             <Copy className="mr-1 h-4 w-4" /> Copy link
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -213,36 +328,78 @@ export function ShareLinkDialog({ share, onClose }: { share: { name: string; lin
   );
 }
 
-export interface PayTarget { id: string; name: string; monthly_fee: number; paid_until: string | null }
+export interface PayTarget {
+  id: string;
+  name: string;
+  monthly_fee: number;
+  paid_until: string | null;
+}
 
-export function PaymentDialog({ shop, onClose, onSaved }: { shop: PayTarget | null; onClose: () => void; onSaved: () => void }) {
+export function PaymentDialog({
+  shop,
+  onClose,
+  onSaved,
+}: {
+  shop: PayTarget | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const today = todayIST();
-  const from = shop?.paid_until && shop.paid_until > today ? shop.paid_until : today;
-  const [form, setForm] = useState({ kind: "subscription", amount: "", method: "bank_transfer", paidOn: today, periodTo: "", note: "" });
+  const from =
+    shop?.paid_until && shop.paid_until > today ? shop.paid_until : today;
+  const [form, setForm] = useState({
+    kind: "subscription",
+    amount: "",
+    method: "bank_transfer",
+    paidOn: today,
+    periodTo: "",
+    note: "",
+  });
   const [busy, setBusy] = useState(false);
   const [openFor, setOpenFor] = useState<string | null>(null);
 
   // reset the form each time it opens for a shop
   if (shop && openFor !== shop.id) {
     setOpenFor(shop.id);
-    setForm({ kind: "subscription", amount: shop.monthly_fee ? String(shop.monthly_fee) : "", method: "bank_transfer", paidOn: today,
-              periodTo: addMonths(from, 1), note: "" });
+    setForm({
+      kind: "subscription",
+      amount: shop.monthly_fee ? String(shop.monthly_fee) : "",
+      method: "bank_transfer",
+      paidOn: today,
+      periodTo: addMonths(from, 1),
+      note: "",
+    });
   }
   if (!shop && openFor !== null) setOpenFor(null);
 
   const save = async () => {
     if (!shop) return;
     const amount = Number(form.amount);
-    const bad = moneyError(form.amount, { label: "amount received", required: true, positive: true, max: 10_000_000 })
-      ?? (!form.paidOn ? "Enter the date it was received." : null)
-      ?? (form.kind === "subscription" && !form.periodTo ? "Enter the date this payment covers until." : null)
-      ?? (form.kind === "subscription" && form.periodTo < form.paidOn ? "The covered-until date cannot be before the received date." : null)
-      ?? textLimitError(form.note, "note", 200);
+    const bad =
+      moneyError(form.amount, {
+        label: "amount received",
+        required: true,
+        positive: true,
+        max: 10_000_000,
+      }) ??
+      (!form.paidOn ? "Enter the date it was received." : null) ??
+      (form.kind === "subscription" && !form.periodTo
+        ? "Enter the date this payment covers until."
+        : null) ??
+      (form.kind === "subscription" && form.periodTo < form.paidOn
+        ? "The covered-until date cannot be before the received date."
+        : null) ??
+      textLimitError(form.note, "note", 200);
     if (bad) return toast.error(bad);
     setBusy(true);
     const { error } = await createClient().rpc("record_shop_payment", {
-      p_shop_id: shop.id, p_amount: amount, p_paid_on: form.paidOn, p_period_to: form.kind === "subscription" ? form.periodTo : null,
-      p_method: form.method, p_note: form.note.trim() || null, p_kind: form.kind,
+      p_shop_id: shop.id,
+      p_amount: amount,
+      p_paid_on: form.paidOn,
+      p_period_to: form.kind === "subscription" ? form.periodTo : null,
+      p_method: form.method,
+      p_note: form.note.trim() || null,
+      p_kind: form.kind,
     });
     setBusy(false);
     if (error) return toast.error(error.message);
@@ -252,54 +409,145 @@ export function PaymentDialog({ shop, onClose, onSaved }: { shop: PayTarget | nu
   };
 
   const monthsChip = (n: number) => (
-    <button type="button" key={n} onClick={() => setForm({ ...form, periodTo: addMonths(from, n),
-      amount: shop?.monthly_fee ? String(shop.monthly_fee * n) : form.amount })}
-      className="rounded-full border border-border px-2.5 py-1 text-xs hover:border-gold/40 hover:bg-gold/5">
+    <button
+      type="button"
+      key={n}
+      onClick={() =>
+        setForm({
+          ...form,
+          periodTo: addMonths(from, n),
+          amount: shop?.monthly_fee
+            ? String(shop.monthly_fee * n)
+            : form.amount,
+        })
+      }
+      className="rounded-full border border-border px-2.5 py-1 text-xs hover:border-gold/40 hover:bg-gold/5"
+    >
       {n === 12 ? "1 year" : `${n} month${n > 1 ? "s" : ""}`}
     </button>
   );
 
   return (
-    <AlertDialog open={shop !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <AlertDialog
+      open={shop !== null}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Payment from {shop?.name}</AlertDialogTitle>
           <AlertDialogDescription>
-            Money received by bank transfer or other means. Paid until moves to the end of the period
+            Money received by bank transfer or other means. Paid until moves to
+            the end of the period
             {shop?.paid_until ? <> (now {fmtDay(shop.paid_until)})</> : null}.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="What the payment is for">
-          {([["subscription", "Subscription"], ["installation", "Installation"], ["other", "Other"]] as const).map(([k, l]) => (
-            <button key={k} type="button" role="radio" aria-checked={form.kind === k} onClick={() => setForm({ ...form, kind: k })}
-              className={"rounded-full border px-3 py-1 text-xs " + (form.kind === k ? "border-gold/60 bg-gold/10 font-medium" : "border-border text-muted-foreground")}>{l}</button>
+        <div
+          className="flex flex-wrap gap-1.5"
+          role="radiogroup"
+          aria-label="What the payment is for"
+        >
+          {(
+            [
+              ["subscription", "Subscription"],
+              ["installation", "Installation"],
+              ["other", "Other"],
+            ] as const
+          ).map(([k, l]) => (
+            <button
+              key={k}
+              type="button"
+              role="radio"
+              aria-checked={form.kind === k}
+              onClick={() => setForm({ ...form, kind: k })}
+              className={
+                "rounded-full border px-3 py-1 text-xs " +
+                (form.kind === k
+                  ? "border-gold/60 bg-gold/10 font-medium"
+                  : "border-border text-muted-foreground")
+              }
+            >
+              {l}
+            </button>
           ))}
         </div>
-        {form.kind === "subscription" ? <div className="flex flex-wrap gap-1.5">{[1, 3, 6, 12].map(monthsChip)}</div> : null}
+        {form.kind === "subscription" ? (
+          <div className="flex flex-wrap gap-1.5">
+            {[1, 3, 6, 12].map(monthsChip)}
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Amount (₹)" error={form.amount.trim() ? moneyError(form.amount, { label: "amount", positive: true, max: 10_000_000 }) ?? undefined : undefined}>
-            <input className={inputClass} inputMode="decimal" maxLength={10} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+          <Field
+            label="Amount (₹)"
+            error={
+              form.amount.trim()
+                ? (moneyError(form.amount, {
+                    label: "amount",
+                    positive: true,
+                    max: 10_000_000,
+                  }) ?? undefined)
+                : undefined
+            }
+          >
+            <input
+              className={inputClass}
+              inputMode="decimal"
+              maxLength={10}
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+            />
           </Field>
           <Field label="Method">
-            <select className={inputClass} value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}>
-              {Object.entries(METHOD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            <select
+              className={inputClass}
+              value={form.method}
+              onChange={(e) => setForm({ ...form, method: e.target.value })}
+            >
+              {Object.entries(METHOD_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
             </select>
           </Field>
           <Field label="Received on">
-            <DateInput value={form.paidOn} onChange={(v) => setForm({ ...form, paidOn: v })} />
+            <DateInput
+              value={form.paidOn}
+              onChange={(v) => setForm({ ...form, paidOn: v })}
+            />
           </Field>
           {form.kind === "subscription" ? (
             <Field label="Covers until">
-              <DateInput value={form.periodTo} onChange={(v) => setForm({ ...form, periodTo: v })} />
+              <DateInput
+                value={form.periodTo}
+                onChange={(v) => setForm({ ...form, periodTo: v })}
+              />
             </Field>
-          ) : <span />}
-          <Field label="Note (reference no., installation ...)" className="col-span-2">
-            <input className={inputClass} maxLength={220} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          ) : (
+            <span />
+          )}
+          <Field
+            label="Note (reference no., installation ...)"
+            className="col-span-2"
+          >
+            <input
+              className={inputClass}
+              maxLength={220}
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+            />
           </Field>
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction disabled={busy} onClick={(e) => { e.preventDefault(); void save(); }}>
+          <AlertDialogAction
+            disabled={busy}
+            onClick={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
             {busy ? "Saving..." : "Record payment"}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -308,7 +556,11 @@ export function PaymentDialog({ shop, onClose, onSaved }: { shop: PayTarget | nu
   );
 }
 
-export function InviteOwnerDialog({ shop, onClose, onLink }: {
+export function InviteOwnerDialog({
+  shop,
+  onClose,
+  onLink,
+}: {
   shop: { id: string; name: string } | null;
   onClose: () => void;
   onLink: (share: { name: string; link: string }) => void;
@@ -323,7 +575,11 @@ export function InviteOwnerDialog({ shop, onClose, onLink }: {
     if (bad) return toast.error(bad);
     setBusy(true);
     try {
-      const { link } = await inviteShopOwner({ shopId: shop.id, ownerName: name.trim().replace(/s+/g, " "), ownerEmail: normalizeEmail(email) });
+      const { link } = await inviteShopOwner({
+        shopId: shop.id,
+        ownerName: name.trim().replace(/s+/g, " "),
+        ownerEmail: normalizeEmail(email),
+      });
       onClose();
       onLink({ name, link });
       setName("");
@@ -336,19 +592,58 @@ export function InviteOwnerDialog({ shop, onClose, onLink }: {
   };
 
   return (
-    <AlertDialog open={shop !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <AlertDialog
+      open={shop !== null}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Invite an owner for {shop?.name}</AlertDialogTitle>
-          <AlertDialogDescription>You get a one-hour link to send them.</AlertDialogDescription>
+          <AlertDialogDescription>
+            You get a one-hour link to send them.
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="grid gap-3">
-          <Field label="Owner name" error={name.trim() ? personNameError(name, "owner's name") ?? undefined : undefined}><input className={inputClass} maxLength={60} value={name} onChange={(e) => setName(e.target.value)} /></Field>
-          <Field label="Owner email" error={email.trim() ? emailError(email) ?? undefined : undefined}><input className={inputClass} inputMode="email" autoCapitalize="none" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+          <Field
+            label="Owner name"
+            error={
+              name.trim()
+                ? (personNameError(name, "owner's name") ?? undefined)
+                : undefined
+            }
+          >
+            <input
+              className={inputClass}
+              maxLength={60}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Field>
+          <Field
+            label="Owner email"
+            error={email.trim() ? (emailError(email) ?? undefined) : undefined}
+          >
+            <input
+              className={inputClass}
+              inputMode="email"
+              autoCapitalize="none"
+              maxLength={254}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </Field>
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction disabled={busy} onClick={(e) => { e.preventDefault(); void send(); }}>
+          <AlertDialogAction
+            disabled={busy}
+            onClick={(e) => {
+              e.preventDefault();
+              void send();
+            }}
+          >
             {busy ? "Creating..." : "Create invite link"}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -358,15 +653,27 @@ export function InviteOwnerDialog({ shop, onClose, onLink }: {
 }
 
 // a WhatsApp reminder to a shop about its subscription, sent from Zypher's phone
-export function reminderLink(shop: { name: string; phone: string | null; paid_until: string | null; monthly_fee: number }, bank: string | null) {
+export function reminderLink(
+  shop: {
+    name: string;
+    phone: string | null;
+    paid_until: string | null;
+    monthly_fee: number;
+  },
+  bank: string | null,
+) {
   if (!shop.phone) return null;
   const digits = shop.phone.replace(/\D/g, "");
   const text = [
     `Hello ${shop.name}, this is a reminder from Zypher about your Overbooked subscription.`,
-    shop.paid_until ? `It was paid until ${fmtDay(shop.paid_until)}.` : "We have not received the first payment yet.",
+    shop.paid_until
+      ? `It was paid until ${fmtDay(shop.paid_until)}.`
+      : "We have not received the first payment yet.",
     shop.monthly_fee ? `Monthly fee: ${rupees(shop.monthly_fee)}.` : "",
     bank ? `Pay to:\n${bank}` : "",
     "Please share the payment reference once paid. Thank you!",
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
   return `https://api.whatsapp.com/send/?phone=${digits.length > 10 ? digits : "91" + digits}&text=${encodeURIComponent(text)}`;
 }
