@@ -57,7 +57,7 @@ export function SummaryCard({
       <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
         {label}
       </p>
-      <p className={cn("mt-2 font-mono text-2xl font-semibold", valueTone)}>{value}</p>
+      <p className={cn("mt-2 font-sans text-2xl font-semibold tabular-nums", valueTone)}>{value}</p>
       {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );
@@ -94,7 +94,7 @@ export function Field({
 export const inputClass =
   "w-full rounded-xl border border-input bg-white px-3 py-2.5 sm:py-2 text-sm text-foreground outline-none transition-all duration-200 placeholder:text-muted-foreground/60 focus:border-neon focus:ring-2 focus:ring-ring disabled:opacity-60 read-only:text-muted-foreground";
 
-export const monoInputClass = cn(inputClass, "font-mono");
+export const monoInputClass = cn(inputClass, "font-sans tabular-nums");
 
 export const labelClass = "mb-1.5 block text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase";
 

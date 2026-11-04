@@ -64,7 +64,7 @@ export function DateInput({ value, onChange, min, max, disabled, className, id, 
   return (
     <div className={cn("relative", className)}>
       <input id={id} aria-label={ariaLabel} type="text" inputMode="numeric" autoComplete="off" disabled={disabled} placeholder="DD/MM/YY" maxLength={10}
-        className={cn(inputClass, "w-full pr-10 font-mono")} value={text} onChange={(e) => type(e.target.value)} onBlur={leave} />
+        className={cn(inputClass, "w-full pr-10 font-sans tabular-nums")} value={text} onChange={(e) => type(e.target.value)} onBlur={leave} />
       <button type="button" tabIndex={-1} disabled={disabled} onClick={open} title="Open calendar" aria-label="Open calendar"
         className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-gold disabled:opacity-40">
         <CalendarIcon className="h-4 w-4" />
@@ -86,7 +86,7 @@ export function DateTimeInput({ value, onChange, min, max, disabled, className }
     <div className={cn("grid grid-cols-[1fr_7.5rem] gap-2", className)}>
       <DateInput value={date ?? ""} min={min?.slice(0, 10)} max={max?.slice(0, 10)} disabled={disabled} aria-label="Date"
         onChange={(d) => onChange(d ? `${d}T${time || "10:00"}` : "")} />
-      <input type="time" aria-label="Time" disabled={disabled || !date} className={cn(inputClass, "font-mono")} value={time}
+      <input type="time" aria-label="Time" disabled={disabled || !date} className={cn(inputClass, "font-sans tabular-nums")} value={time}
         onChange={(e) => onChange(date ? `${date}T${e.target.value || "00:00"}` : "")} />
     </div>
   );
