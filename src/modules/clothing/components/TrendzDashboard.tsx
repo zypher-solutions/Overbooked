@@ -207,10 +207,10 @@ export function TrendzDashboard() {
     [done, f.payment, matchIds]);
 
   const branchName = (id: string) => branches.find((b) => b.id === id)?.name ?? "";
-  const cards: { key: Queue; label: string; count: number; tone: string; box: string; label2: string }[] = [
-    { key: "pickups", label: "Pickups today", count: pickups?.length ?? 0, tone: "text-neon", box: "border-transparent bg-[#101715] text-white", label2: "text-white/70" },
-    { key: "returns", label: "Returns due today", count: dueToday.length, tone: "text-[#101715]", box: "border-transparent bg-neon text-[#101715]", label2: "text-[#101715]/75" },
-    { key: "overdue", label: "Overdue", count: overdue.length, tone: "text-rust", box: "border-border bg-surface", label2: "text-muted-foreground" },
+  const cards: { key: Queue; label: string; switchLabel: string; count: number; tone: string; box: string; label2: string }[] = [
+    { key: "pickups", label: "Pickups today", switchLabel: "Pickups", count: pickups?.length ?? 0, tone: "text-neon", box: "border-transparent bg-[#101715] text-white", label2: "text-white/70" },
+    { key: "returns", label: "Returns due today", switchLabel: "Returns due", count: dueToday.length, tone: "text-[#101715]", box: "border-transparent bg-neon text-[#101715]", label2: "text-[#101715]/75" },
+    { key: "overdue", label: "Overdue", switchLabel: "Overdue", count: overdue.length, tone: "text-rust", box: "border-border bg-surface", label2: "text-muted-foreground" },
   ];
   // the calendar dots and the next few returns come from what is already loaded
   const dueDays = useMemo(() => new Set((out ?? []).map((r) => dayOf(r.end_at))), [out, tz]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -371,11 +371,10 @@ export function TrendzDashboard() {
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {cards.map((c) => (
-          <button key={c.key} type="button" onClick={() => setPicked(c.key)} aria-pressed={queue === c.key}
-            className={cn("rounded-[20px] border p-4 text-left shadow-[0_8px_24px_-12px_rgb(16_23_21/18%)] transition-shadow hover:shadow-lg sm:p-5", c.box, queue === c.key && "ring-2 ring-gold ring-offset-2 ring-offset-background")}>
+          <div key={c.key} className={cn("w-full rounded-[20px] border p-4 text-left shadow-[0_8px_24px_-12px_rgb(16_23_21/18%)] sm:p-5", c.box)}>
             <p className={cn("text-[11px] font-medium uppercase tracking-[0.12em]", c.label2)}>{c.label}</p>
             <p className={cn("mt-3 font-display text-4xl font-bold sm:text-5xl", c.count || c.key === "pickups" || c.key === "returns" ? c.tone : "text-foreground")}>{pickups === null ? "—" : c.count}</p>
-          </button>
+          </div>
         ))}
         {canManage
           ? <SummaryCard label="To collect" value={rupees(toCollect)} hint={`on ${out?.length ?? 0} rentals out`} tone={toCollect > 0 ? "rust" : "emerald"} />
@@ -383,15 +382,27 @@ export function TrendzDashboard() {
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
-      <section className="glass p-4 sm:p-6" aria-label="Today's work">
-        <h2 className="text-sm font-semibold uppercase tracking-wide">{cards.find((c) => c.key === queue)?.label}</h2>
-        {queueRows.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            {queue === "pickups" ? "No pickups scheduled for today." : queue === "returns" ? "No returns due today." : "Nothing overdue. All clear."}
-          </p>
-        ) : (
-          <ul className="mt-3 flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1">
-            {queueRows.map((r) => (
+        <section className="glass p-4 sm:p-6" aria-label="Today's work">
+          <div role="group" aria-label="Choose work list" className="mb-5 grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1">
+            {cards.map((c) => (
+              <button key={c.key} type="button" onClick={() => setPicked(c.key)} aria-pressed={queue === c.key} aria-controls="today-work-queue"
+                className={cn(
+                  "min-h-10 rounded-lg px-2 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 sm:px-3 sm:text-sm",
+                  queue === c.key ? "bg-gold text-white shadow-sm" : "text-muted-foreground hover:bg-surface hover:text-foreground",
+                )}>
+                {c.switchLabel}
+              </button>
+            ))}
+          </div>
+          <div id="today-work-queue">
+          <h2 className="text-sm font-semibold uppercase tracking-wide">{cards.find((c) => c.key === queue)?.label}</h2>
+          {queueRows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {queue === "pickups" ? "No pickups scheduled for today." : queue === "returns" ? "No returns due today." : "Nothing overdue. All clear."}
+            </p>
+          ) : (
+            <ul className="mt-3 flex max-h-[24rem] flex-col gap-2 overflow-y-auto pr-1">
+              {queueRows.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-surface px-3 py-2.5">
                 <Link href={`/rentals/${r.id}`} className="min-w-0 flex-1 basis-48">
                   <span className="flex items-center gap-2">
@@ -414,10 +425,11 @@ export function TrendzDashboard() {
                   </button>
                 </div>
               </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              ))}
+            </ul>
+          )}
+          </div>
+        </section>
 
       <aside className="space-y-4" aria-label="Calendar and next returns">
         <div className="glass p-4 sm:p-5">
