@@ -164,17 +164,26 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   const end = new Date(Date.parse(day) + 2 * 86_400_000).toISOString().slice(0, 10);
   await setDates(page, day, end);
   await expect(page.getByText("₹2,400").first()).toBeVisible();
+  await page.getByRole("button", { name: "Continue to customer" }).click();
 
   const phone = "98" + String(Date.now()).slice(-8);
   await field(page, "Phone").fill(phone);
   await field(page, "Name").fill("Playwright Bride");
+  await page.getByRole("button", { name: "Continue to payment" }).click();
   await field(page, "Advance").fill("1000");
   await page.getByLabel("Advance payment method").selectOption("cash");
+  await page.getByRole("button", { name: "Review booking" }).click();
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
 
   await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click(); // the pop-up, then the list
   await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
+  await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);
+  const pickupSection = page.getByRole("region", { name: "Pickups & Returns" });
+  const liveSection = page.getByRole("region", { name: "Live Bookings" });
+  const bookingLink = { name: new RegExp(phone) };
+  await expect(pickupSection.getByRole("link", bookingLink)).toBeVisible();
   await openBooking(page, "Playwright Bride");
+  const bookingUrl = page.url();
   await expect(page.getByText("Booked", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Hand over" }).click();
@@ -183,6 +192,12 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   await pickup.getByRole("button", { name: "Hand over" }).click();
   await expect(page.getByText("Out", { exact: true })).toBeVisible();
 
+  await page.goto("/bookings");
+  await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);
+  await expect(liveSection.getByRole("link", bookingLink)).toBeVisible();
+  await expect(pickupSection.getByRole("link", bookingLink)).toHaveCount(0);
+
+  await page.goto(bookingUrl);
   await page.getByRole("button", { name: "Mark returned" }).click();
   const ret = page.getByRole("dialog");
   await ret.getByRole("button", { name: "All received" }).click(); // clothes: every piece is ticked as it comes back
@@ -195,38 +210,100 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   await expect(page.getByText("Returned", { exact: true })).toBeVisible();
   await expect(page.getByText("₹2,900").first()).toBeVisible(); // 2,400 + 500 damage
   await expect(page.getByText("Paid", { exact: true }).first()).toBeVisible();
+
+  await page.goto("/bookings");
+  await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);
+  const completed = page.getByRole("region", { name: "Completed Bookings" });
+  await completed.getByRole("button", { name: "Show" }).click();
+  await expect(completed.getByRole("link", bookingLink)).toBeVisible();
+  await expect(liveSection.getByRole("link", bookingLink)).toHaveCount(0);
 });
 
 // a far, random day so repeated runs never collide
 const farDay = () => new Date(Date.now() + (60 + Math.floor(Math.random() * 300)) * 86_400_000).toISOString().slice(0, 10);
 
-test("bridal: customer and payment open only when every item is free; the piece and cleaning days are kept", async ({ page }) => {
+test("should guide clothing checkout through stock, customer and payment before confirmation", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
   await rent(page, /Red bridal lehenga/);
-  await expect(page.getByText("Select pickup and return dates above to verify product availability")).toBeVisible();
+  const next = page.getByRole("button", { name: "Continue to customer" });
+  const cart = page.getByRole("complementary", { name: /Cart items/ });
+  const notifications = page.getByRole("region", { name: /Checkout notifications/ });
+  await expect(next).toBeVisible();
+  await expect(cart.getByRole("img", { name: /product photo/i })).toBeVisible();
+  await expect(page.getByLabel("Pickup date")).toHaveAttribute("required", "");
+  await expect(page.getByLabel("Return date")).toHaveAttribute("required", "");
+  await page.getByLabel("Pickup date").clear();
+  await next.click();
+  await expect(notifications.getByText("Enter a pickup date.")).toBeVisible();
+  await notifications.getByRole("button", { name: "Close toast" }).click();
+  await expect(next).toBeVisible();
+  await page.getByLabel("Pickup date").fill(dmy(farDay()));
+  await next.click();
+  await expect(notifications.getByText(/Enter a return date/)).toBeVisible();
   await expect(field(page, "Phone")).toHaveCount(0);
+  await field(page, "Maintenance buffer").fill("2");
+  await page.mouse.click(5, 5);
+  await expect(page).toHaveURL(/\/catalog$/);
+  await page.goto("/book");
+  await expect(field(page, "Maintenance buffer")).toHaveValue("2");
 
   const day = farDay();
   const end = new Date(Date.parse(day) + 2 * 86_400_000).toISOString().slice(0, 10);
   await setDates(page, day, end);
-  await expect(page.getByLabel(/^Piece 1 of/)).toHaveValue(/.+/); // the free piece is already chosen
-  await expect(field(page, "Phone")).toBeVisible();
-
-  // MG Road has one of these: a second makes the dates unavailable and closes the customer and payment parts
+  await expect(page.getByLabel(/^Piece 1 of/)).toHaveValue(/.+/);
   await page.getByRole("button", { name: "One more" }).click();
-  await expect(page.getByText("Some cart items are unavailable for the selected dates.")).toBeVisible();
+  await expect(page.getByText("Not available for these dates")).toBeVisible();
+  await next.click();
   await expect(field(page, "Phone")).toHaveCount(0);
   await page.getByRole("button", { name: "One less" }).click();
-  await expect(field(page, "Phone")).toBeVisible();
 
-  await field(page, "Maintenance Buffer").fill("2");
-  await field(page, "Phone").fill("98" + String(Date.now()).slice(-8));
+  await next.click();
+  await expect(cart.getByText(/Red bridal lehenga/)).toBeVisible();
+  await expect(field(page, "Name")).toHaveAttribute("required", "");
+  await expect(field(page, "Phone")).toHaveAttribute("required", "");
+  await expect(page.getByRole("combobox", { name: "ID type", exact: true })).toBeVisible();
+  for (const label of ["ID number", "Email", "Address"]) {
+    await expect(page.getByRole("textbox", { name: label, exact: true })).toBeVisible();
+  }
+  const payment = page.getByRole("button", { name: "Continue to payment" });
+  await payment.click();
+  await expect(notifications.getByText(/name/i)).toBeVisible();
+  const phone = "98" + String(Date.now()).slice(-8);
+  await field(page, "Phone").fill(phone);
   await field(page, "Name").fill("Playwright Cleaning");
+
+  await payment.click();
+  const review = page.getByRole("button", { name: "Review booking" });
+  const advanceMethod = page.getByLabel("Advance payment method");
+  const depositMethod = page.getByLabel("Deposit payment method");
+  await expect(advanceMethod).toBeDisabled();
+  await expect(depositMethod).toBeDisabled();
+  await review.click();
+  await expect(notifications.getByText("Enter the advance paid.")).toBeVisible();
+  await field(page, "Security deposit").fill("500");
+  await expect(depositMethod).toBeEnabled();
+  await depositMethod.selectOption("cash");
+  await field(page, "Security deposit").clear();
+  await expect(depositMethod).toBeDisabled();
+  await expect(depositMethod).toHaveValue("");
+  await field(page, "Advance paid").fill("100");
+  await expect(advanceMethod).toBeEnabled();
+  await review.click();
+  await expect(notifications.getByText("Choose how the advance was paid.")).toBeVisible();
+  await page.getByLabel("Advance payment method").selectOption("cash");
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(field(page, "Phone")).toHaveValue(phone);
+  await payment.click();
+  await expect(field(page, "Advance paid")).toHaveValue("100");
+  await review.click();
+  await expect(page.getByRole("heading", { name: "Payment summary" })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(cart.getByText(/Red bridal lehenga/)).toBeInViewport();
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
-  await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click(); // the pop-up, then the list
-  await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
+  await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click();
+  await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 });
   await openBooking(page, "Playwright Cleaning");
-  await expect(page.getByText("BR-001-M-1").first()).toBeVisible(); // the piece that was chosen
+  await expect(page.getByText("BR-001-M-1").first()).toBeVisible();
 });
 
 test("bridal: scan a tag into the cart, check out, hand over, then scan it back in", async ({ page }) => {
@@ -241,8 +318,12 @@ test("bridal: scan a tag into the cart, check out, hand over, then scan it back 
 
   const day = farDay();
   await setDates(page, day, new Date(Date.parse(day) + 86_400_000).toISOString().slice(0, 10));
+  await page.getByRole("button", { name: "Continue to customer" }).click();
   await field(page, "Phone").fill("97" + String(Date.now()).slice(-8));
   await field(page, "Name").fill("Scanned Bride");
+  await page.getByRole("button", { name: "Continue to payment" }).click();
+  await field(page, "Advance paid").fill("0");
+  await page.getByRole("button", { name: "Review booking" }).click();
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
   await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click(); // the pop-up, then the list
   await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
@@ -312,14 +393,21 @@ test("bridal: Edit changes a booking and takes a payment in the same card; the m
   await rent(page, /Kanjivaram silk saree/);
   const day = farDay();
   await setDates(page, day, new Date(Date.parse(day) + 2 * 86_400_000).toISOString().slice(0, 10));
-  await field(page, "Phone").fill("97" + String(Date.now()).slice(-8));
+  await page.getByRole("button", { name: "Continue to customer" }).click();
+  const phone = "97" + String(Date.now()).slice(-8);
+  await field(page, "Phone").fill(phone);
   await field(page, "Name").fill("Edit Card Bride");
+  await page.getByRole("button", { name: "Continue to payment" }).click();
+  await field(page, "Advance paid").fill("0");
   await field(page, "Security Deposit").fill("500");
   await page.getByLabel("Deposit payment method").selectOption("cash");
+  await page.getByRole("button", { name: "Review booking" }).click();
   await page.getByRole("button", { name: /^Confirm Booking/ }).click();
   await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click(); // the pop-up, then the list
   await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
-  await openBooking(page, "Edit Card Bride");
+  await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);
+  await page.getByRole("link", { name: new RegExp(phone) }).click();
+  await expect(page).toHaveURL(/\/rentals\//);
 
   // the payment summary shows the deposit once, with how much is held now, and no "Received" row
   await expect(page.getByText("Security deposit", { exact: true })).toBeVisible();
@@ -331,11 +419,25 @@ test("bridal: Edit changes a booking and takes a payment in the same card; the m
   // Edit opens the booking card: take a payment and add a note there
   await page.getByRole("button", { name: "Edit" }).click();
   await expect(page).toHaveURL(/\/book\?edit=/);
+  await page.getByRole("button", { name: "Continue to customer" }).click();
+  await page.getByRole("button", { name: "Continue to payment" }).click();
   await field(page, "Take a payment now").fill("700");
   await page.getByLabel("Payment method").selectOption("upi");
-  await page.locator("textarea").fill("changed from the edit card");
+  await page.getByLabel("Notes").fill("changed from the edit card");
+  await page.getByRole("button", { name: "Review booking" }).click();
   await page.getByRole("button", { name: "Save change" }).click();
   await expect(page).toHaveURL(/\/rentals\//, { timeout: 15_000 });
   await expect(page.getByText("changed from the edit card")).toBeVisible();
   await expect(page.getByText(/^Payment recorded|Part paid/).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Cancel booking", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm Cancellation & Release Dates" }).click();
+  await expect(page.getByText("Cancelled", { exact: true }).first()).toBeVisible();
+
+  await page.goto("/bookings");
+  await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);
+  await page.getByRole("combobox", { name: "Status", exact: true }).selectOption("cancelled");
+  const cancelled = page.getByRole("region", { name: "Cancelled Bookings" });
+  await expect(cancelled.getByRole("link", { name: new RegExp(phone) })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Pickups & Returns" })).toHaveCount(0);
 });

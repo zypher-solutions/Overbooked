@@ -55,6 +55,8 @@ function defaultPeriod(kind: Template["kind"] | undefined, tz: string, checkIn: 
 }
 
 export type Piece = { unit_id: string; code: string };
+type Availability = Record<string, { free: number; total: number }>;
+const EMPTY_AVAILABILITY: Availability = {};
 
 /** everything the booking form knows and does; the shared form and a module's own form draw it */
 export function useBookingForm() {
@@ -203,9 +205,13 @@ export function useBookingForm() {
   const wait = (k: "avail" | "pieces" | "quote", ms: number) => { const w = firstCheck.current[k] ? 0 : ms; firstCheck.current[k] = false; return w; };
 
   // ---- availability for the period ----
-  const [avail, setAvail] = useState<Record<string, { free: number; total: number }>>({});
+  const availabilityKey = JSON.stringify([branchId, startIso, endIso, cleaning, editing?.id]);
+  const [availability, setAvailability] = useState<{ key: string; rows: Availability; error?: string } | null>(null);
+  const currentAvailability = availability?.key === availabilityKey ? availability : null;
+  const avail = currentAvailability?.rows ?? EMPTY_AVAILABILITY;
   useEffect(() => {
     if (!periodOk || !branchId) return;
+    let live = true;
     const t = setTimeout(async () => {
       try {
         const rows = await call<{ variation_id: string; free: number; total: number }[]>("branch_availability",
@@ -215,13 +221,18 @@ export function useBookingForm() {
         for (const u of editing?.unit_reservations ?? []) {
           if (u.state === "held" && u.units) own.set(u.units.variation_id, (own.get(u.units.variation_id) ?? 0) + 1);
         }
-        setAvail(Object.fromEntries(rows.map((r) => [r.variation_id, { free: Math.min(r.total, r.free + (own.get(r.variation_id) ?? 0)), total: r.total }])));
+        if (live) setAvailability({ key: availabilityKey, rows: Object.fromEntries(rows.map((r) => [
+          r.variation_id, { free: Math.min(r.total, r.free + (own.get(r.variation_id) ?? 0)), total: r.total },
+        ])) });
       } catch (e) {
-        toast.error(errorText(e));
+        if (!live) return;
+        const error = errorText(e);
+        setAvailability({ key: availabilityKey, rows: EMPTY_AVAILABILITY, error });
+        if (!byPiece) toast.error(error);
       }
     }, wait("avail", 250));
-    return () => clearTimeout(t);
-  }, [branchId, startIso, endIso, periodOk, editing, cleaning]);
+    return () => { live = false; clearTimeout(t); };
+  }, [availabilityKey, branchId, startIso, endIso, periodOk, editing, cleaning, byPiece]);
 
   // ---- exact pieces (bridal and groom): the free pieces of every item for these dates, each booked piece
   // is chosen, as in TRENDZ. A set is made of other items, so it only needs enough free sets.
@@ -230,9 +241,11 @@ export function useBookingForm() {
     return v?.template?.kind === "wearable" && !v.product.is_set;
   }) : []), [byPiece, lines, variations]);
   const pieceKey = pieceLines.map((l) => l.variation_id).join(",");
-  const [pieces, setPieces] = useState<Record<string, Piece[]> | null>(null); // null: not checked for these dates yet
+  const pieceRequestKey = JSON.stringify([availabilityKey, pieceKey]);
+  const [pieceResult, setPieceResult] = useState<{ key: string; rows: Record<string, Piece[]>; error?: string } | null>(null);
+  const currentPieces = pieceResult?.key === pieceRequestKey ? pieceResult : null;
+  const pieces = currentPieces?.rows ?? null;
   useEffect(() => {
-    setPieces(null);
     if (!byPiece || !periodOk || !branchId || !pieceKey) return;
     let live = true;
     const t = setTimeout(async () => {
@@ -246,13 +259,13 @@ export function useBookingForm() {
             .map((u) => ({ unit_id: u.unit_id, code: u.units!.code }));
           return [vid, [...own, ...rows].sort((a, b) => a.code.localeCompare(b.code))] as const;
         }));
-        if (live) setPieces(Object.fromEntries(entries));
+        if (live) setPieceResult({ key: pieceRequestKey, rows: Object.fromEntries(entries) });
       } catch (e) {
-        if (live) { setPieces({}); toast.error(errorText(e)); }
+        if (live) setPieceResult({ key: pieceRequestKey, rows: {}, error: errorText(e) });
       }
     }, wait("pieces", 250));
     return () => { live = false; clearTimeout(t); };
-  }, [byPiece, periodOk, branchId, pieceKey, startIso, endIso, cleaning, editing]);
+  }, [byPiece, periodOk, branchId, pieceKey, pieceRequestKey, startIso, endIso, cleaning, editing]);
 
   // every booked piece starts on the first free one; staff can change it (a piece that is no longer free is replaced)
   const lineSig = lines.map((l) => `${l.variation_id}:${l.qty}`).join(",");
@@ -269,48 +282,65 @@ export function useBookingForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pieces, lineSig]);
 
-  // customer and payment open only when every item is free for the dates (TRENDZ: "unlocked when products are available")
+  // Clothing checkout can continue once each cart line has stock for the selected dates.
   const shortItems = useMemo(() => lines.filter((l) => {
     const v = variations.get(l.variation_id);
     if (!byPiece || !v) return false;
     if (pieceLines.includes(l)) return pieces !== null && (pieces[l.variation_id]?.length ?? 0) < l.qty;
     return (avail[l.variation_id]?.free ?? 0) < l.qty;
   }), [byPiece, lines, variations, pieceLines, pieces, avail]);
-  const checkingStock = byPiece && periodOk && lines.length > 0 && pieceLines.length > 0 && pieces === null;
-  const detailsOpen = !byPiece || !!editing || (periodOk && lines.length > 0 && !checkingStock && shortItems.length === 0);
+  const needsBranchAvailability = pieceLines.length < lines.length;
+  const checkingStock = byPiece && periodOk && !!branchId && lines.length > 0 && (
+    !products || (pieceLines.length > 0 && !currentPieces) || (needsBranchAvailability && !currentAvailability)
+  );
+  const stockError = (pieceLines.length ? currentPieces?.error : undefined)
+    ?? (needsBranchAvailability ? currentAvailability?.error : undefined);
+  const pieceProblem = (): string | null => {
+    for (const line of pieceLines) {
+      const label = variations.get(line.variation_id)?.product.name ?? "this item";
+      const free = pieces?.[line.variation_id] ?? [];
+      for (let i = 0; i < line.qty; i++) {
+        const id = line.unit_ids[i];
+        if (!id) return `Choose a physical piece for ${label} (piece ${i + 1}).`;
+        if (!free.some((piece) => piece.unit_id === id)) return `The piece chosen for ${label} (piece ${i + 1}) is no longer free. Choose another.`;
+      }
+    }
+    return null;
+  };
 
   // ---- live quote ----
-  const [quote, setQuote] = useState<Quote | null>(null);
-  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const { adults, children, withDriver, wholeProperty, addOns: draftAddOns } = d;
   const quoteInput = useMemo(() => ({
-    branch_id: branchId, start_at: startIso, end_at: endIso, adults: d.adults, children: d.children,
-    with_driver: d.withDriver && hasVehicle, whole_property: d.wholeProperty,
+    branch_id: branchId, start_at: startIso, end_at: endIso, adults, children,
+    with_driver: withDriver && hasVehicle, whole_property: wholeProperty,
     lines: lines.map((l) => ({
       variation_id: l.variation_id, qty: l.qty,
       ...(l.amount_override.trim() !== "" ? { amount_override: num(l.amount_override) } : {}),
       ...(l.unit_ids.length === l.qty ? { unit_ids: l.unit_ids } : {}),
     })),
-    add_ons: Object.entries(d.addOns).map(([add_on_id, quantity]) => ({ add_on_id, quantity })),
+    add_ons: Object.entries(draftAddOns).map(([add_on_id, quantity]) => ({ add_on_id, quantity })),
     ...(cleaning !== undefined ? { cleaning_days: cleaning } : {}),
-  }), [d, branchId, lines, startIso, endIso, hasVehicle, cleaning]);
+  }), [branchId, startIso, endIso, adults, children, withDriver, hasVehicle, wholeProperty, lines, draftAddOns, cleaning]);
+  const canQuote = periodOk && !!branchId && (lines.length > 0 || wholeProperty);
+  const [quoteResult, setQuoteResult] = useState<{ input: typeof quoteInput; quote?: Quote; error?: string } | null>(null);
+  const currentQuote = canQuote && quoteResult?.input === quoteInput ? quoteResult : null;
+  const quote = currentQuote?.quote ?? null;
+  const quoteError = currentQuote?.error ?? null;
+  const quotePending = canQuote && !currentQuote;
 
   useEffect(() => {
-    if (!periodOk || !branchId || (lines.length === 0 && !d.wholeProperty)) {
-      setQuote(null);
-      setQuoteError(null);
-      return;
-    }
+    if (!canQuote) return;
+    let live = true;
     const t = setTimeout(async () => {
       try {
-        setQuote(await call<Quote>("quote_rental", { p: quoteInput }));
-        setQuoteError(null);
+        const quote = await call<Quote>("quote_rental", { p: quoteInput });
+        if (live) setQuoteResult({ input: quoteInput, quote });
       } catch (e) {
-        setQuote(null);
-        setQuoteError(errorText(e));
+        if (live) setQuoteResult({ input: quoteInput, error: errorText(e) });
       }
     }, wait("quote", 350));
-    return () => clearTimeout(t);
-  }, [quoteInput, periodOk, branchId, lines.length, d.wholeProperty]);
+    return () => { live = false; clearTimeout(t); };
+  }, [quoteInput, canQuote]);
 
   // ---- cart ----
   const addLine = (variationId: string) => {
@@ -334,8 +364,13 @@ export function useBookingForm() {
   const [tried, setTried] = useState(false);
   const money_ = {
     discount: moneyError(d.discount, { label: "discount", max: quote?.total_before_discount ?? 0, maxText: `the rental total (${rupees(quote?.total_before_discount ?? 0)})` }),
-    advance: moneyError(d.advance, { label: "advance", max: total, maxText: `the total (${rupees(total)})` }),
-    deposit: moneyError(d.deposit, { label: "deposit", max: 1_000_000 }),
+    advance: moneyError(d.advance, {
+      label: byPiece ? "advance paid" : "advance",
+      required: byPiece && !editId,
+      max: total,
+      maxText: `the total (${rupees(total)})`,
+    }),
+    deposit: moneyError(byPiece && editing ? d.depositAgreed : d.deposit, { label: "deposit", max: 1_000_000 }),
     advanceMethod: num(d.advance) > 0 && !d.advanceMethod ? "Choose how the advance was paid." : null,
     depositMethod: num(d.deposit) > 0 && !d.depositMethod ? "Choose how the deposit was paid." : null,
     notes: textLimitError(d.notes, "notes", 500),
@@ -351,15 +386,8 @@ export function useBookingForm() {
     if (!periodOk) return toast.error(`The ${word("end").toLowerCase()} must be after the ${word("start").toLowerCase()}.`);
     if (!quote) return toast.error(quoteError ?? "Add at least one item.");
     if (cleaningBad) return toast.error("Cleaning days cannot be negative.");
-    for (const l of pieceLines) {
-      const label = variations.get(l.variation_id)?.product.name ?? "this item";
-      const free = pieces?.[l.variation_id] ?? [];
-      for (let i = 0; i < l.qty; i++) {
-        const id = l.unit_ids[i];
-        if (!id) return toast.error(`Please choose a piece for ${label} (piece ${i + 1}).`);
-        if (!free.some((p) => p.unit_id === id)) return toast.error(`The piece chosen for ${label} (piece ${i + 1}) is no longer free. Choose another.`);
-      }
-    }
+    const invalidPiece = pieceProblem();
+    if (invalidPiece) return toast.error(invalidPiece);
     if (!customer) { const bad = customerProblem(d.customer); if (bad) return toast.error(bad); }
     if (num(d.advance) > 0 && !d.advanceMethod) return toast.error("Choose how the advance was paid.");
     if (num(d.deposit) > 0 && !d.depositMethod) return toast.error("Choose how the deposit was paid.");
@@ -449,7 +477,8 @@ export function useBookingForm() {
   const quoteLineFor = (variationId: string) => quote?.lines.find((l) => l.variation_id === variationId && l.reserve);
 
   return {
-    router, shop, tz, myBranchId, activeBranches, categories, addOns, templateOf, feature, word, businessModule, products, editId, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, kinds, hasRoom, hasVehicle, roomShop, avail, pieceLines, pieces, shortItems, checkingStock, detailsOpen, quote, quoteError, addLine, updateLine, busy, editPay, setEditPay, total, shown, submit, booked, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, quoteLineFor,
+    router, shop, tz, myBranchId, activeBranches, categories, addOns, templateOf, feature, word, businessModule, products, editId, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, kinds, hasRoom, hasVehicle, roomShop, avail, pieceLines, pieces, shortItems, checkingStock, quote, quoteError, addLine, updateLine, busy, editPay, setEditPay, total, shown, submit, booked, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, quoteLineFor,
+    stockError, quotePending, pieceProblem, moneyErrors: money_,
   };
 }
 export type BookingForm = ReturnType<typeof useBookingForm>;

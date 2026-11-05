@@ -175,6 +175,12 @@
   border: 1px solid var(--color-border);
 }
 
+@utility status-badge {
+  background-color: color-mix(in oklab, var(--badge-tone) 9%, var(--surface));
+  border-color: color-mix(in oklab, var(--badge-tone) 24%, var(--surface));
+  color: color-mix(in oklab, var(--badge-tone) 70%, var(--foreground));
+}
+
 @utility row-zebra {
   &:nth-child(even) {
     background: oklch(0 0 0 / 2%);

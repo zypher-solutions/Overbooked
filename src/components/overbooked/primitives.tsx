@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-type Tone = "gold" | "emerald" | "rust" | "muted" | "indigo";
+type Tone = "accent" | "gold" | "emerald" | "rust" | "muted" | "indigo";
 
 const toneClasses: Record<Tone, string> = {
-  gold: "border-amber/35 bg-amber/10 text-amber",
-  emerald: "border-emerald/40 bg-emerald/12 text-emerald",
-  rust: "border-rust/45 bg-rust/14 text-rust",
-  muted: "border-border bg-white/5 text-muted-foreground",
-  indigo: "border-indigo/45 bg-indigo/14 text-indigo",
+  accent: "[--badge-tone:var(--gold)]",
+  gold: "[--badge-tone:var(--amber)]",
+  emerald: "[--badge-tone:var(--emerald)]",
+  rust: "[--badge-tone:var(--rust)]",
+  muted: "[--badge-tone:var(--muted-foreground)]",
+  indigo: "[--badge-tone:var(--indigo)]",
 };
 
 export function StatusBadge({
@@ -19,11 +20,11 @@ export function StatusBadge({
   children: ReactNode;
   tone?: Tone;
   className?: string;
-}) {
+}): React.JSX.Element {
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium",
+        "status-badge inline-flex max-w-full items-center rounded-full border px-2.5 py-0.5 text-xs leading-4 font-semibold",
         toneClasses[tone],
         className,
       )}

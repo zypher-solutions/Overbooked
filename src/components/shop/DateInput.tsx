@@ -35,12 +35,13 @@ interface DateInputProps {
   min?: string;
   max?: string;
   disabled?: boolean;
+  required?: boolean;
   className?: string;
   "aria-label"?: string;
   id?: string;
 }
 
-export function DateInput({ value, onChange, min, max, disabled, className, id, "aria-label": ariaLabel }: DateInputProps) {
+export function DateInput({ value, onChange, min, max, disabled, required, className, id, "aria-label": ariaLabel }: DateInputProps) {
   const [text, setText] = useState(() => isoToDisplay(value));
   const picker = useRef<HTMLInputElement>(null);
   // follow the value when it changes from outside (the calendar, a draft, another field)
@@ -63,7 +64,7 @@ export function DateInput({ value, onChange, min, max, disabled, className, id, 
 
   return (
     <div className={cn("relative", className)}>
-      <input id={id} aria-label={ariaLabel} type="text" inputMode="numeric" autoComplete="off" disabled={disabled} placeholder="DD/MM/YY" maxLength={10}
+      <input id={id} aria-label={ariaLabel} type="text" inputMode="numeric" autoComplete="off" disabled={disabled} required={required} placeholder="DD/MM/YY" maxLength={10}
         className={cn(inputClass, "w-full pr-10 font-sans tabular-nums")} value={text} onChange={(e) => type(e.target.value)} onBlur={leave} />
       <button type="button" tabIndex={-1} disabled={disabled} onClick={open} title="Open calendar" aria-label="Open calendar"
         className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-gold disabled:opacity-40">

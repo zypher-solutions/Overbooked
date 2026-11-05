@@ -30,12 +30,13 @@ export const ID_TYPES: Record<string, string> = {
 };
 
 // Find a returning customer by name or phone, or fill in a new one. Vehicles need the driving licence.
-export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicence }: {
+export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicence, showOptionalDetails = false }: {
   selected: Customer | null;
   onSelect: (c: Customer | null) => void;
   draft: NewCustomer;
   onDraft: (c: NewCustomer) => void;
   needsLicence: boolean;
+  showOptionalDetails?: boolean;
 }) {
   const [matches, setMatches] = useState<Customer[]>([]);
   // a message shows under a field once the person has left it
@@ -120,6 +121,72 @@ export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicenc
     );
   }
 
+  const optionalDetails = (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Field label="ID type">
+        <select
+          className={inputClass}
+          value={draft.id_type}
+          onChange={(e) => set({ id_type: e.target.value })}
+        >
+          <option value="">—</option>
+          {Object.entries(ID_TYPES).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="ID number">
+        <input
+          className={inputClass}
+          value={draft.id_number}
+          onChange={(e) => set({ id_number: e.target.value })}
+        />
+      </Field>
+      {needsLicence ? (
+        <>
+          <Field label="Driving licence number">
+            <input
+              className={inputClass}
+              value={draft.licence_number}
+              onChange={(e) => set({ licence_number: e.target.value })}
+            />
+          </Field>
+          <Field label="Licence valid until">
+            <DateInput
+              value={draft.licence_expiry}
+              onChange={(v) => set({ licence_expiry: v })}
+            />
+          </Field>
+        </>
+      ) : null}
+      <Field
+        label="Email"
+        error={
+          seen.email ? (emailError(draft.email, false) ?? undefined) : undefined
+        }
+      >
+        <input
+          className={inputClass}
+          inputMode="email"
+          autoCapitalize="none"
+          maxLength={254}
+          value={draft.email}
+          onBlur={() => see("email")}
+          onChange={(e) => set({ email: e.target.value })}
+        />
+      </Field>
+      <Field label="Address">
+        <input
+          className={inputClass}
+          value={draft.address}
+          onChange={(e) => set({ address: e.target.value })}
+        />
+      </Field>
+    </div>
+  );
+
   return (
     <div className="space-y-3">
       <div className="relative">
@@ -146,11 +213,11 @@ export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicenc
       </div>
       <p className="flex items-center gap-3 text-[11px] uppercase tracking-wider text-muted-foreground"><span className="h-px flex-1 bg-border" />or a new customer<span className="h-px flex-1 bg-border" /></p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Name" error={seen.name ? personNameError(draft.full_name, "customer's name") ?? undefined : undefined}>
-          <input className={inputClass} autoComplete="off" maxLength={60} value={draft.full_name} onBlur={() => see("name")} onChange={(e) => set({ full_name: e.target.value })} />
+        <Field label={showOptionalDetails ? "Name (required)" : "Name"} error={seen.name ? personNameError(draft.full_name, "customer's name") ?? undefined : undefined}>
+          <input className={inputClass} autoComplete="off" required maxLength={60} value={draft.full_name} onBlur={() => see("name")} onChange={(e) => set({ full_name: e.target.value })} />
         </Field>
-        <Field label="Phone" error={seen.phone ? phoneError(draft.phone, true) ?? undefined : undefined}>
-          <input className={inputClass} inputMode="tel" autoComplete="off" maxLength={16} value={draft.phone} onBlur={() => see("phone")} onChange={(e) => set({ phone: e.target.value })} />
+        <Field label={showOptionalDetails ? "Phone (required)" : "Phone"} error={seen.phone ? phoneError(draft.phone, true) ?? undefined : undefined}>
+          <input className={inputClass} inputMode="tel" autoComplete="off" required maxLength={16} value={draft.phone} onBlur={() => see("phone")} onChange={(e) => set({ phone: e.target.value })} />
         </Field>
       </div>
       {sameNumber ? (
@@ -174,28 +241,17 @@ export function CustomerPicker({ selected, onSelect, draft, onDraft, needsLicenc
           </ul>
         </div>
       ) : null}
-      <details className="rounded-lg border border-border px-3 py-2 text-sm" open={needsLicence}>
-        <summary className="cursor-pointer text-muted-foreground">ID {needsLicence ? "and driving licence" : ""}, email and address</summary>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <Field label="ID type">
-            <select className={inputClass} value={draft.id_type} onChange={(e) => set({ id_type: e.target.value })}>
-              <option value="">—</option>
-              {Object.entries(ID_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </Field>
-          <Field label="ID number"><input className={inputClass} value={draft.id_number} onChange={(e) => set({ id_number: e.target.value })} /></Field>
-          {needsLicence ? (
-            <>
-              <Field label="Driving licence number"><input className={inputClass} value={draft.licence_number} onChange={(e) => set({ licence_number: e.target.value })} /></Field>
-              <Field label="Licence valid until"><DateInput value={draft.licence_expiry} onChange={(v) => set({ licence_expiry: v })} /></Field>
-            </>
-          ) : null}
-          <Field label="Email" error={seen.email ? emailError(draft.email, false) ?? undefined : undefined}>
-            <input className={inputClass} inputMode="email" autoCapitalize="none" maxLength={254} value={draft.email} onBlur={() => see("email")} onChange={(e) => set({ email: e.target.value })} />
-          </Field>
-          <Field label="Address"><input className={inputClass} value={draft.address} onChange={(e) => set({ address: e.target.value })} /></Field>
-        </div>
-      </details>
+      {showOptionalDetails ? (
+        <fieldset className="space-y-3">
+          <legend className="mb-2 text-sm font-semibold text-muted-foreground">Optional details</legend>
+          {optionalDetails}
+        </fieldset>
+      ) : (
+        <details className="rounded-lg border border-border px-3 py-2 text-sm" open={needsLicence}>
+          <summary className="cursor-pointer text-muted-foreground">ID {needsLicence ? "and driving licence" : ""}, email and address</summary>
+          <div className="mt-3">{optionalDetails}</div>
+        </details>
+      )}
     </div>
   );
 }
