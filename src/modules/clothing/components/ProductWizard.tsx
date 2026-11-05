@@ -319,9 +319,6 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
         actions={<>
           {product && isOwner ? <button className={dangerButtonClass} onClick={() => setAsking({ kind: "product" })}><Trash2 className="h-4 w-4" /> Remove</button> : null}
           {!product ? <button className={ghostButtonClass} onClick={discard}>Clear form</button> : null}
-          <button className={goldButtonClass} disabled={busy} onClick={() => (step === "variations" ? void save() : step === "basic" ? goAttributes() : buildRows())}>
-            {busy ? "Saving..." : step === "variations" ? (product ? "Save changes" : "Save product") : "Next"}
-          </button>
         </>} />
 
       <ol className="mb-4 flex flex-wrap gap-2" aria-label="Steps">

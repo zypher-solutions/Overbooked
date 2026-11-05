@@ -21,6 +21,7 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
     title: "Work",
     items: [
       { href: "/", label: "Dashboard", icon: BarChart3, show: true },
+      { href: "/finance", label: "Finance", icon: Wallet, show: c.canManage },
       { href: "/bookings", label: "Bookings", icon: Calendar, show: true },
       { href: "/calendar", label: "Calendar", icon: CalendarDays, show: true },
       {
@@ -60,12 +61,6 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
     title: "People",
     items: [
       { href: "/customers", label: "Customers", icon: UserSquare, show: true },
-    ],
-  },
-  {
-    title: "Money",
-    items: [
-      { href: "/finance", label: "Finance", icon: Wallet, show: c.canManage },
     ],
   },
   // branches and staff are set up by Zypher in its console; where stock is kept shows for a Zypher support login

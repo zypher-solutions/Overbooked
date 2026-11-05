@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, LayoutGrid, List, Pencil, Search as SearchIcon, ShoppingBag, Trash2 } from "lucide-react";
+import { LayoutGrid, List, Pencil, ShoppingBag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useShop } from "@/lib/shop/ShopContext";
@@ -11,23 +11,16 @@ import { errorText, rupees } from "@/lib/shop/format";
 import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { headlinePrice, useCatalog } from "@/lib/shop/useCatalog";
 import type { Product } from "@/lib/shop/types";
-import { StockCard, stockTotals, useStock } from "@/modules/clothing/components/StockCard";
+import { stockTotals, useStock } from "@/modules/clothing/components/StockCard";
+import { RentProductDialog } from "@/modules/clothing/components/RentProductDialog";
 import { ProductDetail } from "@/modules/clothing/components/ProductDetail";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { StatusBadge, ghostButtonClass, goldButtonClass, inputClass, ListSkeleton } from "@/components/shop/ui";
 
 // All Products: every product with its stock in each branch. Tap a product for its complete details; Rent asks for the colour
 // and size, then shows what is in stock with Rent (adds to the cart). Owners and managers also get Edit; the owner gets Remove.
-const SWATCH: Record<string, string> = {
-  black: "#111111", white: "#ffffff", red: "#c62828", maroon: "#7b1e3a", wine: "#722f37", pink: "#e8799f", "hot pink": "#e91e8c", peach: "#ffb08a",
-  orange: "#ef7d22", yellow: "#f4d03f", mustard: "#c9992b", gold: "#c9a227", green: "#2e8b57", "bottle green": "#0b5d3b", olive: "#6b6b2a", teal: "#1a8a8a",
-  blue: "#2a6fd6", "royal blue": "#2646b3", navy: "#17224d", "sky blue": "#7ec0ee", purple: "#7b3fa0", lavender: "#b9a3dd", violet: "#6a3fb5",
-  grey: "#8a8f94", gray: "#8a8f94", silver: "#c2c6ca", brown: "#7a5133", beige: "#d9c4a3", cream: "#f3ead2", ivory: "#f7f1e1", rust: "#b5532f",
-};
-const swatchOf = (name: string) => SWATCH[name.trim().toLowerCase()];
-
 export default function AllRentals() {
-  const { activeBranches, myBranchId, tz, branches, canManage, isOwner, categories, templateOf } = useShop();
+  const { activeBranches, myBranchId, tz, branches, canManage, isOwner, categories } = useShop();
   const { products, reload } = useCatalog({ includeInactive: canManage });
   const [deleting, setDeleting] = useState<Product | null>(null);
   const remove = async (p: Product) => {
@@ -47,27 +40,6 @@ export default function AllRentals() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [open, setOpen] = useState<Product | null>(null); // the Rent flow: colour and size, then the stock with Rent
   const [detail, setDetail] = useState<Product | null>(null); // the complete details of a product
-  // opening a product: first a small card to choose the colour and size, then the stock of what was chosen
-  const [step, setStep] = useState<"filter" | "stock">("stock");
-  const [pick, setPick] = useState<Record<string, string[]>>({});
-  const optionsOf = (p: Product) => {
-    const vars = (p.product_variations ?? []).filter((v) => v.is_enabled);
-    const order = (templateOf(p.category_id)?.variation_fields ?? []).map((x) => x.key);
-    const rank = (k: string) => { const i = order.indexOf(k); return i < 0 ? order.length : i; };
-    return Array.from(new Set(vars.flatMap((v) => Object.keys(v.attributes ?? {})))).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
-      .map((key) => ({ key, values: Array.from(new Set(vars.map((v) => String(v.attributes?.[key] ?? "").trim()).filter(Boolean))) }))
-      .filter((o) => o.values.length > 1);
-  };
-  const openProduct = (p: Product) => { setPick({}); setStep(optionsOf(p).length ? "filter" : "stock"); setOpen(p); };
-  const toggle = (key: string, value: string) => setPick((x) => {
-    const now = x[key] ?? [];
-    return { ...x, [key]: now.includes(value) ? now.filter((y) => y !== value) : [...now, value] };
-  });
-  // how many variations the current choice matches, so the button can say what Search will show
-  const matches = (p: Product) => (p.product_variations ?? []).filter((v) => v.is_enabled)
-    .filter((v) => Object.entries(pick).every(([k, vals]) => !vals.length || vals.includes(String(v.attributes?.[k] ?? "").trim()))).length;
-  const label = (k: string) => k.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
-
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
     return (products ?? []).filter((p) => {
@@ -96,7 +68,7 @@ export default function AllRentals() {
   };
   const manage = (p: Product, full = false) => (
     <div className={cn("flex items-center gap-2", full ? "border-t border-border/60 px-3 py-2.5" : "shrink-0 self-center pr-3")}>
-      {p.is_active ? <button type="button" className={cn(goldButtonClass, "px-4 py-1.5 text-xs", full && "min-h-10 flex-1 text-sm")} onClick={() => openProduct(p)}><ShoppingBag className="h-3.5 w-3.5" /> Rent</button> : null}
+      {p.is_active ? <button type="button" className={cn(goldButtonClass, "px-4 py-1.5 text-xs", full && "min-h-10 flex-1 text-sm")} onClick={() => setOpen(p)}><ShoppingBag className="h-3.5 w-3.5" /> Rent</button> : null}
       {canManage ? <Link href={`/catalog/${p.id}`} className={cn(ghostButtonClass, full && "flex-1")}><Pencil className="h-3.5 w-3.5" /> Edit</Link> : null}
       {canManage && !p.is_active ? <button type="button" className={ghostButtonClass} onClick={() => void reactivate(p)}>Reactivate</button> : null}
       {isOwner ? <button type="button" title="Remove product" aria-label={`Remove ${p.name}`} onClick={() => setDeleting(p)}
@@ -225,78 +197,16 @@ export default function AllRentals() {
 
       {/* the complete details of a product: tap a product; Rent starts the booking */}
       <Dialog open={detail !== null} onOpenChange={(o) => { if (!o) setDetail(null); }}>
-        <DialogContent className="max-h-[92dvh] gap-6 overflow-y-auto p-5 sm:max-w-4xl sm:rounded-2xl sm:p-8">
+        <DialogContent className="max-h-[92dvh] gap-0 overflow-y-auto bg-surface p-4 sm:max-w-4xl sm:rounded-2xl sm:p-6">
           <DialogTitle className="sr-only">{detail?.name ?? "Product"}</DialogTitle>
           <DialogDescription className="sr-only">Everything about this product: stock, who has it, bookings, earnings and every piece.</DialogDescription>
           {detail ? <ProductDetail product={detail} stock={stock}
-            onRent={() => { const p = detail; setDetail(null); openProduct(p); }}
+            onRent={() => { const p = detail; setDetail(null); setOpen(p); }}
             onRemove={() => { setDeleting(detail); setDetail(null); }} /> : null}
         </DialogContent>
       </Dialog>
 
-      {/* step 1: a small card to choose the colour and size */}
-      <Dialog open={open !== null && step === "filter"} onOpenChange={(o) => { if (!o) setOpen(null); }}>
-        <DialogContent className="max-h-[92dvh] gap-0 overflow-y-auto rounded-3xl p-0 sm:max-w-md">
-          {open ? <>
-            <div className="flex items-center gap-4 bg-accent/60 px-6 pb-5 pt-6 pr-12">
-              {open.image_url ? <img src={open.image_url} alt="" className="h-16 w-16 shrink-0 rounded-2xl object-cover" />
-                : <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#101715] text-[10px] text-white/60">No image</span>}
-              <div className="min-w-0">
-                <DialogTitle className="truncate font-display text-xl font-bold">{open.name}</DialogTitle>
-                <DialogDescription className="mt-0.5 font-mono text-xs">{open.sku} · {price(open)}/day</DialogDescription>
-              </div>
-            </div>
-            <div className="space-y-5 px-6 py-5">
-              <p className="text-sm text-muted-foreground">What does the customer want? Pick a colour and a size and we will show what is in stock.</p>
-              {optionsOf(open).map((o) => (
-                <div key={o.key}>
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label(o.key)}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {o.values.map((val) => {
-                      const on = pick[o.key]?.includes(val);
-                      const sw = /^colou?r$/i.test(o.key) ? swatchOf(val) : undefined;
-                      return (
-                        <button key={val} type="button" aria-pressed={on} onClick={() => toggle(o.key, val)}
-                          className={cn("inline-flex min-h-11 items-center gap-2 rounded-full border-2 px-4 text-sm font-medium transition-all",
-                            on ? "border-neon bg-neon/15 text-foreground shadow-sm" : "border-border bg-white hover:border-gold/40")}>
-                          {sw ? <span className="h-5 w-5 rounded-full border border-black/15" style={{ background: sw }} /> : null}
-                          {val}
-                          {on ? <Check className="h-4 w-4 text-gold" aria-hidden="true" /> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center justify-between gap-3 border-t border-border bg-white px-6 py-4">
-              <button type="button" className="text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => { setPick({}); setStep("stock"); }}>Show all</button>
-              <button type="button" className={cn(goldButtonClass, "min-h-11 px-6")} onClick={() => setStep("stock")}>
-                <SearchIcon className="h-4 w-4" /> Search · {matches(open)} {matches(open) === 1 ? "match" : "matches"}
-              </button>
-            </div>
-          </> : null}
-        </DialogContent>
-      </Dialog>
-
-      {/* step 2: the product opened, as in TRENDZ: photo, name, code, price, then each size / colour of the choice with its stock per branch */}
-      <Dialog open={open !== null && step === "stock"} onOpenChange={(o) => { if (!o) setOpen(null); }}>
-        <DialogContent className="max-h-[92dvh] gap-6 overflow-y-auto p-5 sm:max-w-4xl sm:rounded-2xl sm:p-8">
-          <DialogTitle className="sr-only">{open?.name ?? "Product"}</DialogTitle>
-          <DialogDescription className="sr-only">Stock of each size and colour in every branch. Rent adds it to the cart.</DialogDescription>
-          {open ? <>
-            {Object.values(pick).some((a) => a.length) ? (
-              <p className="-mb-2 flex flex-wrap items-center gap-2 pr-8 text-sm text-muted-foreground">
-                Showing {Object.values(pick).flat().join(", ")}
-                <button type="button" className="font-medium text-gold hover:underline" onClick={() => setStep("filter")}>Change</button>
-              </p>
-            ) : optionsOf(open).length ? (
-              <p className="-mb-2 pr-8 text-sm text-muted-foreground">Showing every variation <button type="button" className="font-medium text-gold hover:underline" onClick={() => setStep("filter")}>Choose colour or size</button></p>
-            ) : null}
-            <StockCard product={open} stock={stock} pick={pick} />
-          </> : null}
-        </DialogContent>
-      </Dialog>
+      {open ? <RentProductDialog key={open.id} product={open} stock={stock} dailyPrice={price(open)} onClose={() => setOpen(null)} /> : null}
     </>
   );
 }

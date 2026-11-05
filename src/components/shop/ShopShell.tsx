@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   BarChart3, Boxes, Building2, Calendar, CalendarClock, CalendarDays, CalendarPlus, ChevronDown, ClipboardList, Home, LayoutGrid, LineChart,
-  LogOut, Menu, Plus, ScanLine, Settings2, ShoppingBag, Store, Tag, Upload, Users, UserRound, Wallet, X, type LucideIcon,
+  LogOut, MapPin, Menu, Plus, ScanLine, Settings2, ShoppingBag, Store, Tag, Upload, Users, UserRound, Wallet, X, type LucideIcon,
 } from "lucide-react";
 import { useCart } from "@/modules/clothing/cart";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,7 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { OfflineBanner } from "@/components/overbooked/OfflineBanner";
 import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { goldButtonClass } from "./ui";
+import { StatusBadge, goldButtonClass } from "./ui";
 import { SubscriptionBanner } from "./Subscription";
 import { shopModules } from "@/modules/registry";
 import type { NavGroup } from "@/lib/shop/nav";
@@ -79,22 +79,29 @@ export function ShopShell({ children }: { children: ReactNode }) {
             <NavWithTab groups={visible} pathname={pathname} onPick={() => setOpen(false)} />
           </Suspense>
         </nav>
-        <div className="space-y-2 border-t border-border p-4 text-xs">
+        <div className="space-y-3 border-t border-sidebar-border px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button type="button" aria-label="Open profile menu"
-                className={cn("group flex w-full min-w-0 items-start gap-3 rounded-xl p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold",
-                  pathname === "/account" ? "bg-gold/10" : "hover:bg-black/5")}>
-                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gold/30 bg-gold/10 text-gold">
-                  <UserRound className="h-5 w-5" aria-hidden="true" />
+                className={cn("group block w-full min-w-0 rounded-xl border border-sidebar-border bg-surface p-3 text-left transition-colors hover:border-gold/35 hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold data-[state=open]:border-gold/35 data-[state=open]:bg-sidebar-accent",
+                  pathname === "/account" && "border-gold/35 bg-sidebar-accent")}>
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-sidebar-accent text-gold">
+                    <UserRound className="size-5" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-foreground">{profile?.full_name?.trim() || "Account holder"}</span>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">{user?.phone?.trim() || "Phone not set"}</span>
+                  </span>
+                  <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-foreground">{profile?.full_name?.trim() || "Account holder"}</span>
-                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">{user?.phone?.trim() || "Phone not set"}</span>
-                  <span className="mt-1 block truncate text-xs font-medium text-gold">{isSupport ? "Zypher support" : role}</span>
-                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">{myBranch}</span>
+                <span className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-sidebar-border pt-2">
+                  <StatusBadge tone="accent" className="capitalize">{isSupport ? "Zypher support" : role.replace("_", " ")}</StatusBadge>
+                  <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                    <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
+                    <span className="truncate">{myBranch}</span>
+                  </span>
                 </span>
-                <ChevronDown className="mt-3 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-56">
@@ -108,7 +115,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <p className="pl-[4rem] font-mono text-[11px] text-muted-foreground">Overbooked v0.1.0</p>
+          <p className="px-1 text-xs text-muted-foreground">Overbooked <span className="tabular-nums">v0.1.0</span></p>
         </div>
       </aside>
 

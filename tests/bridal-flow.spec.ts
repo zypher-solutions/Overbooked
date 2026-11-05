@@ -18,9 +18,10 @@ const setDates = async (page: Page, from: string, to: string) => {
   await page.getByLabel("Return date").fill(dmy(to));
 };
 // the booking takes its items from the cart: open the product on All Rentals, press Rent on the first free branch, then open the booking form
-const rent = async (page: Page, product: RegExp) => {
+const rent = async (page: Page, product: string) => {
   await page.goto("/catalog");
-  await page.getByRole("row", { name: product }).first().getByRole("button", { name: "Rent", exact: true }).click(); // Rent on the product, then colour and size
+  await page.getByRole("textbox", { name: "Search products" }).fill(product);
+  await page.getByRole("button", { name: "Rent", exact: true }).click();
   // a product with colours and sizes first asks which ones: Search shows them all
   const search = page.getByRole("dialog").getByRole("button", { name: "Show all" });
   if (await search.isVisible({ timeout: 1500 }).catch(() => false)) await search.click();
@@ -37,7 +38,7 @@ const num = (t: string | null) => Number((t ?? "").replace(/[^0-9.]/g, ""));
 
 test("bridal: a lost piece is charged, a return that leaves money unpaid asks first, and Finance shows what is owed", async ({ page }) => {
   await signIn(page, "owner@groom.test");
-  await rent(page, /Cream sherwani/);
+  await rent(page, "Cream sherwani");
   const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10); // India date
   await setDates(page, today, new Date(Date.parse(today) + 86_400_000).toISOString().slice(0, 10));
   await page.getByRole("button", { name: "Continue to customer" }).click();
@@ -91,7 +92,7 @@ test("bridal: a lost piece is charged, a return that leaves money unpaid asks fi
 test("bridal: Cancel offers a no-show once the pickup date has passed, and refunds the deposit and what was paid less the fee", async ({ page }) => {
   await signIn(page, "owner@groom.test");
   // a booking for today (the start date is allowed today), then the planned start passes only after midnight: so check the plain cancel
-  await rent(page, /Cream sherwani/);
+  await rent(page, "Cream sherwani");
   const day = farDay();
   await setDates(page, day, new Date(Date.parse(day) + 86_400_000).toISOString().slice(0, 10));
   await page.getByRole("button", { name: "Continue to customer" }).click();

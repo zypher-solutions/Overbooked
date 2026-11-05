@@ -21,9 +21,10 @@ const setDates = async (page: Page, from: string, to: string) => {
   await page.getByLabel("Return date").fill(dmy(to));
 };
 // the booking takes its items from the cart: open the product on All Rentals, press Rent on the first free branch, then open the booking form
-const rent = async (page: Page, product: RegExp) => {
+const rent = async (page: Page, product: string) => {
   await page.goto("/catalog");
-  await page.getByRole("row", { name: product }).first().getByRole("button", { name: "Rent", exact: true }).click(); // Rent on the product, then colour and size
+  await page.getByRole("textbox", { name: "Search products" }).fill(product);
+  await page.getByRole("button", { name: "Rent", exact: true }).click();
   // a product with colours and sizes first asks which ones: Search shows them all
   const search = page.getByRole("dialog").getByRole("button", { name: "Show all" });
   if (await search.isVisible({ timeout: 1500 }).catch(() => false)) await search.click();
@@ -41,16 +42,26 @@ test("a bridal owner gets the TRENDZ menu", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   const nav = page.getByLabel("Main navigation");
   await expect(nav.getByText("Kalyani Bridal")).toBeVisible();
-  for (const item of ["Dashboard", "Finance", "Bookings", "Inventory Search", "Calendar", "Customers", "All Products",
+  for (const item of ["Dashboard", "Finance", "Bookings", "Inventory search", "Calendar", "Customers", "Products",
     "Add New Product", "Categories", "CSV Import", "Shop settings"]) {
     await expect(nav.getByRole("link", { name: item, exact: true })).toBeVisible();
   }
+  await expect.poll(async () => (await nav.getByRole("link").allTextContents()).slice(0, 3).map((name) => name.trim()))
+    .toEqual(["Dashboard", "Finance", "Bookings"]);
+  const work = nav.getByRole("button", { name: "Work", exact: true });
+  await work.click();
+  await expect(nav.getByRole("link", { name: "Finance", exact: true })).toHaveCount(0);
+  await work.click();
+  await nav.getByRole("button", { name: "Open profile menu" }).click();
+  await expect(page.getByRole("menuitem", { name: "Account settings" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeVisible();
+  await page.keyboard.press("Escape");
   // branches, staff and stock locations are set up by Zypher, not by the shop
   for (const item of ["Branch Management", "Staff Management", "Stock Locations"]) {
     await expect(nav.getByRole("link", { name: item, exact: true })).toHaveCount(0);
   }
   // All Products has no tabs (as in TRENDZ): Categories is its own menu item
-  await nav.getByRole("link", { name: "All Products", exact: true }).click();
+  await nav.getByRole("link", { name: "Products", exact: true }).click();
   await expect(page.getByRole("heading", { name: "All Products" })).toBeVisible();
   await expect(page.getByRole("tab")).toBeHidden();
   // the setup screens live only in the Zypher console: the shop has no such addresses
@@ -158,7 +169,7 @@ test("Zypher lands in the console and sees every shop", async ({ page }) => {
 
 test("bridal: book, hand over and return with a damage charge", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
-  await rent(page, /Kanjivaram silk saree/);
+  await rent(page, "Kanjivaram silk saree");
   // a quiet date far ahead so repeated runs never collide
   const day = new Date(Date.now() + (60 + Math.floor(Math.random() * 300)) * 86_400_000).toISOString().slice(0, 10);
   const end = new Date(Date.parse(day) + 2 * 86_400_000).toISOString().slice(0, 10);
@@ -185,8 +196,13 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   await openBooking(page, "Playwright Bride");
   const bookingUrl = page.url();
   await expect(page.getByText("Booked", { exact: true })).toBeVisible();
+  const overview = page.getByRole("region", { name: "Booking overview" });
+  await expect(overview.getByText("Playwright Bride", { exact: true })).toBeVisible();
+  await expect(overview.getByRole("heading", { name: "Awaiting pickup" })).toBeVisible();
+  await expect(overview.getByText("Stock hold ends", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Payment summary" }).getByText("Paid toward rental")).toBeVisible();
 
-  await page.getByRole("button", { name: "Hand over" }).click();
+  await overview.getByRole("button", { name: "Hand over" }).click();
   const pickup = page.getByRole("dialog");
   await pickup.getByRole("radio", { name: "Cash" }).first().click();
   await pickup.getByRole("button", { name: "Hand over" }).click();
@@ -198,7 +214,7 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   await expect(pickupSection.getByRole("link", bookingLink)).toHaveCount(0);
 
   await page.goto(bookingUrl);
-  await page.getByRole("button", { name: "Mark returned" }).click();
+  await overview.getByRole("button", { name: "Mark returned" }).click();
   const ret = page.getByRole("dialog");
   await ret.getByRole("button", { name: "All received" }).click(); // clothes: every piece is ticked as it comes back
   await ret.getByRole("radio", { name: "Damaged" }).click();
@@ -208,6 +224,8 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   await ret.getByRole("button", { name: "Mark returned" }).click();
 
   await expect(page.getByText("Returned", { exact: true })).toBeVisible();
+  await expect(overview.getByText("Return recorded", { exact: true })).toBeVisible();
+  await expect(overview.getByRole("button", { name: "Mark returned" })).toHaveCount(0);
   await expect(page.getByText("₹2,900").first()).toBeVisible(); // 2,400 + 500 damage
   await expect(page.getByText("Paid", { exact: true }).first()).toBeVisible();
 
@@ -224,7 +242,7 @@ const farDay = () => new Date(Date.now() + (60 + Math.floor(Math.random() * 300)
 
 test("should guide clothing checkout through stock, customer and payment before confirmation", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
-  await rent(page, /Red bridal lehenga/);
+  await rent(page, "Red bridal lehenga");
   const next = page.getByRole("button", { name: "Continue to customer" });
   const cart = page.getByRole("complementary", { name: /Cart items/ });
   const notifications = page.getByRole("region", { name: /Checkout notifications/ });
@@ -346,11 +364,13 @@ test("bridal: scan a tag into the cart, check out, hand over, then scan it back 
   await expect(page.getByText("Returned", { exact: true })).toBeVisible();
 });
 
-test("bridal: Add New Product makes every size and colour with its pieces", async ({ page }) => {
+test("should add multiple product variants from one rental dialog", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
   await page.goto("/catalog/new");
-  await field(page, "Product name").fill(`PW Saree ${Date.now()}`);
+  const productName = `PW Saree ${Date.now()}`;
+  await field(page, "Product name").fill(productName);
   await field(page, "Price per day").fill("1500");
+  await expect(page.getByRole("button", { name: /^Next(?:$|:)/ })).toHaveCount(1);
   await page.getByRole("button", { name: "Next: Attributes" }).click();
   const colours = page.getByLabel("Colour values");
   await colours.fill("Red");
@@ -358,13 +378,38 @@ test("bridal: Add New Product makes every size and colour with its pieces", asyn
   await colours.fill("Blue");
   await colours.press("Enter");
   await expect(page.getByText("This makes 2 variations")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Next(?:$|:)/ })).toHaveCount(1);
   await page.getByRole("button", { name: "Next: Variations & Stock" }).click();
   const stock = page.getByLabel("Pieces at MG Road");
   await stock.nth(0).fill("2");
   await stock.nth(1).fill("1");
-  await page.getByRole("button", { name: "Save product" }).first().click();
+  const save = page.getByRole("button", { name: "Save product", exact: true });
+  await expect(save).toHaveCount(1);
+  await save.click();
   await expect(page.getByText("Saved, with 3 new pieces")).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveURL(/\/catalog$/); // back to All Products
+
+  await page.getByRole("textbox", { name: "Search products" }).fill(productName);
+  await page.getByRole("heading", { name: productName, exact: true }).click();
+  const details = page.getByRole("dialog", { name: productName, exact: true });
+  await expect(details.getByRole("tab", { name: "Stock" })).toHaveAttribute("aria-selected", "true");
+  await details.getByRole("tab", { name: "Business" }).click();
+  await expect(details.getByText("Times rented")).toBeVisible();
+  await details.getByRole("tab", { name: /Pieces/ }).click();
+  await expect(details.getByText(/MG Road/).first()).toBeVisible();
+  await details.getByRole("button", { name: "Rent", exact: true }).click();
+  const rent = page.getByRole("dialog", { name: productName, exact: true });
+  const red = rent.getByRole("button", { name: "Red", exact: true });
+  const blue = rent.getByRole("button", { name: "Blue", exact: true });
+  await red.click();
+  await rent.getByRole("button", { name: /^Search/ }).click();
+  await expect(red).toHaveAttribute("aria-pressed", "true");
+  await rent.getByRole("button", { name: /Add .*Red.*MG Road.*to cart/i }).click();
+  await blue.click();
+  await red.click();
+  await expect(rent.getByRole("button", { name: /Add .*Red.*to cart/i })).toHaveCount(0);
+  await rent.getByRole("button", { name: /Add .*Blue.*MG Road.*to cart/i }).click();
+  await expect(rent.getByRole("link", { name: "Checkout (2)" })).toBeVisible();
 });
 
 test("Zypher never enters a shop's screens, and a support login sees only its own shop", async ({ page, context }) => {
@@ -390,7 +435,7 @@ test("Zypher never enters a shop's screens, and a support login sees only its ow
 
 test("bridal: Edit changes a booking and takes a payment in the same card; the money card has no Received row", async ({ page }) => {
   await signIn(page, "owner@bridal.test");
-  await rent(page, /Kanjivaram silk saree/);
+  await rent(page, "Kanjivaram silk saree");
   const day = farDay();
   await setDates(page, day, new Date(Date.parse(day) + 2 * 86_400_000).toISOString().slice(0, 10));
   await page.getByRole("button", { name: "Continue to customer" }).click();
@@ -433,6 +478,7 @@ test("bridal: Edit changes a booking and takes a payment in the same card; the m
   await page.getByRole("button", { name: "Cancel booking", exact: true }).click();
   await page.getByRole("button", { name: "Confirm Cancellation & Release Dates" }).click();
   await expect(page.getByText("Cancelled", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "Booking overview" }).getByText("Cancellation recorded")).toBeVisible();
 
   await page.goto("/bookings");
   await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);

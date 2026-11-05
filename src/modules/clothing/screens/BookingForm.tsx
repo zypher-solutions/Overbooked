@@ -19,6 +19,7 @@ import { DateInput, isoToDisplay } from "@/components/shop/DateInput";
 import {
   Field,
   Modal,
+  dangerButtonClass,
   ghostButtonClass,
   goldButtonClass,
   inputClass,
@@ -506,7 +507,7 @@ export function BookingForm({ f }: { f: BookingFormState }): React.JSX.Element {
                       disabled={busy}
                       className={cn(
                         ghostButtonClass,
-                        "border-transparent bg-transparent px-2 text-muted-foreground",
+                        "min-h-11 disabled:opacity-50",
                       )}
                       onClick={closeForm}
                     >
@@ -516,7 +517,10 @@ export function BookingForm({ f }: { f: BookingFormState }): React.JSX.Element {
                       <button
                         type="button"
                         disabled={busy}
-                        className="min-h-10 rounded-lg px-2 text-sm font-medium text-rust hover:bg-rust/10 disabled:opacity-50"
+                        className={cn(
+                          dangerButtonClass,
+                          "min-h-11 rounded-lg px-4 text-[13px] text-foreground",
+                        )}
                         onClick={() => setConfirmDiscard(true)}
                       >
                         Discard draft
