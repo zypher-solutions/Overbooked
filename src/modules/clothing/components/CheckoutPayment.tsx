@@ -149,7 +149,9 @@ export function CheckoutPayment({ f }: { f: BookingForm }): React.JSX.Element {
             hint={
               editing
                 ? "Agreed amount, tracked separately."
-                : "Leave blank if no deposit was collected."
+                : f.suggestedDeposit > 0
+                  ? `Filled in from the products (${rupees(f.suggestedDeposit)}). Change it if you agreed a different amount.`
+                  : "Leave blank if no deposit was collected."
             }
             error={shown("deposit", editing ? d.depositAgreed : d.deposit)}
           >

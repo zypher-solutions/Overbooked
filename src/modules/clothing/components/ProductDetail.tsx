@@ -576,6 +576,15 @@ export function ProductDetail({
                 }
                 hint="charged if lost"
               />
+              <BusinessFact
+                name="Security deposit"
+                value={Number(product.security_deposit) > 0 ? rupees(Number(product.security_deposit)) : "—"}
+                hint="per piece, filled in on the bill"
+              />
+              <BusinessFact
+                name="MRP"
+                value={Number(product.mrp) > 0 ? rupees(Number(product.mrp)) : "—"}
+              />
             </dl>
           </TabsContent>
         ) : null}

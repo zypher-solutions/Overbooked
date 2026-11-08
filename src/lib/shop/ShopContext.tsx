@@ -55,7 +55,8 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       supabase.from("branches").select("id, name, slug, is_active, phone, address, email").order("created_at"),
       supabase.from("categories").select("id, name, template_key, sku_prefix").order("name"),
       supabase.from("business_templates").select("*").order("sort"),
-      supabase.from("add_ons").select("id, name, basis, amount, template_keys, is_active").order("name"),
+      // "*": works before and after migration 029 adds category_ids and quantity
+      supabase.from("add_ons").select("*").order("name"),
     ]);
     const err = b.error ?? c.error ?? t.error ?? a.error;
     if (err) toast.error("Could not load the shop setup: " + err.message);

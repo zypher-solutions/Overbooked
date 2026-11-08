@@ -4,7 +4,7 @@ import { businessNameError, moneyError } from "@/lib/validate";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Pencil, Plus, QrCode, Search, Tag, Trash2, Upload } from "lucide-react";
+import { Pencil, Plus, QrCode, Search, Sheet, Tag, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -31,16 +31,19 @@ function Catalog() {
   // ?tab=categories: the sidebar's Categories item
   const asked = useSearchParams().get("tab");
   const [adding, setAdding] = useState(0);
-  const [tab, setTab] = useState<Tab>(asked === "categories" || (asked === "extras" && !clothing) ? asked : "items");
-  useEffect(() => { setTab(asked === "categories" || (asked === "extras" && !clothing) ? asked : "items"); }, [asked, clothing]);
+  const [tab, setTab] = useState<Tab>(asked === "categories" || asked === "extras" ? asked : "items");
+  useEffect(() => { setTab(asked === "categories" || asked === "extras" ? asked : "items"); }, [asked]);
   return (
     <>
-      <PageHeader title={clothing ? (tab === "categories" ? "Categories" : tab === "extras" ? "Extras" : "All Products") : word("items", "Catalog")}
+      <PageHeader title={clothing ? (tab === "categories" ? "Categories" : tab === "extras" ? "Accessories" : "All Products") : word("items", "Catalog")}
+        subtitle={clothing && tab === "extras" ? "Safas, malas, chunnis and other pieces offered with an outfit. At booking they show unticked, for the customer to take or leave." : undefined}
         actions={!canManage || tab === "extras" ? null : tab === "categories" ? (
           <button className={goldButtonClass} onClick={() => setAdding((n) => n + 1)}><Plus className="h-4 w-4" /> Add Category</button>
         ) : <>
           {tab === "items" ? <Link href="/print/tags" className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link> : null}
-          <Link href="/catalog/import" className={ghostButtonClass}><Upload className="h-4 w-4" /> Import</Link>
+          {clothing
+            ? <Link href="/catalog/bulk" className={ghostButtonClass}><Sheet className="h-4 w-4" /> Bulk add & edit</Link>
+            : <Link href="/catalog/import" className={ghostButtonClass}><Upload className="h-4 w-4" /> Import</Link>}
           {feature("sets") && templates.some((t) => t.kind === "wearable") ? (
             <Link href="/catalog/new?set=1" className={ghostButtonClass}><Plus className="h-4 w-4" /> New set</Link>
           ) : null}
@@ -169,56 +172,84 @@ function Items() {
 }
 
 function Extras() {
-  const { shop, addOns, templates, canManage, refresh } = useShop();
-  const [edit, setEdit] = useState<(Partial<AddOn> & { amountText: string }) | null>(null);
+  const { shop, addOns, templates, categories, canManage, refresh, businessModule } = useShop();
+  const clothing = businessModule === "clothing";
+  const noun = clothing ? "accessory" : "extra";
+  const [edit, setEdit] = useState<(Partial<AddOn> & { amountText: string; quantityText: string }) | null>(null);
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
     if (!edit) return;
-    const bad = businessNameError(edit.name ?? "", "extra's name", 40) ?? moneyError(edit.amountText ?? "", { label: "price", required: true, max: 1_000_000 });
+    // an accessory may be free (blank price); an extra of the other shops keeps its required price
+    const bad = businessNameError(edit.name ?? "", `${noun}'s name`, 40)
+      ?? moneyError(edit.amountText ?? "", { label: "price", required: !clothing, max: 1_000_000 })
+      ?? (edit.quantityText.trim() && !/^\d{1,5}$/.test(edit.quantityText.trim()) ? "How many you have must be a whole number." : null);
     if (bad) return toast.error(bad);
     setBusy(true);
-    const row = { name: (edit.name ?? "").trim().replace(/s+/g, " "), basis: edit.basis ?? "per_rental", amount: num(edit.amountText), template_keys: edit.template_keys ?? [], is_active: edit.is_active ?? true };
+    const row = {
+      name: (edit.name ?? "").trim().replace(/\s+/g, " "), basis: edit.basis ?? "per_rental", amount: num(edit.amountText), template_keys: edit.template_keys ?? [], is_active: edit.is_active ?? true,
+      // the columns of migration 029 are only sent when used, so extras still save before it is applied
+      ...(clothing ? { category_ids: edit.category_ids ?? [], quantity: edit.quantityText.trim() ? Number(edit.quantityText) : null } : {}),
+    };
     const supabase = createClient();
     const { error } = edit.id ? await supabase.from("add_ons").update(row).eq("id", edit.id) : await supabase.from("add_ons").insert({ ...row, shop_id: shop.id });
     setBusy(false);
-    if (error) return toast.error(error.code === "23505" ? "An extra with this name exists." : errorText(error));
+    if (error) return toast.error(error.code === "23505" ? `An ${noun} with this name exists.` : errorText(error));
     toast.success("Saved");
     setEdit(null);
     await refresh();
   };
+  const catNames = (ids: string[] | undefined) => (ids?.length ? ids.map((id) => categories.find((c) => c.id === id)?.name).filter(Boolean).join(", ") : "every category");
 
   return (
-    <Panel title="Extras offered with a booking" actions={canManage ? (
-      <button className={ghostButtonClass} onClick={() => setEdit({ basis: "per_rental", amountText: "", template_keys: [], is_active: true })}><Plus className="h-4 w-4" /> Add extra</button>
+    <Panel title={clothing ? "Accessories offered with an outfit" : "Extras offered with a booking"} actions={canManage ? (
+      <button className={ghostButtonClass} onClick={() => setEdit({ basis: "per_rental", amountText: "", quantityText: "", template_keys: [], category_ids: [], is_active: true })}><Plus className="h-4 w-4" /> Add {noun}</button>
     ) : null}>
-      {addOns.length === 0 ? <Empty>No extras yet.</Empty> : (
+      {addOns.length === 0 ? <Empty>{clothing ? "No accessories yet. Add safas, malas, chunnis and the like, and link them to the categories they go with." : "No extras yet."}</Empty> : (
         <ul className="divide-y divide-border">
           {addOns.map((a) => (
             <li key={a.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
               <div>
                 <span className="font-medium">{a.name}</span> {!a.is_active ? <StatusBadge>Off</StatusBadge> : null}
-                <p className="text-xs text-muted-foreground">{rupees(a.amount)} {BASIS_LABELS[a.basis]}
-                  {a.template_keys.length ? ` · ${a.template_keys.map((k) => templates.find((t) => t.key === k)?.name ?? k).join(", ")}` : " · all types"}</p>
+                <p className="text-xs text-muted-foreground">{Number(a.amount) > 0 ? `${rupees(a.amount)} ${BASIS_LABELS[a.basis]}` : "Free"}
+                  {clothing ? ` · with ${catNames(a.category_ids)}${a.quantity != null ? ` · ${a.quantity} in the shop` : ""}`
+                    : a.template_keys.length ? ` · ${a.template_keys.map((k) => templates.find((t) => t.key === k)?.name ?? k).join(", ")}` : " · all types"}</p>
               </div>
-              {canManage ? <button className={ghostButtonClass} onClick={() => setEdit({ ...a, amountText: String(a.amount) })}>Edit</button> : null}
+              {canManage ? <button className={ghostButtonClass} onClick={() => setEdit({ ...a, amountText: Number(a.amount) ? String(a.amount) : "", quantityText: a.quantity != null ? String(a.quantity) : "" })}>Edit</button> : null}
             </li>
           ))}
         </ul>
       )}
-      <Modal open={edit !== null} onClose={() => setEdit(null)} title={edit?.id ? "Edit extra" : "New extra"}
+      <Modal open={edit !== null} onClose={() => setEdit(null)} title={edit?.id ? `Edit ${noun}` : `New ${noun}`}
         footer={<><button className={ghostButtonClass} onClick={() => setEdit(null)}>Cancel</button><button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save"}</button></>}>
         {edit ? <>
-          <Field label="Name" error={edit.name?.trim() ? businessNameError(edit.name ?? "", "extra's name", 40) ?? undefined : undefined}><input className={inputClass} maxLength={40} value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+          <Field label="Name" error={edit.name?.trim() ? businessNameError(edit.name ?? "", `${noun}'s name`, 40) ?? undefined : undefined}><input className={inputClass} maxLength={40} value={edit.name ?? ""} placeholder={clothing ? "e.g. Safa, Mala, Dupatta" : undefined} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Price (₹)" error={edit.amountText?.trim() ? moneyError(edit.amountText, { label: "price", max: 1_000_000 }) ?? undefined : undefined}><input className={monoInputClass} inputMode="decimal" maxLength={10} value={edit.amountText} onChange={(e) => setEdit({ ...edit, amountText: e.target.value })} /></Field>
+            <Field label="Price (₹)" hint={clothing ? "Leave blank if it comes free" : undefined} error={edit.amountText?.trim() ? moneyError(edit.amountText, { label: "price", max: 1_000_000 }) ?? undefined : undefined}><input className={monoInputClass} inputMode="decimal" maxLength={10} placeholder={clothing ? "Free" : undefined} value={edit.amountText} onChange={(e) => setEdit({ ...edit, amountText: e.target.value })} /></Field>
             <Field label="Charged">
               <select className={inputClass} value={edit.basis} onChange={(e) => setEdit({ ...edit, basis: e.target.value as AddOnBasis })}>
-                {Object.entries(BASIS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                {Object.entries(BASIS_LABELS).filter(([k]) => !clothing || k === "per_rental" || k === "per_day").map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </Field>
           </div>
-          {templates.length > 1 ? (
+          {clothing ? <>
+            <Field label="How many you have" hint="Optional. Shown to staff at booking.">
+              <input className={monoInputClass} inputMode="numeric" maxLength={5} placeholder="Not counted" value={edit.quantityText} onChange={(e) => setEdit({ ...edit, quantityText: e.target.value })} />
+            </Field>
+            <fieldset>
+              <legend className="mb-1.5 block text-xs font-semibold tracking-wide text-muted-foreground">Suggest it with</legend>
+              <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                {categories.map((c) => (
+                  <label key={c.id} className="flex items-center gap-1.5">
+                    <input type="checkbox" checked={edit.category_ids?.includes(c.id) ?? false}
+                      onChange={(e) => setEdit({ ...edit, category_ids: e.target.checked ? [...(edit.category_ids ?? []), c.id] : (edit.category_ids ?? []).filter((x) => x !== c.id) })} />
+                    {c.name}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">None ticked: suggested with every outfit.</p>
+            </fieldset>
+          </> : templates.length > 1 ? (
             <Field label="Offered for">
               <div className="flex flex-wrap gap-3 text-sm">
                 {templates.map((t) => (

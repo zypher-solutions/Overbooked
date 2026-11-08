@@ -31,7 +31,13 @@ export interface Template {
 
 export interface Branch { id: string; name: string; slug: string; is_active: boolean; phone: string | null; address: string | null; email: string | null }
 export interface Category { id: string; name: string; template_key: string; sku_prefix: string | null }
-export interface AddOn { id: string; name: string; basis: AddOnBasis; amount: number; template_keys: string[]; is_active: boolean }
+export interface AddOn {
+  id: string; name: string; basis: AddOnBasis; amount: number; template_keys: string[]; is_active: boolean;
+  /** categories it is suggested for at booking; empty = all (migration 029; missing before it is applied) */
+  category_ids?: string[];
+  /** how many the shop owns; null = not counted */
+  quantity?: number | null;
+}
 
 export interface Rate { rate_type: RateType; amount: number }
 export interface Variation {
@@ -58,6 +64,9 @@ export interface Product {
   image_url: string | null;
   purchase_price: number;
   replacement_value: number;
+  /** selling price of the piece, and the deposit a booking starts with for one piece (migration 029) */
+  mrp?: number;
+  security_deposit?: number;
   is_set: boolean;
   is_active: boolean;
   product_variations?: Variation[];
