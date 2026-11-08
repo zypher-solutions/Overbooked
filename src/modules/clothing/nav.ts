@@ -8,8 +8,10 @@ import {
   LayoutGrid,
   Plus,
   Settings,
+  Gem,
+  Sheet,
   Tag,
-  Upload,
+  TrendingUp,
   Wallet,
   UserSquare,
 } from "lucide-react";
@@ -43,6 +45,13 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
         icon: Plus,
         show: c.canManage,
       },
+      // the spreadsheet: many products at once, Excel paste, Excel/CSV files, and editing many saved products
+      {
+        href: "/catalog/bulk",
+        label: "Bulk add & edit",
+        icon: Sheet,
+        show: c.canManage,
+      },
       {
         href: "/catalog?tab=categories",
         label: "Categories",
@@ -50,9 +59,15 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
         show: c.canManage,
       },
       {
-        href: "/catalog/import",
-        label: "CSV Import",
-        icon: Upload,
+        href: "/catalog?tab=extras",
+        label: "Accessories",
+        icon: Gem,
+        show: c.canManage,
+      },
+      {
+        href: "/catalog/earnings",
+        label: "Earnings by product",
+        icon: TrendingUp,
         show: c.canManage,
       },
     ],

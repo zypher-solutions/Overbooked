@@ -24,7 +24,15 @@ import { Field, Modal, PageHeader, Panel, dangerButtonClass, ghostButtonClass, g
 // Changing a product uses the same form: pieces can be added here, and removed from the Pieces list.
 interface Attr { key: string; label: string; values: string[] }
 interface VarRow { id?: string; key: string; attributes: Record<string, string>; name: string; sku: string; savedSku?: string; rate: string; enabled: boolean; stock: Record<string, string> }
-interface Basic { category_id: string; name: string; sku: string; rate: string; replacement_value: string; description: string; image_url: string; is_active: boolean }
+interface Basic {
+  category_id: string; name: string; sku: string; rate: string; replacement_value: string; description: string; image_url: string; is_active: boolean;
+  mrp: string; purchase_price: string; security_deposit: string;
+  /** a new product's SKU typed by hand instead of numbered from the category */
+  ownSku: boolean;
+}
+const money = (n: number | undefined) => (Number(n) ? String(n) : "");
+// a typed product SKU follows the shop's pattern, as the database checks (migration 013): LH-101
+const TYPED_SKU = /^[A-Z]{2,6}-[0-9]{3,4}$/;
 type Step = "basic" | "attributes" | "variations";
 
 const skuPart = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 16);
@@ -68,6 +76,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     category_id: product?.category_id ?? (wearCats.length === 1 ? wearCats[0].id : ""), name: product?.name ?? "", sku: product?.sku ?? "",
     rate: "", replacement_value: product ? String(product.replacement_value ?? "") : "", description: product?.description ?? "",
     image_url: product?.image_url ?? "", is_active: product?.is_active ?? true,
+    mrp: money(product?.mrp), purchase_price: money(product?.purchase_price), security_deposit: money(product?.security_deposit), ownSku: false,
   }));
   const template = templateOf(basic.category_id);
   const [attrs, setAttrsRaw] = useState<Attr[]>([]);
@@ -116,7 +125,8 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
         const saved = localStorage.getItem(draftKey);
         if (saved) {
           const d = JSON.parse(saved) as { basic: Basic; attrs: Attr[]; rows: VarRow[] };
-          setBasic(d.basic); setRows(d.rows);
+          // a draft saved before the money fields existed has no values for them
+          setBasic((b) => ({ ...b, ...d.basic, mrp: d.basic.mrp ?? "", purchase_price: d.basic.purchase_price ?? "", security_deposit: d.basic.security_deposit ?? "", ownSku: !!d.basic.ownSku })); setRows(d.rows);
           setAttrsRaw(d.attrs.map((a) => ({ ...a, values: tidyAll(a.values, suggestionsFor(template, a)) })));
           toast.message("Your unfinished product was restored.");
           return;
@@ -171,7 +181,8 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     }
     return `${prefix}-${String(max + 1).padStart(3, "0")}`;
   }, [prefix, allProducts]);
-  const productSku = product ? product.sku : nextSku;
+  const typedSku = basic.sku.trim().toUpperCase();
+  const productSku = product ? product.sku : basic.ownSku ? typedSku : nextSku;
   const autoName = (a: Record<string, string>) => Object.values(a).filter(Boolean).join(" / ") || basic.name.trim() || "Standard";
   const autoSku = (a: Record<string, string>) => `${productSku}${Object.values(a).filter(Boolean).length ? "-" + skuPart(Object.values(a).filter(Boolean).join("-")) : ""}`;
 
@@ -214,7 +225,15 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     name: businessNameError(basic.name, "product name", 80),
     rate: moneyError(basic.rate, { label: "price per day", required: true, positive: true, max: 1_000_000 }),
     replacement: moneyError(basic.replacement_value, { label: "replacement value", max: 10_000_000 }),
+    mrp: moneyError(basic.mrp, { label: "MRP", max: 10_000_000 }),
+    purchase: moneyError(basic.purchase_price, { label: "purchase price", max: 10_000_000 }),
+    deposit: moneyError(basic.security_deposit, { label: "security deposit", max: 1_000_000 }),
     description: textLimitError(basic.description, "description", 500),
+    sku: product || !basic.ownSku ? null
+      : !typedSku ? "Type the SKU, or switch back to numbering it for you."
+      : !TYPED_SKU.test(typedSku) ? "Use 2 to 6 letters, a hyphen, then 3 or 4 digits, e.g. LH-101."
+      : (allProducts ?? []).some((p) => p.sku.toUpperCase() === typedSku) ? `${typedSku} is already used by another product.`
+      : null,
   };
   const showBasic = (k: keyof typeof basicErr, typed: string) => (triedBasic || typed.trim() ? basicErr[k] ?? undefined : undefined);
   const validBasic = () => {
@@ -223,7 +242,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     if (first) { toast.error(first); return false; }
     if (!basic.category_id) { toast.error("Choose a category."); return false; }
     if (!basic.name.trim()) { toast.error("Name the product."); return false; }
-    if (!product && !prefix) { toast.error("This category has no base SKU yet. Set it on the Categories page first."); return false; }
+    if (!product && !basic.ownSku && !prefix) { toast.error("This category has no base SKU yet. Set it on the Categories page, or type your own SKU."); return false; }
     if (!product && allProducts === null) { toast.error("Still loading the products. Try again in a moment."); return false; }
     return true;
   };
@@ -265,7 +284,8 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
       const id = await call<string>("save_product", {
         p: {
           id: product?.id, category_id: basic.category_id, name: basic.name, sku: productSku, description: basic.description, image_url: basic.image_url,
-          purchase_price: product?.purchase_price ?? 0, replacement_value: num(basic.replacement_value), is_active: basic.is_active,
+          purchase_price: num(basic.purchase_price), replacement_value: num(basic.replacement_value), is_active: basic.is_active,
+          mrp: num(basic.mrp), security_deposit: num(basic.security_deposit),
           variations: sent.map((r, i) => ({
             id: r.id, name: r.name.trim() || autoName(r.attributes), sku: skus[i], attributes: r.attributes,
             rates: { day: String(num(r.rate || basic.rate)) }, is_enabled: r.enabled,
@@ -304,7 +324,8 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   const discard = () => {
     try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
     restored.current = false;
-    setBasic({ category_id: wearCats.length === 1 ? wearCats[0].id : "", name: "", sku: "", rate: "", replacement_value: "", description: "", image_url: "", is_active: true });
+    setBasic({ category_id: wearCats.length === 1 ? wearCats[0].id : "", name: "", sku: "", rate: "", replacement_value: "", description: "", image_url: "", is_active: true,
+      mrp: "", purchase_price: "", security_deposit: "", ownSku: false });
     setAttrsRaw(template ? template.variation_fields.map((f) => ({ key: f.key, label: f.label, values: [] })) : []);
     setRows([]);
     setStep("basic");
@@ -347,9 +368,23 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
                   {wearCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </Field>
-              <Field label="Base SKU" hint={prefix || product ? "From the category and numbered for you" : "This category has no base SKU yet (Categories page)"}>
-                <input className={cn(monoInputClass, "cursor-default bg-muted/50 font-medium text-foreground")} value={productSku} readOnly aria-readonly="true" />
+              <div>
+              <Field label="Base SKU" error={showBasic("sku", basic.sku)}
+                hint={product ? "A saved product keeps its SKU" : basic.ownSku ? "2 to 6 letters, a hyphen, 3 or 4 digits, e.g. LH-101" : prefix ? "From the category and numbered for you" : "This category has no base SKU yet (Categories page)"}>
+                {basic.ownSku && !product ? (
+                  <input className={monoInputClass} maxLength={40} value={basic.sku} placeholder="e.g. LH-101" aria-label="Your own SKU"
+                    onChange={(e) => setBasic({ ...basic, sku: e.target.value.toUpperCase().replace(/\s+/g, "-") })} />
+                ) : (
+                  <input className={cn(monoInputClass, "cursor-default bg-muted/50 font-medium text-foreground")} value={productSku} readOnly aria-readonly="true" />
+                )}
               </Field>
+              {product ? null : (
+                <label className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" checked={basic.ownSku} onChange={(e) => setBasic({ ...basic, ownSku: e.target.checked, sku: e.target.checked ? basic.sku : "" })} />
+                  Type my own SKU
+                </label>
+              )}
+              </div>
               <Field label="Price per day (₹)" hint="Starting price for every size; agree any price per booking" error={showBasic("rate", basic.rate)}>
                 <input className={monoInputClass} inputMode="decimal" value={basic.rate}
                   // one price for every size and colour: changing it here changes it on every variation
@@ -357,6 +392,15 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
               </Field>
               <Field label="Replacement value (₹)" hint="Charged if it is lost" error={showBasic("replacement", basic.replacement_value)}>
                 <input className={monoInputClass} inputMode="decimal" value={basic.replacement_value} onChange={(e) => setBasic({ ...basic, replacement_value: e.target.value })} />
+              </Field>
+              <Field label="Security deposit (₹)" hint="Filled in on the bill for each piece; can be changed there" error={showBasic("deposit", basic.security_deposit)}>
+                <input className={monoInputClass} inputMode="decimal" placeholder="0" value={basic.security_deposit} onChange={(e) => setBasic({ ...basic, security_deposit: e.target.value })} />
+              </Field>
+              <Field label="MRP (₹)" hint="Its selling price, for your records" error={showBasic("mrp", basic.mrp)}>
+                <input className={monoInputClass} inputMode="decimal" placeholder="0" value={basic.mrp} onChange={(e) => setBasic({ ...basic, mrp: e.target.value })} />
+              </Field>
+              <Field label="Purchase price (₹)" hint="What you paid; shows when it has earned itself back" error={showBasic("purchase", basic.purchase_price)}>
+                <input className={monoInputClass} inputMode="decimal" placeholder="0" value={basic.purchase_price} onChange={(e) => setBasic({ ...basic, purchase_price: e.target.value })} />
               </Field>
               <Field label="Description" className="sm:col-span-2" error={showBasic("description", basic.description)}><textarea className={inputClass} rows={2} maxLength={520} value={basic.description} onChange={(e) => setBasic({ ...basic, description: e.target.value })} /></Field>
             </div>

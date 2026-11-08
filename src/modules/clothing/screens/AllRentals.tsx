@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { LayoutGrid, List, Pencil, ShoppingBag, Trash2 } from "lucide-react";
+import { FileSpreadsheet, LayoutGrid, List, Pencil, QrCode, Sheet, ShoppingBag, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useShop } from "@/lib/shop/ShopContext";
@@ -16,6 +16,8 @@ import { RentProductDialog } from "@/modules/clothing/components/RentProductDial
 import { ProductDetail } from "@/modules/clothing/components/ProductDetail";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { StatusBadge, ghostButtonClass, goldButtonClass, inputClass, ListSkeleton } from "@/components/shop/ui";
+import { useBulkSetup } from "@/modules/clothing/useBulkSetup";
+import { exportProducts } from "@/modules/clothing/sheet";
 
 // All Products: every product with its stock in each branch. Tap a product for its complete details; Rent asks for the colour
 // and size, then shows what is in stock with Rent (adds to the cart). Owners and managers also get Edit; the owner gets Remove.
@@ -40,6 +42,21 @@ export default function AllRentals() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [open, setOpen] = useState<Product | null>(null); // the Rent flow: colour and size, then the stock with Rent
   const [detail, setDetail] = useState<Product | null>(null); // the complete details of a product
+  // ticked products, for printing their tags, editing them in bulk or exporting them
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const togglePick = (id: string) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const { cols, loadUnits } = useBulkSetup();
+  const exportPicked = async () => {
+    try {
+      const n = await exportProducts((products ?? []).filter((p) => picked.has(p.id)), { cols, categories, units: await loadUnits() });
+      toast.success(`Exported ${n} row${n === 1 ? "" : "s"}`);
+    } catch (e) { toast.error(errorText(e)); }
+  };
+  const pickBox = (p: Product) => (canManage ? (
+    <input type="checkbox" aria-label={`Select ${p.name}`} checked={picked.has(p.id)} onClick={(e) => e.stopPropagation()} onChange={() => togglePick(p.id)}
+      className="h-4 w-4 shrink-0 cursor-pointer accent-gold" />
+  ) : null);
+  const allPicked = (list: Product[]) => list.length > 0 && list.every((p) => picked.has(p.id));
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
     return (products ?? []).filter((p) => {
@@ -84,7 +101,14 @@ export default function AllRentals() {
 
   return (
     <>
-      <p className="mb-2 text-xs text-muted-foreground">{products ? `${list.length} product${list.length === 1 ? "" : "s"} found` : "Loading..."}</p>
+      <p className="mb-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <span>{products ? `${list.length} product${list.length === 1 ? "" : "s"} found` : "Loading..."}</span>
+        {canManage && list.length ? (
+          <button type="button" className="text-gold hover:underline" onClick={() => setPicked(allPicked(list) ? new Set() : new Set(list.map((p) => p.id)))}>
+            {allPicked(list) ? "Unselect all" : `Select all ${list.length}`}
+          </button>
+        ) : null}
+      </p>
       <div className="glass mb-4 flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
         <input className={cn(inputClass, "sm:max-w-xs")} placeholder="Search products by name or SKU..." aria-label="Search products" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="flex flex-wrap items-center gap-2">
@@ -111,7 +135,8 @@ export default function AllRentals() {
           {list.map((p) => {
             const { total, free } = stockTotals(stock, p, branch || undefined);
             return (
-              <div key={p.id} className="group flex flex-col overflow-hidden glass transition-all hover:border-gold/40 hover:shadow-md">
+              <div key={p.id} className={cn("group relative flex flex-col overflow-hidden glass transition-all hover:border-gold/40 hover:shadow-md", picked.has(p.id) && "border-gold/60 ring-2 ring-gold/30")}>
+              {canManage ? <span className="absolute left-2 top-2 z-[1] flex rounded-md bg-white/90 p-1 shadow-sm">{pickBox(p)}</span> : null}
               <button type="button" onClick={() => setDetail(p)} className="flex flex-1 flex-col text-left">
                 <div className="relative aspect-square w-full overflow-hidden bg-muted/60">
                   {p.image_url ? <img src={p.image_url} alt={p.name} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : null}
@@ -139,6 +164,7 @@ export default function AllRentals() {
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="bg-muted/70 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <tr>
+                  {canManage ? <th className="w-10 py-3 pl-4"><span className="sr-only">Select</span></th> : null}
                   <th className="px-4 py-3">Product</th><th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3">Daily rate</th><th className="px-4 py-3 text-right">Total stock</th><th className="px-4 py-3">Branches</th>
                   <th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Actions</th>
@@ -149,6 +175,7 @@ export default function AllRentals() {
                   const { total, free } = stockTotals(stock, p, branch || undefined);
                   return (
                     <tr key={p.id} className="cursor-pointer hover:bg-accent/40" onClick={() => setDetail(p)}>
+                      {canManage ? <td className="py-2.5 pl-4" onClick={(e) => e.stopPropagation()}>{pickBox(p)}</td> : null}
                       <td className="px-4 py-2.5">
                         <span className="flex items-center gap-3">
                           {p.image_url ? <img src={p.image_url} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg object-cover" /> : <span className="h-11 w-11 shrink-0 rounded-lg bg-muted/70" />}
@@ -172,6 +199,7 @@ export default function AllRentals() {
               const { total, free } = stockTotals(stock, p, branch || undefined);
               return (
                 <li key={p.id} className="flex items-stretch">
+                  {canManage ? <span className="flex items-center pl-3">{pickBox(p)}</span> : null}
                   <button type="button" onClick={() => setDetail(p)} className="flex min-w-0 flex-1 gap-3 p-3 text-left hover:bg-black/[0.02]">
                     {p.image_url ? <img src={p.image_url} alt="" loading="lazy" className="h-14 w-14 shrink-0 rounded-lg object-cover" /> : <span className="h-14 w-14 shrink-0 rounded-lg bg-muted/70" />}
                     <span className="min-w-0 flex-1">
@@ -191,6 +219,18 @@ export default function AllRentals() {
           </ul>
         </>
       )}
+
+      {picked.size ? (
+        <div role="region" aria-label="Selected products" className="glass sticky bottom-3 z-20 mt-4 flex flex-wrap items-center justify-between gap-2 p-3 shadow-lg">
+          <span className="text-sm font-medium">{picked.size} selected</span>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/print/tags?products=${Array.from(picked).join(",")}`} className={ghostButtonClass}><QrCode className="h-4 w-4" /> Print tags</Link>
+            <Link href={`/catalog/bulk?load=${Array.from(picked).join(",")}`} className={ghostButtonClass}><Sheet className="h-4 w-4" /> Edit in bulk</Link>
+            <button type="button" className={ghostButtonClass} onClick={() => void exportPicked()}><FileSpreadsheet className="h-4 w-4" /> Export to Excel</button>
+            <button type="button" className={ghostButtonClass} onClick={() => setPicked(new Set())}><X className="h-4 w-4" /> Clear</button>
+          </div>
+        </div>
+      ) : null}
 
       <ConfirmDialog open={!!deleting} tone="danger" title={`Delete ${deleting?.name ?? "this product"}?`} confirmLabel="Delete" cancelLabel="Keep it" message="If it has rental or booking history it will be switched off instead of deleted."
         onCancel={() => setDeleting(null)} onConfirm={() => { if (deleting) void remove(deleting); setDeleting(null); }} />

@@ -365,7 +365,8 @@ export function CheckoutCart({
 
       {extras.length ? (
         <div className="mt-4 space-y-2 border-t border-border pt-3">
-          <h3 className="text-sm font-semibold">Extras</h3>
+          <h3 className="text-sm font-semibold">Accessories</h3>
+          {editable ? <p className="text-xs text-muted-foreground">Tick the ones the customer is taking.</p> : null}
           <ul className="space-y-2">
             {extras.map((extra) => {
               const quantity = d.addOns[extra.id];
@@ -393,7 +394,8 @@ export function CheckoutCart({
                       <span className="min-w-0 break-words">
                         {extra.name}
                         <span className="block text-muted-foreground">
-                          {rupees(extra.amount)} {BASIS_LABELS[extra.basis]}
+                          {Number(extra.amount) > 0 ? `${rupees(extra.amount)} ${BASIS_LABELS[extra.basis]}` : "Free"}
+                          {extra.quantity != null ? ` · ${extra.quantity} in the shop` : ""}
                         </span>
                       </span>
                     </label>

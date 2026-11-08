@@ -30,6 +30,8 @@ function Tags() {
   const [branch, setBranch] = useState("");
   const [cat, setCat] = useState("");
   const [product, setProduct] = useState(params.get("product") ?? "");
+  // ?products=a,b: the products ticked on the product list
+  const [picked, setPicked] = useState<string[] | null>(() => params.get("products")?.split(",").filter(Boolean) ?? null);
   const [size, setSize] = useState<keyof typeof SIZES>("medium");
   const [skip, setSkip] = useState<Set<string>>(new Set());
 
@@ -50,7 +52,7 @@ function Tags() {
   }, [shop]);
 
   const productOf = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
-  const list = units.filter((u) => (!branch || u.branch_id === branch) && (!product || u.product_id === product)
+  const list = units.filter((u) => (!branch || u.branch_id === branch) && (!product || u.product_id === product) && (!picked || picked.includes(u.product_id))
     && (!cat || productOf.get(u.product_id)?.category_id === cat));
   const printable = list.filter((u) => !skip.has(u.id));
   const s = SIZES[size];
@@ -112,6 +114,7 @@ function Tags() {
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
             <span>
+              {picked ? <span className="mr-2">Tags of the {picked.length} product{picked.length === 1 ? "" : "s"} you ticked. <button onClick={() => setPicked(null)} className="text-gold hover:underline">Show all products</button>.</span> : null}
               <strong className="text-foreground">{printable.length}</strong> of {list.length} selected. Click a tag to leave it out.
               {skip.size > 0 ? <button onClick={() => setSkip(new Set())} className="ml-2 text-gold hover:underline">Select all again</button> : null}
             </span>

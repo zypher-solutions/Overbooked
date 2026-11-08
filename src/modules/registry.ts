@@ -34,10 +34,11 @@ export interface ShopModule {
 export const shopModules: Record<ModuleKey, ShopModule> = {
   clothing: {
     nav: clothingNav, Home: TrendzDashboard, tagline: "Rental Studio",
-    screens: ["/finance", "/bookings", "/all-rentals", "/scan", "/stock-locations"],
+    screens: ["/finance", "/bookings", "/all-rentals", "/scan", "/stock-locations", "/catalog/bulk", "/catalog/earnings"],
     ProductForm: ProductWizard, productsTitle: "All Products", importSkus,
     BookingForm, bookingByPiece: true,
-    replace: (path, canManage) => (path === "/rentals" ? "/bookings" : path === "/all-rentals" ? "/catalog" : path === "/dashboard" ? (canManage ? "/finance" : "/") : null),
+    replace: (path, canManage) => (path === "/rentals" ? "/bookings" : path === "/all-rentals" ? "/catalog" : path === "/dashboard" ? (canManage ? "/finance" : "/")
+      : path === "/catalog/import" ? "/catalog/bulk" : null),
   },
   standard: { nav: standardNav, Home: Today, tagline: "Overbooked", screens: [] },
 };

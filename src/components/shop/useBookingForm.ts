@@ -161,6 +161,23 @@ export function useBookingForm() {
     return map;
   }, [products, templateOf]);
 
+  // A new booking's deposit starts as the products' deposits added up (one per piece), as in Rentopus. It follows the cart
+  // while it still shows the last suggestion; once staff type their own amount it is left alone.
+  const suggestedDeposit = useMemo(() => lines.reduce((s, l) =>
+    s + l.qty * Number(variations.get(l.variation_id)?.product.security_deposit ?? 0), 0), [lines, variations]);
+  const lastSuggested = useRef<string | null>(null);
+  useEffect(() => {
+    if (editId || products === null) return;
+    const next = suggestedDeposit > 0 ? String(suggestedDeposit) : "";
+    const prev = lastSuggested.current;
+    lastSuggested.current = next;
+    setD((x) => {
+      const untouched = prev === null ? x.deposit === "" : x.deposit === prev;
+      if (!untouched || x.deposit === next) return x;
+      return { ...x, deposit: next, depositAgreed: next, depositMethod: next ? x.depositMethod : "" };
+    });
+  }, [suggestedDeposit, editId, products]);
+
   // ?variation=... from the catalog's "Book" button
   const prefill = params.get("variation");
   useEffect(() => {
@@ -472,13 +489,16 @@ export function useBookingForm() {
     setConfirmDiscard(false);
   };
 
+  // an accessory linked to categories is offered only when the cart holds one of them (left unticked: the customer may not want it)
+  const cartCategories = new Set(lines.map((l) => variations.get(l.variation_id)?.product.category_id));
   const visibleAddOns = addOns.filter((a) => a.is_active
-    && (a.template_keys.length === 0 || a.template_keys.some((k) => cartTemplates.some((t) => t.key === k))));
+    && (a.template_keys.length === 0 || a.template_keys.some((k) => cartTemplates.some((t) => t.key === k)))
+    && (!a.category_ids?.length || a.category_ids.some((c) => cartCategories.has(c)) || d.addOns[a.id] !== undefined));
   const quoteLineFor = (variationId: string) => quote?.lines.find((l) => l.variation_id === variationId && l.reserve);
 
   return {
     router, shop, tz, myBranchId, activeBranches, categories, addOns, templateOf, feature, word, businessModule, products, editId, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, kinds, hasRoom, hasVehicle, roomShop, avail, pieceLines, pieces, shortItems, checkingStock, quote, quoteError, addLine, updateLine, busy, editPay, setEditPay, total, shown, submit, booked, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, quoteLineFor,
-    stockError, quotePending, pieceProblem, moneyErrors: money_,
+    stockError, quotePending, pieceProblem, moneyErrors: money_, suggestedDeposit,
   };
 }
 export type BookingForm = ReturnType<typeof useBookingForm>;
