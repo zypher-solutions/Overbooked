@@ -1,7 +1,7 @@
 // Self-check of the bulk add & edit rules (src/modules/clothing/bulk.ts). No database needed:
 //   node --experimental-strip-types scripts/check-bulk.ts
 import assert from "node:assert/strict";
-import { bulkColumns, matchHeader, parseTsv, planRows, rowsFromTable, rowsOfProducts, type BulkRow } from "../src/modules/clothing/bulk.ts";
+import { bulkColumns, matchHeader, missingCategories, parseTsv, planRows, rowsFromTable, rowsOfProducts, tidyName, tidyValue, variationSkuPart, type BulkRow } from "../src/modules/clothing/bulk.ts";
 
 const branches = [{ id: "b1", name: "Main" }, { id: "b2", name: "Kochi" }];
 const cols = bulkColumns([{ key: "colour", label: "Colour" }, { key: "size", label: "Size" }], branches);
@@ -75,5 +75,28 @@ const loaded = rowsOfProducts(products, { cols, categories, units }, () => "x");
 assert.equal(loaded[0].cells["pieces:b1"], "1");
 assert.equal(loaded[0].cells.rate, "2500");
 assert.equal(loaded[0].cells["attr:colour"], "Red");
+
+// the shop's SKU format (Admin > SKU): only the attributes it lists, in its order; one typed on a single product goes last
+const fmt = [{ key: "colour", sku_position: null }, { key: "size", sku_position: 1 }];
+assert.equal(variationSkuPart({ colour: "Royal Blue", size: "xl" }, fmt), "XL");
+assert.equal(variationSkuPart({ colour: "Red", size: "M" }, [{ key: "colour", sku_position: 2 }, { key: "size", sku_position: 1 }]), "M-RED");
+assert.equal(variationSkuPart({ size: "M", sleeve: "Full" }, fmt), "M-FULL");
+assert.equal(variationSkuPart({ colour: "Red", size: "M" }, []), "RED-M");
+const sized = planRows([row({ category: "Bridal Lehenga", name: "Blue Lehenga", colour: "", "attr:colour": "Blue", "attr:size": "L", rate: "100" })], { ...ctx, attributes: fmt });
+assert.equal(sized.items[0].item.variations[0].sku, "BL-008-L");
+
+// one spelling: Size in capitals, every other value and every attribute name with each word starting with a capital
+assert.equal(tidyValue(" xl ", { key: "size", label: "Size" }), "XL");
+assert.equal(tidyValue("3xl", { key: "waist", label: "size" }), "3XL");
+assert.equal(tidyValue("royal  blue", { key: "color", label: "Colour" }), "Royal Blue");
+assert.equal(tidyValue("32", { key: "length", label: "Length" }), "32");
+assert.equal(tidyName(" sleeve type "), "Sleeve Type");
+const tidied = planRows([row({ category: "Bridal Lehenga", name: "Gold Lehenga", "attr:colour": "gold", "attr:size": "m", rate: "100" })], ctx);
+assert.deepEqual(tidied.items[0].item.variations[0].attributes, { colour: "Gold", size: "M" });
+
+// categories the rows name that the shop lacks: once each (any capitals), each with a free base SKU
+const miss = missingCategories([row({ category: "outdoor apparel" }), row({ category: "Outdoor Apparel " }), row({ category: "bridal lehenga" }),
+  row({ category: "Sarees" }), row({ category: "Bags Large" })], [...categories, { name: "Belts", sku_prefix: "BL" }]);
+assert.deepEqual(miss, [{ name: "Outdoor Apparel", sku_prefix: "OA" }, { name: "Sarees", sku_prefix: "SAR" }, { name: "Bags Large", sku_prefix: "BLG" }]);
 
 console.log("bulk.ts: all checks passed");

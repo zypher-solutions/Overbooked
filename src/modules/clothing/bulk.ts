@@ -2,7 +2,7 @@
 // on its own: scripts/check-bulk.ts). One row is one variation (a colour/size) of a product; rows with the same SKU, or
 // with the same category and name when the SKU is blank, become one product. Saving goes through import_catalog, which
 // finds products and variations by SKU, so the same file both adds new products and updates existing ones.
-import type { Category, Product } from "@/lib/shop/types";
+import type { Category, Product, ShopAttribute } from "@/lib/shop/types";
 
 export interface Field { key: string; label: string }
 export interface Place { id: string; name: string }
@@ -11,6 +11,53 @@ export interface Col { key: string; label: string; kind: ColKind; required?: boo
 export interface Origin { productId: string; variationId: string; have: Record<string, number> }
 export interface BulkRow { uid: string; cells: Record<string, string>; origin?: Origin }
 export interface UnitLite { code: string; variation_id: string; branch_id: string; status: string }
+
+// One spelling for attribute names and values, wherever they are typed (product form, Admin pages, bulk add):
+// every word starts with a capital (royal blue -> Royal Blue, sleeve type -> Sleeve Type); the rest is kept as typed.
+export const capitalWords = (s: string) => s.replace(/(^|\s)(\p{L})/gu, (_, sp: string, ch: string) => sp + ch.toUpperCase());
+export const tidyName = (s: string) => capitalWords(s.trim().replace(/\s+/g, " "));
+/** a value of an attribute: Size is all capitals (xl -> XL, 3xl -> 3XL), any other attribute starts each word with a capital */
+export function tidyValue(value: string, attr: { key: string; label: string }): string {
+  const v = value.trim().replace(/\s+/g, " ");
+  return attr.key === "size" || attr.label.trim().toLowerCase() === "size" ? v.toUpperCase() : capitalWords(v);
+}
+
+/** categories named in the rows that the shop does not have yet, once each (any capitals), with a free base SKU each:
+ *  the initials of the name (Outdoor Apparel -> OA), or its first letters for one word (Sarees -> SAR) */
+export function missingCategories(rows: BulkRow[], categories: Pick<Category, "name" | "sku_prefix">[]): { name: string; sku_prefix: string }[] {
+  const have = new Set(categories.map((c) => c.name.trim().toLowerCase()));
+  const taken = new Set(categories.map((c) => c.sku_prefix).filter(Boolean));
+  const out: { name: string; sku_prefix: string }[] = [];
+  for (const r of rows) {
+    const name = tidyName(r.cells.category ?? "");
+    if (!name || name.length > 40 || have.has(name.toLowerCase())) continue;
+    have.add(name.toLowerCase());
+    const words = name.toUpperCase().split(" ").map((w) => w.replace(/[^A-Z]/g, "")).filter(Boolean);
+    const letters = words.join("");
+    let base = (words.length > 1 ? words.map((w) => w[0]).join("") : letters.slice(0, 3)).slice(0, 4);
+    if (base.length < 2) base = (letters + "CAT").slice(0, 3);
+    // already used by another category: one more letter, from the name and then A to Z (letters only: OA -> OAP)
+    const prefix = [base, ...[...letters.slice(base.length), ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].map((x) => base + x)].find((p) => !taken.has(p)) ?? base;
+    taken.add(prefix);
+    out.push({ name, sku_prefix: prefix });
+  }
+  return out;
+}
+
+export const skuPart =(s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 16);
+
+/** the attribute keys a system-made variation SKU uses, in order (Admin > SKU); null = the shop has no attribute list yet */
+export function skuKeys(attributes: Pick<ShopAttribute, "key" | "sku_position">[]): string[] {
+  return attributes.filter((x) => x.sku_position !== null).sort((x, y) => x.sku_position! - y.sku_position!).map((x) => x.key);
+}
+
+/** the variation's part of a system-made SKU (BR-001-<this>): the shop's SKU attributes in their order, then any attribute the
+ *  shop does not list at all (typed only on this product), so those never make two variations share a SKU */
+export function variationSkuPart(a: Record<string, string>, attributes: Pick<ShopAttribute, "key" | "sku_position">[]): string {
+  const known = new Set(attributes.map((x) => x.key));
+  const keys = [...skuKeys(attributes), ...Object.keys(a).filter((k) => !known.has(k))];
+  return skuPart(keys.map((k) => (a[k] ?? "").trim()).filter(Boolean).join("-"));
+}
 
 export const MONEY_KEYS = ["rate", "deposit", "mrp", "purchase", "replacement"] as const;
 
@@ -112,7 +159,6 @@ export function rowsFromTable(table: string[][], cols: Col[], startKey = cols[0]
   return { rows, unknownHeaders: headed ? table[0].filter((h, i) => h.trim() && !mapped[i]) : [], headed };
 }
 
-const skuPart = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 16);
 // a clothing shop's product SKU (the database checks it too, migration 013): BR-001
 const TYPED_SKU = /^[A-Z]{2,6}-[0-9]{3,4}$/;
 const MONEY = /^\d+(\.\d{1,2})?$/;
@@ -129,7 +175,11 @@ export interface ImportItem {
 }
 export interface PlanItem { sku: string; name: string; uids: string[]; isNew: boolean; item: ImportItem }
 export interface Plan { errors: Record<string, string[]>; notes: Record<string, string>; items: PlanItem[] }
-export interface PlanContext { cols: Col[]; categories: Category[]; products: Product[]; units: UnitLite[]; branches: Place[] }
+export interface PlanContext {
+  cols: Col[]; categories: Category[]; products: Product[]; units: UnitLite[]; branches: Place[];
+  /** the shop's SKU format (Admin > SKU); without it every attribute goes into the variation SKU, in column order */
+  attributes?: Pick<ShopAttribute, "key" | "sku_position">[];
+}
 
 /** checks every row and groups the good ones into products ready for import_catalog; a product with a bad row is held back */
 export function planRows(rows: BulkRow[], ctx: PlanContext): Plan {
@@ -161,7 +211,7 @@ export function planRows(rows: BulkRow[], ctx: PlanContext): Plan {
     const c = r.cells;
     const cat = ctx.categories.find((x) => x.name.trim().toLowerCase() === (c.category ?? "").trim().toLowerCase());
     if (!(c.category ?? "").trim()) err(r.uid, "Choose a category.");
-    else if (!cat) err(r.uid, `There is no category "${c.category.trim()}". Pick one from the list.`);
+    else if (!cat) err(r.uid, `There is no category "${c.category.trim()}" yet. Press Save all to add it, or pick one from the list.`);
     const name = (c.name ?? "").trim();
     if (!name) err(r.uid, "Type the product name.");
     else if (name.length > 80) err(r.uid, "The product name is too long (80 characters at most).");
@@ -203,7 +253,7 @@ export function planRows(rows: BulkRow[], ctx: PlanContext): Plan {
     }
     const g = groups.get(sku) ?? { sku, product, rows: [], cat, attrs: [] };
     g.rows.push(r);
-    g.attrs.push(Object.fromEntries(attrCols.map((a) => [a.key.slice(5), (c[a.key] ?? "").trim()]).filter(([, v]) => v)));
+    g.attrs.push(Object.fromEntries(attrCols.map((a) => [a.key.slice(5), tidyValue(c[a.key] ?? "", { key: a.key.slice(5), label: a.label })]).filter(([, v]) => v)));
     groups.set(sku, g);
   }
 
@@ -227,7 +277,7 @@ export function planRows(rows: BulkRow[], ctx: PlanContext): Plan {
       seen.add(key);
       const saved = r.origin ? g.product?.product_variations?.find((v) => v.id === r.origin!.variationId)
         : g.product?.product_variations?.find((v) => sameAttrs(v.attributes ?? {}, attrs));
-      const parts = skuPart(Object.values(attrs).join("-"));
+      const parts = ctx.attributes ? variationSkuPart(attrs, ctx.attributes) : skuPart(Object.values(attrs).join("-"));
       const vSku = saved?.sku ?? (parts ? `${g.sku}-${parts}` : g.sku);
       const owner = variationSkus.get(vSku.toUpperCase());
       if (!saved && owner && owner !== g.product?.id) { err(r.uid, `The variation SKU ${vSku} belongs to another product. Type a different SKU.`); return; }

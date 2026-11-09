@@ -31,6 +31,14 @@ export interface Template {
 
 export interface Branch { id: string; name: string; slug: string; is_active: boolean; phone: string | null; address: string | null; email: string | null }
 export interface Category { id: string; name: string; template_key: string; sku_prefix: string | null }
+/** a shop's own attribute (Colour, Size, Length ...) and its preferred values (migration 030) */
+export interface ShopAttribute {
+  id: string; key: string; label: string; sort: number;
+  /** place in a system-made variation SKU after BR-001; null = left out */
+  sku_position: number | null;
+  is_archived: boolean;
+  shop_attribute_values: { id: string; value: string; sort: number }[];
+}
 export interface AddOn {
   id: string; name: string; basis: AddOnBasis; amount: number; template_keys: string[]; is_active: boolean;
   /** categories it is suggested for at booking; empty = all (migration 029; missing before it is applied) */

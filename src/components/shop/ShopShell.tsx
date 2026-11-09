@@ -25,7 +25,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { profile, user, signOut } = useAuth();
-  const { shop, role, isSupport, isOwner, canManage, branches, myBranchId, word, feature, businessModule, loading } = useShop();
+  const { shop, role, isSupport, isOwner, canManage, branches, myBranchId, word, feature, businessModule, loading, attributes } = useShop();
   const mod = shopModules[businessModule];
 
   // An error or warning is about the page it came from: it is cleared when the person moves to another page
@@ -46,7 +46,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
-  const navCtx = { isOwner, canManage, isSupport, feature, word };
+  const navCtx = { isOwner, canManage, isSupport, feature, word, attributes: attributes.filter((a) => !a.is_archived) };
   const groups: NavGroup[] = loading ? [] : mod.nav(navCtx);
   const visible = groups.map((g) => ({ ...g, items: g.items.filter((n) => n.show) })).filter((g) => g.items.length);
 

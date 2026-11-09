@@ -13,8 +13,9 @@ import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { useCatalog } from "@/lib/shop/useCatalog";
 import { businessNameError, moneyError, textLimitError } from "@/lib/validate";
 import { errorText, num, rupees } from "@/lib/shop/format";
-import type { Product, Template, Unit } from "@/lib/shop/types";
-import { SKU_PATTERN } from "../sku";
+import type { Product, ShopAttribute, Unit } from "@/lib/shop/types";
+import { SKU_PATTERN, variationSkuPart } from "../sku";
+import { capitalWords, tidyValue } from "../bulk";
 import { Field, Modal, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "@/components/shop/ui";
 
 // Add New Product, as in TRENDZ: three steps on one page.
@@ -35,26 +36,22 @@ const money = (n: number | undefined) => (Number(n) ? String(n) : "");
 const TYPED_SKU = /^[A-Z]{2,6}-[0-9]{3,4}$/;
 type Step = "basic" | "attributes" | "variations";
 
-const skuPart = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 16);
 const comboKey = (a: Record<string, string>) => Object.keys(a).sort().map((k) => `${k}=${a[k]}`).join("|");
 
-// One spelling for every value, so "blue", "Blue" and "BLUE" are the same: a suggestion keeps its own spelling (Royal Blue, XL),
-// sizes are capitals (xl -> XL, 3xl -> 3XL, 32), anything else is Title Case.
-function tidy(value: string, suggestions: string[]): string {
+// One spelling for every value, so "blue", "Blue" and "BLUE" are the same: a suggestion keeps its own spelling (Royal Blue, XL);
+// otherwise Size is all capitals (xl -> XL) and any other attribute starts each word with a capital (tidyValue, bulk.ts).
+function tidy(value: string, suggestions: string[], attr: { key: string; label: string }): string {
   const v = value.trim().replace(/\s+/g, " ");
-  const known = suggestions.find((s) => s.toLowerCase() === v.toLowerCase());
-  if (known) return known;
-  if (/^(\d*x*[sml]|\d+)$/i.test(v)) return v.toUpperCase();
-  return v.toLowerCase().replace(/(^|\s)(\S)/g, (_, sp: string, ch: string) => sp + ch.toUpperCase());
+  return suggestions.find((s) => s.toLowerCase() === v.toLowerCase()) ?? tidyValue(v, attr);
 }
-function tidyAll(values: string[], suggestions: string[]): string[] {
+function tidyAll(values: string[], suggestions: string[], attr: { key: string; label: string }): string[] {
   const seen = new Set<string>();
-  return values.map((v) => tidy(v, suggestions)).filter((v) => v && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()));
+  return values.map((v) => tidy(v, suggestions, attr)).filter((v) => v && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()));
 }
-// the business type's suggestions for an attribute, found by key or by name (any capitals)
-function suggestionsFor(template: Template | undefined, a: { key: string; label: string }): string[] {
-  const f = template?.variation_fields.find((x) => x.key === a.key || x.label.toLowerCase() === a.label.trim().toLowerCase());
-  return f?.suggestions ?? [];
+// the shop's preferred values for an attribute (Admin pages), found by key or by name (any capitals)
+function suggestionsFor(attributes: ShopAttribute[], a: { key: string; label: string }): string[] {
+  const f = attributes.find((x) => x.key === a.key || x.label.toLowerCase() === a.label.trim().toLowerCase());
+  return f?.shop_attribute_values.map((v) => v.value) ?? [];
 }
 
 function combos(attrs: Attr[]): Record<string, string>[] {
@@ -65,7 +62,9 @@ function combos(attrs: Attr[]): Record<string, string>[] {
 
 export function ProductWizard({ product, onSaved }: { product?: Product; onSaved?: () => void }) {
   const router = useRouter();
-  const { shop, categories, templates, templateOf, activeBranches, myBranchId, role, isOwner } = useShop();
+  const { shop, categories, templates, templateOf, activeBranches, myBranchId, role, isOwner, attributes } = useShop();
+  // the shop's own attributes in use (Admin > Attributes) start every new product
+  const shopAttrs = attributes.filter((a) => !a.is_archived);
   const wearCats = categories.filter((c) => templates.some((t) => t.key === c.template_key && t.kind === "wearable") && (!product || c.id === product.category_id || templateOf(c.id)?.key === templateOf(product.category_id)?.key));
   const draftKey = `ob_product_draft_${shop.id}`;
   const [step, setStep] = useState<Step>("basic");
@@ -102,6 +101,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   };
   const [sameQty, setSameQty] = useState(false);
   const [askEmpty, setAskEmpty] = useState(false);
+  const [askClear, setAskClear] = useState(false);
   // the "Remove ...?" card: a variation row (by its key) or the whole product
   const [asking, setAsking] = useState<{ kind: "variation"; key: string } | { kind: "product" } | null>(null);
   const [bulk, setBulk] = useState<Record<string, string>>({});
@@ -116,7 +116,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     if (basic.category_id || onlyCatId) setBasic((b) => ({ ...b, category_id: onlyCatId }));
   }, [product, onlyCatId, catValid, basic.category_id]);
 
-  // fields of the business type (Colour, Size) come first; existing values when changing a product
+  // the shop's attributes (Colour, Size ...) come first; existing values when changing a product
   useEffect(() => {
     if (restored.current || !template) return;
     restored.current = true;
@@ -127,18 +127,18 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
           const d = JSON.parse(saved) as { basic: Basic; attrs: Attr[]; rows: VarRow[] };
           // a draft saved before the money fields existed has no values for them
           setBasic((b) => ({ ...b, ...d.basic, mrp: d.basic.mrp ?? "", purchase_price: d.basic.purchase_price ?? "", security_deposit: d.basic.security_deposit ?? "", ownSku: !!d.basic.ownSku })); setRows(d.rows);
-          setAttrsRaw(d.attrs.map((a) => ({ ...a, values: tidyAll(a.values, suggestionsFor(template, a)) })));
+          setAttrsRaw(d.attrs.map((a) => ({ ...a, values: tidyAll(a.values, suggestionsFor(attributes, a), a) })));
           toast.message("Your unfinished product was restored.");
           return;
         }
       } catch { /* storage unavailable */ }
-      setAttrsRaw(template.variation_fields.map((f) => ({ key: f.key, label: f.label, values: [] })));
+      setAttrsRaw(shopAttrs.map((f) => ({ key: f.key, label: f.label, values: [] })));
       return;
     }
     const vars = product.product_variations ?? [];
-    const keys = new Set<string>([...template.variation_fields.map((f) => f.key), ...vars.flatMap((v) => Object.keys(v.attributes ?? {}))]);
+    const keys = new Set<string>([...shopAttrs.map((f) => f.key), ...vars.flatMap((v) => Object.keys(v.attributes ?? {}))]);
     setAttrsRaw(Array.from(keys).map((k) => ({
-      key: k, label: template.variation_fields.find((f) => f.key === k)?.label ?? k,
+      key: k, label: attributes.find((f) => f.key === k)?.label ?? k,
       values: Array.from(new Set(vars.filter((v) => v.is_enabled).map((v) => String(v.attributes?.[k] ?? "")).filter(Boolean))),
     })));
     setRows(vars.map((v) => {
@@ -148,6 +148,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     }));
     const first = vars.find((v) => v.variation_rates?.some((r) => r.rate_type === "day"));
     setBasic((b) => ({ ...b, rate: String(first?.variation_rates?.find((r) => r.rate_type === "day")?.amount ?? "") }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template, product, draftKey]);
 
   // how many pieces each variation already has per branch
@@ -184,7 +185,8 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   const typedSku = basic.sku.trim().toUpperCase();
   const productSku = product ? product.sku : basic.ownSku ? typedSku : nextSku;
   const autoName = (a: Record<string, string>) => Object.values(a).filter(Boolean).join(" / ") || basic.name.trim() || "Standard";
-  const autoSku = (a: Record<string, string>) => `${productSku}${Object.values(a).filter(Boolean).length ? "-" + skuPart(Object.values(a).filter(Boolean).join("-")) : ""}`;
+  // the shop's SKU format (Admin > SKU): which attributes go in, in which order
+  const autoSku = (a: Record<string, string>) => { const part = variationSkuPart(a, attributes); return part ? `${productSku}-${part}` : productSku; };
 
   // step 3 rows: one per mix of values; existing variations keep their place, new mixes are added
   const buildRows = () => {
@@ -272,7 +274,8 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     // saved variations always go (unticked = switched off); a new mix goes only when ticked
     const sent = rows.filter((r) => r.id || r.enabled);
     const skus = sent.map((r) => (r.sku || autoSku(r.attributes)).toUpperCase());
-    if (new Set(skus).size !== skus.length) return toast.error("Two variations have the same SKU. Change one of them.");
+    const twice = skus.find((s, i) => skus.indexOf(s) !== i);
+    if (twice) return toast.error(`Two variations would get the same SKU, ${twice}. Add the attribute they differ by on the Admin > SKU page.`);
     // a new or changed variation SKU follows the shop's pattern (a saved one that was not touched is left alone)
     const bad = skus.find((s, i) => !SKU_PATTERN.test(s) && s !== sent[i].savedSku);
     if (bad) return toast.error(`SKU ${bad} is not allowed: start with ${productSku}, then more parts after hyphens (e.g. ${productSku}-GOLD-M).`);
@@ -326,7 +329,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     restored.current = false;
     setBasic({ category_id: wearCats.length === 1 ? wearCats[0].id : "", name: "", sku: "", rate: "", replacement_value: "", description: "", image_url: "", is_active: true,
       mrp: "", purchase_price: "", security_deposit: "", ownSku: false });
-    setAttrsRaw(template ? template.variation_fields.map((f) => ({ key: f.key, label: f.label, values: [] })) : []);
+    setAttrsRaw(shopAttrs.map((f) => ({ key: f.key, label: f.label, values: [] })));
     setRows([]);
     setStep("basic");
   };
@@ -339,7 +342,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
       <PageHeader title={product ? product.name : "Add New Product"}
         actions={<>
           {product && isOwner ? <button className={dangerButtonClass} onClick={() => setAsking({ kind: "product" })}><Trash2 className="h-4 w-4" /> Remove</button> : null}
-          {!product ? <button className={ghostButtonClass} onClick={discard}>Clear form</button> : null}
+          {!product ? <button className={ghostButtonClass} onClick={() => setAskClear(true)}>Clear form</button> : null}
         </>} />
 
       <ol className="mb-4 flex flex-wrap gap-2" aria-label="Steps">
@@ -423,11 +426,10 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
           <ul className="space-y-3">
             {attrs.map((a, i) => (
               <li key={i} className="grid gap-2 rounded-lg border border-border p-3 sm:grid-cols-[180px_1fr_auto] sm:items-start">
-                <AttributeName attr={a} locked={!!template?.variation_fields.some((f) => f.key === a.key || f.label.toLowerCase() === a.label.trim().toLowerCase())}
-                  choices={[...(template?.variation_fields.map((f) => f.label) ?? []), ...EXTRA_ATTRIBUTES].filter((n, k, all) => all.indexOf(n) === k
-                    && !attrs.some((x, j) => j !== i && x.label.toLowerCase() === n.toLowerCase()))}
+                <AttributeName attr={a} locked={shopAttrs.some((f) => f.key === a.key || f.label.toLowerCase() === a.label.trim().toLowerCase())}
+                  choices={shopAttrs.map((f) => f.label).filter((n) => !attrs.some((x, j) => j !== i && x.label.toLowerCase() === n.toLowerCase()))}
                   onChange={(label) => setAttrs(attrs.map((x, j) => j === i ? { ...x, label, key: label.trim().toLowerCase().replace(/\s+/g, "_") } : x))} />
-                <ChipInput values={a.values} label={a.label || "attribute"} suggestions={suggestionsFor(template, a)}
+                <ChipInput values={a.values} label={a.label || "attribute"} attr={a} suggestions={suggestionsFor(attributes, a)}
                   onChange={(values) => setAttrs(attrs.map((x, j) => j === i ? { ...x, values } : x))} />
                 <button type="button" aria-label={`Remove ${a.label || "attribute"}`} className="rounded p-2 hover:bg-black/5" onClick={() => setAttrs(attrs.filter((_, j) => j !== i))}><Trash2 className="h-4 w-4" /></button>
               </li>
@@ -540,6 +542,9 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
       </Modal>
       <ConfirmDialog open={askEmpty} confirmLabel="Save anyway" message={"No pieces were added.\n\nWithout pieces nobody can book this product. Save it anyway?"}
         onCancel={() => setAskEmpty(false)} onConfirm={() => { setAskEmpty(false); void save(true); }} />
+      <ConfirmDialog open={askClear} confirmLabel="Clear form" cancelLabel="Keep editing"
+        message={"Clear this form?\n\nEverything typed for this product (details, photo, attributes, variations and stock) is removed. This cannot be undone."}
+        onCancel={() => setAskClear(false)} onConfirm={() => { setAskClear(false); discard(); }} />
       <div className="mt-4 flex justify-between">
         {stepIndex > 0 ? <button className={ghostButtonClass} onClick={() => setStep(steps[stepIndex - 1][0])}>Back</button> : <span />}
         <button className={goldButtonClass} disabled={busy} onClick={() => (step === "variations" ? void save() : step === "basic" ? goAttributes() : buildRows())}>
@@ -550,13 +555,10 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   );
 }
 
-// Names offered besides the business type's own attributes; "Custom..." lets the shop type its own.
-const EXTRA_ATTRIBUTES = ["Fabric", "Fit", "Length", "Work", "Style", "Occasion"];
-
 function AttributeName({ attr, locked, choices, onChange }: { attr: Attr; locked: boolean; choices: string[]; onChange: (label: string) => void }) {
   const known = choices.includes(attr.label);
   const [custom, setCustom] = useState(!!attr.label && !known);
-  // the type's own attributes (Colour, Size) are plain bold text; others are chosen or typed
+  // the shop's attributes (Colour, Size) are plain bold text; others are chosen from the shop's list or typed for this product only
   if (locked) return <div className="flex min-h-10 items-center text-sm font-semibold text-foreground">{attr.label}</div>;
   return (
     <div className="space-y-1.5">
@@ -566,17 +568,17 @@ function AttributeName({ attr, locked, choices, onChange }: { attr: Attr; locked
         {choices.map((n) => <option key={n} value={n}>{n}</option>)}
         <option value="__custom">Custom...</option>
       </select>
-      {!locked && custom ? <input className={inputClass} aria-label="Custom attribute name" placeholder="e.g. Sleeve type" value={attr.label} onChange={(e) => onChange(e.target.value)} /> : null}
+      {!locked && custom ? <input className={inputClass} aria-label="Custom attribute name" placeholder="e.g. Sleeve Type" value={attr.label} onChange={(e) => onChange(capitalWords(e.target.value))} /> : null}
     </div>
   );
 }
 
-function ChipInput({ values, label, onChange, suggestions = [] }: { values: string[]; label: string; onChange: (v: string[]) => void; suggestions?: string[] }) {
+function ChipInput({ values, label, attr, onChange, suggestions = [] }: { values: string[]; label: string; attr: { key: string; label: string }; onChange: (v: string[]) => void; suggestions?: string[] }) {
   const [text, setText] = useState("");
   const add = () => {
     // only the new values are tidied; saved ones keep their spelling (their variations are keyed by it)
     const have = new Set(values.map((v) => v.toLowerCase()));
-    const fresh = tidyAll(text.split(","), suggestions).filter((v) => !have.has(v.toLowerCase()));
+    const fresh = tidyAll(text.split(","), suggestions, attr).filter((v) => !have.has(v.toLowerCase()));
     if (fresh.length) onChange([...values, ...fresh]);
     setText("");
   };
