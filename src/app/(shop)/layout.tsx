@@ -27,7 +27,7 @@ export default function ShopLayout({ children }: { children: ReactNode }) {
   }
   return (
     <ShopProvider>
-      <CartProvider shopId={shop.id}>
+      <CartProvider key={`${shop.id}:${profile.id}`} shopId={shop.id}>
         <ShopShell>{children}</ShopShell>
       </CartProvider>
     </ShopProvider>

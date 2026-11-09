@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/overbooked/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 import { call, loadRental, money, type RentalDetail } from "@/lib/shop/api";
 import {
-  BASIS_LABELS, CHARGE_LABELS, DEFAULT_TZ, METHOD_LABELS, PAYMENT_LABELS, fmtDate, fmtDateTime, lineMath, rupees,
+  BASIS_LABELS, CHARGE_LABELS, DEFAULT_TZ, METHOD_LABELS, PAYMENT_LABELS, fmtDate, fmtDateTime, inclusiveTaxBreakdown, lineMath, rupees,
 } from "@/lib/shop/format";
 import type { Branch } from "@/lib/shop/types";
 
@@ -43,8 +43,7 @@ export default function PrintRental() {
   const closed = r.status === "cancelled" || r.status === "no_show";
   const isInvoice = !!shop.gstin && gst > 0 && r.status === "completed" && inv !== null;
   const sac: string = shop.settings?.sac_code ?? "";
-  const taxable = Math.round((m.total / (1 + gst / 100)) * 100) / 100;
-  const tax = Math.round((m.total - taxable) * 100) / 100;
+  const { taxable, tax } = inclusiveTaxBreakdown(m.total, gst);
   const note: string = shop.settings?.receipt_note ?? "";
   const isRoom = r.rental_lines.every((l) => l.kind === "room");
 

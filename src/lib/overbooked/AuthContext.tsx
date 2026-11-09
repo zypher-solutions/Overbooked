@@ -5,6 +5,7 @@ import { User, Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { setShopBrand } from "./brand";
+import { cartStorageKey } from "@/modules/clothing/cart-storage";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -172,7 +173,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setShop(null);
         setShopBrand(null);
         userIdRef.current = null;
-        if (event === "SIGNED_OUT" && !endingOnPurpose.current) setNotice("session");
+        if (event === "SIGNED_OUT") {
+          clearBookingDrafts();
+          if (!endingOnPurpose.current) setNotice("session");
+        }
       }
       setIsLoading(false);
     });
@@ -198,6 +202,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     clearBookingDrafts();
+    if (shop && profile) {
+      try { localStorage.removeItem(cartStorageKey(shop.id, profile.id)); } catch { /* storage unavailable */ }
+    }
     window.location.href = "/login";
   };
 
@@ -220,7 +227,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            {/* The booking draft in sessionStorage is left untouched. */}
             <AlertDialogAction onClick={() => { window.location.href = "/login"; }}>Go to sign in</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,5 +1,10 @@
 import { money } from "@/lib/shop/api";
-import { METHOD_LABELS, num, plural, rupees } from "@/lib/shop/format";
+import {
+  inclusiveTaxBreakdown,
+  METHOD_LABELS,
+  num,
+  rupees,
+} from "@/lib/shop/format";
 import type { Method } from "@/lib/shop/types";
 import { Field, inputClass, monoInputClass } from "@/components/shop/ui";
 import type { BookingForm } from "@/components/shop/useBookingForm";
@@ -230,19 +235,8 @@ function ReviewRow({
   );
 }
 
-export function CheckoutReview({
-  f,
-  pickup,
-  returns,
-  branchName,
-}: {
-  f: BookingForm;
-  pickup: string;
-  returns: string;
-  branchName: string;
-}): React.JSX.Element {
-  const { d, customer, editing, total, quote, editPay, cleaning } = f;
-  const person = editing?.customers ?? customer ?? d.customer;
+export function CheckoutSummary({ f }: { f: BookingForm }): React.JSX.Element {
+  const { d, editing, total, quote, editPay, lines, variations, shop } = f;
   const advance = num(d.advance);
   const deposit = num(editing ? d.depositAgreed : d.deposit);
   const priorPayment = editing ? money(editing).paid : 0;
@@ -251,92 +245,93 @@ export function CheckoutReview({
     0,
     total - (editing ? priorPayment + additionalPayment : advance),
   );
+  const gstRate = shop.gstin ? Number(shop.settings?.gst_percent ?? 0) : 0;
+  const { tax: includedTax } = inclusiveTaxBreakdown(total, gstRate);
+  const discount = num(d.discount);
 
   return (
-    <div className="space-y-5">
-      <dl className="space-y-2 text-sm">
-        <ReviewRow label="Customer">
-          {person.full_name}
-          <span className="block font-normal text-muted-foreground">
-            {person.phone}
-          </span>
+    <>
+      <h2
+        id="checkout-summary-title"
+        className="scroll-mt-20 text-lg font-semibold"
+      >
+        Order summary
+      </h2>
+      {lines.length ? (
+        <ul
+          aria-label="Order items"
+          className="mt-3 max-h-36 divide-y divide-border overflow-y-auto text-sm"
+        >
+          {lines.map((line) => {
+            const product = variations.get(line.variation_id);
+            const priced = f.quoteLineFor(line.variation_id);
+            const name =
+              product?.product.name ?? priced?.description ?? "Cart item";
+            const variant = product?.variation.name;
+            return (
+              <li
+                key={line.variation_id}
+                className="flex items-baseline justify-between gap-3 py-2"
+              >
+                <span className="min-w-0 break-words">
+                  <span className="font-medium">{name}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {variant && variant !== name ? `${variant} · ` : ""}Qty{" "}
+                    {line.qty}
+                  </span>
+                </span>
+                <span className="shrink-0 tabular-nums">
+                  {priced ? rupees(priced.amount) : "—"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Your cart is empty.
+        </p>
+      )}
+      <dl className="mt-3 space-y-2.5 border-t border-border pt-3 text-sm">
+        <ReviewRow label="Cart subtotal">
+          {quote ? rupees(quote.total_before_discount) : "—"}
         </ReviewRow>
-        <ReviewRow label="Pickup">{pickup}</ReviewRow>
-        <ReviewRow label="Return">{returns}</ReviewRow>
-        <ReviewRow label="Branch">{branchName}</ReviewRow>
-        {cleaning ? (
-          <ReviewRow label="Cleaning buffer">
-            {plural(cleaning, "day")}
+        {quote && quote.add_ons_total > 0 ? (
+          <ReviewRow label="Accessories included">
+            {rupees(quote.add_ons_total)}
           </ReviewRow>
         ) : null}
-      </dl>
-
-      <section
-        aria-labelledby="checkout-payment-summary"
-        className="rounded-xl border border-border bg-muted/40 p-4 sm:p-5"
-      >
-        <h3 id="checkout-payment-summary" className="text-base font-semibold">
-          Payment summary
-        </h3>
-        <dl className="mt-3 space-y-2.5 text-sm">
-          {num(d.discount) > 0 ? (
-            <>
-              <ReviewRow label="Cart subtotal">
-                {rupees(quote?.total_before_discount)}
+        {discount > 0 ? (
+          <ReviewRow label="Discount">−{rupees(discount)}</ReviewRow>
+        ) : null}
+        <ReviewRow label={gstRate > 0 ? `GST included (${gstRate}%)` : "GST"}>
+          {quote ? rupees(includedTax) : "—"}
+        </ReviewRow>
+        <ReviewRow label="Rental total">
+          {quote ? rupees(total) : "—"}
+        </ReviewRow>
+        {editing ? (
+          <>
+            <ReviewRow label="Paid so far">{rupees(priorPayment)}</ReviewRow>
+            {additionalPayment > 0 ? (
+              <ReviewRow label="Additional payment">
+                {rupees(additionalPayment)}
               </ReviewRow>
-              <ReviewRow label="Discount">−{rupees(num(d.discount))}</ReviewRow>
-            </>
-          ) : null}
-          <ReviewRow label="Rental total">{rupees(total)}</ReviewRow>
-          {editing ? (
-            <>
-              <ReviewRow label="Paid so far">{rupees(priorPayment)}</ReviewRow>
-              {additionalPayment > 0 ? (
-                <ReviewRow
-                  label={`Additional payment · ${METHOD_LABELS[editPay.method]}`}
-                >
-                  {rupees(additionalPayment)}
-                </ReviewRow>
-              ) : null}
-            </>
-          ) : (
-            <ReviewRow
-              label={
-                advance > 0
-                  ? `Advance paid · ${METHOD_LABELS[d.advanceMethod]}`
-                  : "Advance paid"
-              }
-            >
-              {rupees(advance)}
-            </ReviewRow>
-          )}
-          <div className="flex justify-between gap-3 border-t border-border pt-3 text-base font-semibold">
-            <dt>Remaining rental balance</dt>
-            <dd className="shrink-0 tabular-nums text-gold">{rupees(due)}</dd>
-          </div>
-          <ReviewRow
-            label={
-              !editing && deposit > 0
-                ? `Security deposit · ${METHOD_LABELS[d.depositMethod]}`
-                : "Security deposit"
-            }
-          >
-            {rupees(deposit)}
-          </ReviewRow>
-        </dl>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The security deposit is tracked separately from the rental balance.
-        </p>
-      </section>
-
-      {d.notes.trim() ? (
-        <div className="text-sm">
-          <h3 className="font-semibold">Notes</h3>
-          <p className="mt-1 break-words whitespace-pre-wrap text-muted-foreground">
-            {d.notes}
-          </p>
+            ) : null}
+          </>
+        ) : (
+          <ReviewRow label="Advance paid">{rupees(advance)}</ReviewRow>
+        )}
+        <div className="flex justify-between gap-3 border-t border-border pt-3 text-base font-semibold">
+          <dt>Remaining rental balance</dt>
+          <dd className="shrink-0 tabular-nums text-gold">
+            {quote ? rupees(due) : "—"}
+          </dd>
         </div>
-      ) : null}
-    </div>
+        <ReviewRow label="Security deposit (separate)">
+          {rupees(deposit)}
+        </ReviewRow>
+      </dl>
+    </>
   );
 }

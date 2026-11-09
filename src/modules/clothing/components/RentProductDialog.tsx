@@ -20,6 +20,7 @@ import {
   type StockRow,
 } from "@/modules/clothing/components/StockCard";
 import { useCart } from "@/modules/clothing/cart";
+import { CartSwitcher } from "@/modules/clothing/components/CartSwitcher";
 
 const swatches: Record<string, string> = {
   black: "#111111",
@@ -237,6 +238,9 @@ export function RentProductDialog({
         <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3 sm:px-6">
           {showingStock ? (
             <>
+              <div className="mr-auto">
+                <CartSwitcher />
+              </div>
               <button
                 type="button"
                 className={cn(ghostButtonClass, "min-h-11")}
@@ -246,7 +250,7 @@ export function RentProductDialog({
               </button>
               {cart.count > 0 ? (
                 <Link
-                  href="/book"
+                  href="/checkout"
                   className={cn(goldButtonClass, "min-h-11")}
                   onClick={onClose}
                 >

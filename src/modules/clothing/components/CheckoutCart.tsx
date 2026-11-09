@@ -18,17 +18,12 @@ const cartButton =
 function CartProductPhoto({
   src,
   name,
-  compact,
 }: {
   src?: string | null;
   name: string;
-  compact: boolean;
 }): React.JSX.Element {
   const [failed, setFailed] = useState(false);
-  const frame = cn(
-    "shrink-0 rounded-lg border border-border bg-muted",
-    compact ? "size-11" : "size-16",
-  );
+  const frame = "size-14 shrink-0 rounded-lg border border-border bg-muted";
 
   return src && !failed ? (
     <img
@@ -48,13 +43,7 @@ function CartProductPhoto({
   );
 }
 
-export function CheckoutCart({
-  f,
-  editable,
-}: {
-  f: BookingForm;
-  editable: boolean;
-}): React.JSX.Element {
+export function CheckoutCart({ f }: { f: BookingForm }): React.JSX.Element {
   const {
     d,
     editing,
@@ -74,19 +63,12 @@ export function CheckoutCart({
     set,
   } = f;
   const count = lines.reduce((sum, line) => sum + line.qty, 0);
-  const extras = editable
-    ? visibleAddOns
-    : visibleAddOns.filter((extra) => d.addOns[extra.id] !== undefined);
+  const extras = visibleAddOns;
 
   return (
-    <aside
+    <section
       aria-labelledby="checkout-cart-title"
-      className={cn(
-        "min-w-0 shrink-0 border-border bg-surface-2 px-4 py-4 sm:px-6 lg:min-h-0 lg:overflow-y-auto lg:border-l",
-        editable
-          ? "border-t lg:border-t-0"
-          : "sticky top-0 z-10 order-first max-h-[28dvh] overflow-y-auto border-b lg:static lg:order-none lg:max-h-none lg:border-b-0",
-      )}
+      className="mt-5 min-w-0 border-t border-border pt-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="checkout-cart-title" className="text-base font-semibold">
@@ -101,7 +83,7 @@ export function CheckoutCart({
           <StatusBadge tone="emerald">In stock</StatusBadge>
         ) : null}
       </div>
-      {editable && count > 0 ? (
+      {count > 0 ? (
         <p className="mt-1 text-sm text-muted-foreground">
           Check quantities and assign the pieces going out.
         </p>
@@ -119,16 +101,12 @@ export function CheckoutCart({
           .
         </p>
       ) : null}
-      {editable && checkingStock ? (
+      {checkingStock ? (
         <p role="status" className="mt-3 text-sm text-gold">
           Checking piece availability…
         </p>
       ) : null}
-      {editable &&
-      periodOk &&
-      !checkingStock &&
-      !stockError &&
-      shortItems.length > 0 ? (
+      {periodOk && !checkingStock && !stockError && shortItems.length > 0 ? (
         <div className="mt-3 rounded-lg border border-rust/35 bg-rust/5 p-3 text-sm">
           <p className="font-semibold">Not available for these dates</p>
           <ul className="mt-1 list-inside list-disc">
@@ -167,18 +145,10 @@ export function CheckoutCart({
           return (
             <li
               key={line.variation_id}
-              className={cn(
-                "rounded-xl border border-border bg-surface",
-                editable ? "p-3" : "p-2.5",
-              )}
+              className="rounded-lg border border-border bg-surface p-3"
             >
               <div className="flex items-start gap-2.5">
-                <CartProductPhoto
-                  key={photo}
-                  src={photo}
-                  name={name}
-                  compact={!editable}
-                />
+                <CartProductPhoto key={photo} src={photo} name={name} />
                 <div className="min-w-0 flex-1">
                   <p className="break-words text-sm leading-snug font-semibold">
                     {name}
@@ -193,80 +163,64 @@ export function CheckoutCart({
                       {sku}
                     </p>
                   ) : null}
-                  {!editable ? (
-                    <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 text-xs">
-                      <span className="text-muted-foreground">
-                        Qty {line.qty}
-                      </span>
-                      {pricing ? (
-                        <strong className="text-sm tabular-nums">
-                          {rupees(pricing.amount)}
-                        </strong>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </div>
               </div>
-              {editable ? (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-t border-border pt-2.5">
-                  {pricing ? (
-                    <div>
-                      <p className="text-sm font-semibold tabular-nums">
-                        {rupees(pricing.amount)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {pricing.is_override
-                          ? "Agreed price"
-                          : lineMath(pricing)}
-                      </p>
-                    </div>
-                  ) : null}
-                  <div className="ml-auto flex items-center gap-1">
-                    <div className="flex items-center rounded-lg border border-border bg-muted/40">
-                      <button
-                        type="button"
-                        aria-label="One less"
-                        className={cartButton}
-                        onClick={() =>
-                          updateLine(line.variation_id, {
-                            qty: line.qty - 1,
-                            unit_ids: line.unit_ids.slice(0, line.qty - 1),
-                          })
-                        }
-                      >
-                        <Minus aria-hidden="true" className="size-4" />
-                      </button>
-                      <span className="w-7 text-center text-sm font-semibold tabular-nums">
-                        {line.qty}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label="One more"
-                        className={cartButton}
-                        onClick={() =>
-                          updateLine(line.variation_id, { qty: line.qty + 1 })
-                        }
-                      >
-                        <Plus aria-hidden="true" className="size-4" />
-                      </button>
-                    </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-t border-border pt-2.5">
+                {pricing ? (
+                  <div>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {rupees(pricing.amount)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {pricing.is_override ? "Agreed price" : lineMath(pricing)}
+                    </p>
+                  </div>
+                ) : null}
+                <div className="ml-auto flex items-center gap-1">
+                  <div className="flex items-center rounded-lg border border-border bg-muted/40">
                     <button
                       type="button"
-                      aria-label="Remove from cart"
-                      className={cn(
-                        cartButton,
-                        "hover:bg-rust/10 hover:text-rust",
-                      )}
+                      aria-label="One less"
+                      className={cartButton}
                       onClick={() =>
-                        updateLine(line.variation_id, { qty: 0, unit_ids: [] })
+                        updateLine(line.variation_id, {
+                          qty: line.qty - 1,
+                          unit_ids: line.unit_ids.slice(0, line.qty - 1),
+                        })
                       }
                     >
-                      <Trash2 aria-hidden="true" className="size-4" />
+                      <Minus aria-hidden="true" className="size-4" />
+                    </button>
+                    <span className="w-7 text-center text-sm font-semibold tabular-nums">
+                      {line.qty}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="One more"
+                      className={cartButton}
+                      onClick={() =>
+                        updateLine(line.variation_id, { qty: line.qty + 1 })
+                      }
+                    >
+                      <Plus aria-hidden="true" className="size-4" />
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    aria-label="Remove from cart"
+                    className={cn(
+                      cartButton,
+                      "hover:bg-rust/10 hover:text-rust",
+                    )}
+                    onClick={() =>
+                      updateLine(line.variation_id, { qty: 0, unit_ids: [] })
+                    }
+                  >
+                    <Trash2 aria-hidden="true" className="size-4" />
+                  </button>
                 </div>
-              ) : null}
-              {editable && periodOk && pieceLines.includes(line) ? (
+              </div>
+              {periodOk && pieceLines.includes(line) ? (
                 <div className="mt-3 space-y-2 border-t border-border pt-2.5">
                   <p className="text-sm font-semibold">
                     Physical pieces{" "}
@@ -337,18 +291,6 @@ export function CheckoutCart({
                   )}
                 </div>
               ) : null}
-              {!editable && line.unit_ids.length ? (
-                <p className="mt-1 break-words text-sm text-muted-foreground">
-                  {line.unit_ids
-                    .map(
-                      (id) =>
-                        availablePieces?.find((piece) => piece.unit_id === id)
-                          ?.code,
-                    )
-                    .filter(Boolean)
-                    .join(", ")}
-                </p>
-              ) : null}
             </li>
           );
         })}
@@ -366,7 +308,9 @@ export function CheckoutCart({
       {extras.length ? (
         <div className="mt-4 space-y-2 border-t border-border pt-3">
           <h3 className="text-sm font-semibold">Accessories</h3>
-          {editable ? <p className="text-xs text-muted-foreground">Tick the ones the customer is taking.</p> : null}
+          <p className="text-xs text-muted-foreground">
+            Tick the ones the customer is taking.
+          </p>
           <ul className="space-y-2">
             {extras.map((extra) => {
               const quantity = d.addOns[extra.id];
@@ -378,32 +322,31 @@ export function CheckoutCart({
                   key={extra.id}
                   className="flex flex-wrap items-center justify-between gap-2 text-sm"
                 >
-                  {editable ? (
-                    <label className="flex min-w-0 items-start gap-2">
-                      <input
-                        type="checkbox"
-                        className="mt-1 accent-gold"
-                        checked={quantity !== undefined}
-                        onChange={(event) => {
-                          const next = { ...d.addOns };
-                          if (event.target.checked) next[extra.id] = 1;
-                          else delete next[extra.id];
-                          set({ addOns: next });
-                        }}
-                      />
-                      <span className="min-w-0 break-words">
-                        {extra.name}
-                        <span className="block text-muted-foreground">
-                          {Number(extra.amount) > 0 ? `${rupees(extra.amount)} ${BASIS_LABELS[extra.basis]}` : "Free"}
-                          {extra.quantity != null ? ` · ${extra.quantity} in the shop` : ""}
-                        </span>
+                  <label className="flex min-w-0 items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1 accent-gold"
+                      checked={quantity !== undefined}
+                      onChange={(event) => {
+                        const next = { ...d.addOns };
+                        if (event.target.checked) next[extra.id] = 1;
+                        else delete next[extra.id];
+                        set({ addOns: next });
+                      }}
+                    />
+                    <span className="min-w-0 break-words">
+                      {extra.name}
+                      <span className="block text-muted-foreground">
+                        {Number(extra.amount) > 0
+                          ? `${rupees(extra.amount)} ${BASIS_LABELS[extra.basis]}`
+                          : "Free"}
+                        {extra.quantity != null
+                          ? ` · ${extra.quantity} in the shop`
+                          : ""}
                       </span>
-                    </label>
-                  ) : (
-                    <span>{extra.name}</span>
-                  )}
-                  {editable &&
-                  quantity !== undefined &&
+                    </span>
+                  </label>
+                  {quantity !== undefined &&
                   (extra.basis === "per_rental" ||
                     extra.basis === "per_day") ? (
                     <input
@@ -436,14 +379,6 @@ export function CheckoutCart({
           </ul>
         </div>
       ) : null}
-      {quote && count > 0 ? (
-        <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3 text-sm">
-          <span className="font-medium">Cart subtotal</span>
-          <strong className="tabular-nums">
-            {rupees(quote.total_before_discount)}
-          </strong>
-        </div>
-      ) : null}
-    </aside>
+    </section>
   );
 }

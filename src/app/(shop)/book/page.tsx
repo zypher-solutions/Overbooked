@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Minus, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -13,12 +14,26 @@ import { CustomerPicker } from "@/components/shop/CustomerPicker";
 import { Field, MethodPicker, MoneyRows, PageHeader, Panel, StatusBadge, ghostButtonClass, goldButtonClass, inputClass, monoInputClass, PageSkeleton } from "@/components/shop/ui";
 import { useBookingForm, type BookingForm as BookingFormState } from "@/components/shop/useBookingForm";
 import { shopModules } from "@/modules/registry";
+import { useCart } from "@/modules/clothing/cart";
 
 export default function NewBookingPage() {
   // defaults (branch, times) come from the shop setup, so wait for it
   const { loading } = useShop();
-  if (loading) return <PageSkeleton columns={false} />;
-  return <Suspense fallback={<PageSkeleton columns={false} />}><NewBooking /></Suspense>;
+  const { ready } = useCart();
+  if (loading || !ready) return <PageSkeleton columns={false} />;
+  return <Suspense fallback={<PageSkeleton columns={false} />}><BookingRoute /></Suspense>;
+}
+
+function BookingRoute(): React.JSX.Element {
+  const { businessModule } = useShop();
+  const params = useSearchParams();
+  const router = useRouter();
+  const redirectToCheckout = businessModule === "clothing" && !params.get("edit");
+  const query = params.toString();
+  useEffect(() => {
+    if (redirectToCheckout) router.replace(`/checkout${query ? `?${query}` : ""}`);
+  }, [query, redirectToCheckout, router]);
+  return redirectToCheckout ? <PageSkeleton columns={false} /> : <NewBooking key={params.get("edit") ?? "new"} />;
 }
 
 function NewBooking() {

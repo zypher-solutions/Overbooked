@@ -3,12 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { errorText } from "@/lib/shop/format";
-import { PageHeader, Panel, goldButtonClass, inputClass, linkClass, tableWrap, theadClass } from "@/components/shop/ui";
+import { PageHeader, Panel, ghostButtonClass, goldButtonClass, inputClass, linkClass, tableWrap, theadClass } from "@/components/shop/ui";
 import { reorder } from "./Attributes";
 import { tidyValue } from "../bulk";
 
@@ -78,6 +78,9 @@ export default function AttributeValues() {
   const iconButton = "rounded-md p-2 text-muted-foreground hover:bg-black/5 hover:text-foreground disabled:opacity-30";
   return (
     <>
+      <Link href="/admin/attributes" className={`${ghostButtonClass} mb-3 -ml-2.5`}>
+        <ArrowLeft aria-hidden="true" className="size-4" /> Back to attributes
+      </Link>
       <PageHeader title={attr.label}
         subtitle={`Your preferred ${attr.label.toLowerCase()} values, suggested when adding a product. A new value typed on a product is added here when it is saved.`} />
       {attr.is_archived ? (

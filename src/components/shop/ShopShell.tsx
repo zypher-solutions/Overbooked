@@ -9,6 +9,7 @@ import {
   LogOut, MapPin, Menu, Plus, ScanLine, Settings2, ShoppingBag, Store, Tag, Upload, Users, UserRound, Wallet, X, type LucideIcon,
 } from "lucide-react";
 import { useCart } from "@/modules/clothing/cart";
+import { CartSwitcher } from "@/modules/clothing/components/CartSwitcher";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/overbooked/AuthContext";
 import { useShop } from "@/lib/shop/ShopContext";
@@ -25,7 +26,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { profile, user, signOut } = useAuth();
-  const { shop, role, isSupport, isOwner, canManage, branches, myBranchId, word, feature, businessModule, loading, attributes } = useShop();
+  const { shop, role, isSupport, isOwner, canManage, branches, myBranchId, word, feature, businessModule, loading } = useShop();
   const mod = shopModules[businessModule];
 
   // An error or warning is about the page it came from: it is cleared when the person moves to another page
@@ -46,7 +47,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
-  const navCtx = { isOwner, canManage, isSupport, feature, word, attributes: attributes.filter((a) => !a.is_archived) };
+  const navCtx = { isOwner, canManage, isSupport, feature, word };
   const groups: NavGroup[] = loading ? [] : mod.nav(navCtx);
   const visible = groups.map((g) => ({ ...g, items: g.items.filter((n) => n.show) })).filter((g) => g.items.length);
 
@@ -127,22 +128,24 @@ export function ShopShell({ children }: { children: ReactNode }) {
         </div>
       </main>
 
-      {/* the cart's way to checkout, on every screen but the booking form itself */}
-      {cart.count > 0 && pathname !== "/book" ? (
-        <Link href="/book" className={cn(goldButtonClass, "fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-30 px-5 py-3 text-sm shadow-xl")}>
-          <ShoppingBag className="h-4 w-4" /> Checkout ({cart.count})
-        </Link>
+      {cart.ready && !loading && pathname !== "/book" && pathname !== "/checkout" && (businessModule === "clothing" || cart.count > 0) ? (
+        <div className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-30 flex max-w-[calc(100vw-2.5rem)] items-center gap-1.5 rounded-xl border border-border bg-surface p-1.5 shadow-lg">
+          {businessModule === "clothing" ? <CartSwitcher /> : null}
+          <Link href={businessModule === "clothing" ? "/checkout" : "/book"} className={cn(goldButtonClass, "min-h-11 shrink-0")}>
+            <ShoppingBag className="h-4 w-4" aria-hidden="true" /> Checkout{cart.count > 0 ? ` (${cart.count})` : ""}
+          </Link>
+        </div>
       ) : null}
       <ConfirmDialog
         open={confirmSignOut}
         title="Sign out of Overbooked?"
-        message={cart.count > 0
-          ? "Your cart and the booking draft you are filling in will be cleared when you sign out. Stay signed in to keep them."
+        message={businessModule === "clothing" || cart.count > 0
+          ? "Your open carts and checkout details will be cleared from this device when you sign out."
           : "You will be signed out of this device. You can sign in again at any time."}
         confirmLabel="Sign out"
         cancelLabel="Stay signed in"
         tone="danger"
-        onConfirm={() => { cart.clear(); void signOut(); }}
+        onConfirm={() => { void signOut(); }}
         onCancel={() => setConfirmSignOut(false)}
       />
     </div>

@@ -189,7 +189,12 @@ export default function InventorySearch() {
               <Link href={`/rentals/${unit.reservation.rental_id}`} className={ghostButtonClass}>Booked on {unit.reservation.token}</Link>
             ) : null}
             {unit.status === "available" && unit.reservation?.state !== "out" && canBook(unit.branch_id) ? (
-              <button className={goldButtonClass} onClick={() => { cart.add(unit.branch_id, unit.variation_id, unit.id); toast.success(`${unit.code} added to the cart`); void reloadStock(); }}>
+              <button className={goldButtonClass} onClick={() => {
+                if (cart.add(unit.branch_id, unit.variation_id, unit.id)) {
+                  toast.success(`${unit.code} added to the cart`);
+                  void reloadStock();
+                }
+              }}>
                 <ShoppingBag className="h-4 w-4" /> Add this piece to cart
               </button>
             ) : null}

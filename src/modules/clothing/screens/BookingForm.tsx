@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
-import { toast } from "sonner";
+import { ArrowDown, ArrowLeft, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { call, money } from "@/lib/shop/api";
 import {
@@ -24,40 +23,20 @@ import {
   goldButtonClass,
   inputClass,
   monoInputClass,
+  PageHeader,
+  Panel,
+  Skeleton,
 } from "@/components/shop/ui";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Toaster } from "@/components/ui/sonner";
-import type { BookingForm as BookingFormState } from "@/components/shop/useBookingForm";
+import type {
+  BookedRental,
+  BookingForm as BookingFormState,
+} from "@/components/shop/useBookingForm";
+import { CartSwitcher } from "@/modules/clothing/components/CartSwitcher";
 import { CheckoutCart } from "@/modules/clothing/components/CheckoutCart";
 import {
   CheckoutPayment,
-  CheckoutReview,
+  CheckoutSummary,
 } from "@/modules/clothing/components/CheckoutPayment";
-
-const steps = [
-  {
-    id: "rental",
-    label: "Rental setup",
-    short: "Rental",
-    next: "Continue to customer",
-  },
-  {
-    id: "customer",
-    label: "Customer information",
-    short: "Customer",
-    next: "Continue to payment",
-  },
-  { id: "payment", label: "Payment", short: "Payment", next: "Review booking" },
-  { id: "review", label: "Review & confirm", short: "Review", next: "" },
-] as const;
-
-type Step = (typeof steps)[number]["id"];
-const validationToast = "checkout-validation";
 
 function rentalIssue(f: BookingFormState): string | null {
   if (!f.d.start) return "Enter a pickup date.";
@@ -214,428 +193,185 @@ function RentalSetup({
 
 export function BookingForm({ f }: { f: BookingFormState }): React.JSX.Element {
   const {
-    router,
-    tz,
     activeBranches,
-    editing,
-    d,
-    customer,
-    setCustomer,
-    set,
     branchId,
-    checkingStock,
-    quotePending,
     busy,
-    total,
-    submit,
-    booked,
-    confirmDiscard,
-    setConfirmDiscard,
-    reset,
+    customer,
+    d,
+    editing,
+    loadingCustomer,
+    set,
+    setCustomer,
   } = f;
-  const [step, setStep] = useState<Step>("rental");
-  const notifiedIssue = useRef<string | null>(null);
-  const heading = useRef<HTMLHeadingElement>(null);
-  const body = useRef<HTMLDivElement>(null);
-  const form = useRef<HTMLElement>(null);
-  const index = steps.findIndex(({ id }) => id === step);
-  const current = steps[index];
-  const pickup = isoToDisplay(d.start.slice(0, 10));
-  const returns = isoToDisplay(d.end.slice(0, 10));
+  const [attempted, setAttempted] = useState(false);
   const branchName =
     activeBranches.find((branch) => branch.id === branchId)?.name ?? "";
-
-  const customerIssue = editing
-    ? null
-    : customer
-      ? customer.is_blocked
-        ? "Choose a customer who can make a booking."
-        : null
-      : customerProblem(d.customer);
+  const customerIssue =
+    editing || loadingCustomer
+      ? null
+      : customer
+        ? customer.is_blocked
+          ? "Choose a customer who can make a booking."
+          : null
+        : customerProblem(d.customer);
   const paymentIssue =
     Object.values(f.moneyErrors).find(Boolean) ??
-    (editing && f.quote && total < money(editing).paid
+    (editing && f.quote && f.total < money(editing).paid
       ? "The new total is less than what was already paid. Record a refund on the booking first."
       : null);
-  const issues = {
-    rental: rentalIssue(f),
-    customer: customerIssue,
-    payment: paymentIssue,
-    review: null,
-  };
+  const issue = rentalIssue(f) ?? customerIssue ?? paymentIssue;
   const pending =
-    step === "rental" &&
-    (checkingStock || quotePending) &&
+    (f.checkingStock || f.quotePending) &&
     !f.shortItems.length &&
     !f.stockError;
-  const issue = issues[step];
+  const activeCustomer = customer?.full_name ?? d.customer.full_name.trim();
 
-  useEffect(() => {
-    if (notifiedIssue.current && notifiedIssue.current !== issue) {
-      toast.dismiss(validationToast);
-      notifiedIssue.current = null;
-    }
-  }, [issue]);
-
-  useEffect(
-    () => () => {
-      toast.dismiss(validationToast);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (body.current) body.current.scrollTop = 0;
-    if (form.current) form.current.scrollTop = 0;
-    heading.current?.focus({ preventScroll: true });
-  }, [step]);
-
-  function goTo(next: Step): void {
-    toast.dismiss(validationToast);
-    notifiedIssue.current = null;
-    setStep(next);
-  }
-
-  function showIssue(message: string): void {
-    notifiedIssue.current = message;
-    toast.error(message, { id: validationToast, toasterId: validationToast });
-  }
-
-  function closeForm(): void {
-    if (busy || booked) return;
-    if (editing) router.push(`/rentals/${editing.id}`);
-    else if (window.history.length > 1) router.back();
-    else router.push("/scan");
-  }
-
-  function advance(): void {
-    if (step === "review") {
-      const invalid = steps.find(({ id }) => issues[id]);
-      const message = invalid && issues[invalid.id];
-      if (invalid && message) {
-        setStep(invalid.id);
-        showIssue(message);
-        return;
-      }
-      void submit();
-      return;
-    }
-    if (issue) {
-      showIssue(issue);
-      return;
-    }
-    goTo(steps[index + 1].id);
+  function confirm(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    if (busy || pending || loadingCustomer) return;
+    setAttempted(true);
+    f.showErrors();
+    if (!issue) void f.submit();
   }
 
   return (
     <>
-      <Dialog
-        open
-        onOpenChange={(open) => {
-          if (!open) closeForm();
-        }}
-      >
-        <DialogContent
-          className="flex h-[min(54rem,calc(100dvh-2rem))] max-h-dvh w-full max-w-5xl flex-col gap-0 overflow-hidden! rounded-xl bg-surface p-0 max-sm:w-dvw! max-sm:p-0 sm:w-[calc(100%-2rem)]"
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            heading.current?.focus();
-          }}
+      {!busy ? (
+        <Link
+          href={editing ? `/rentals/${editing.id}` : "/scan"}
+          className={cn(ghostButtonClass, "mb-3 -ml-2.5")}
         >
-          <Toaster
-            id={validationToast}
-            containerAriaLabel="Checkout notifications"
-            position="top-center"
-            style={{ position: "absolute" }}
-          />
-          <header className="shrink-0 border-b border-border px-4 pt-5 sm:px-6 sm:pt-6">
-            <DialogTitle className="pr-10 font-display text-xl font-semibold leading-tight sm:text-2xl">
-              {editing ? `Change booking ${editing.token}` : "Create booking"}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Complete rental setup, customer information, payment and final
-              review.
-            </DialogDescription>
-            <nav aria-label="Checkout progress" className="mt-4">
-              <ol className="grid grid-cols-4 gap-1.5 sm:gap-3">
-                {steps.map(({ id, short, label }, position) => {
-                  const done = position < index;
-                  const active = id === step;
-                  const itemClass = cn(
-                    "flex w-full min-w-0 flex-col items-start gap-1.5 border-b-2 px-1 pb-2.5 text-left text-sm font-semibold sm:flex-row sm:items-center sm:gap-2 sm:px-2",
-                    active
-                      ? "border-gold text-gold"
-                      : "border-transparent text-muted-foreground",
-                  );
-                  const content = (
-                    <>
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          "grid size-6 shrink-0 place-items-center rounded-full text-xs tabular-nums",
-                          active
-                            ? "bg-gold text-primary-foreground"
-                            : done
-                              ? "bg-accent text-gold"
-                              : "bg-muted text-muted-foreground",
-                        )}
-                      >
-                        {done ? <Check className="size-4" /> : position + 1}
-                      </span>
-                      <span className="sm:hidden">{short}</span>
-                      <span className="hidden sm:inline">{label}</span>
-                    </>
-                  );
-                  return (
-                    <li key={id} aria-current={active ? "step" : undefined}>
-                      {done ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          className={cn(
-                            itemClass,
-                            "rounded-t-md hover:bg-accent/50",
-                          )}
-                          onClick={() => goTo(id)}
-                        >
-                          {content}
-                        </button>
-                      ) : (
-                        <span className={itemClass}>{content}</span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-            </nav>
-          </header>
-
-          <div
-            ref={body}
-            className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_21rem] lg:overflow-hidden"
-          >
-            <section
-              ref={form}
-              aria-labelledby="checkout-step-title"
-              className="min-w-0 shrink-0 space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:min-h-0 lg:overflow-y-auto [&_input:not([type])]:min-h-11 [&_input[type=number]]:min-h-11 [&_input[type=text]]:min-h-11 [&_label>span:first-child]:text-sm [&_label>span:first-child]:text-foreground [&_label>span:first-child]:tracking-normal [&_select]:min-h-11"
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          {editing ? "Back to booking" : "Inventory search"}
+        </Link>
+      ) : null}
+      <PageHeader
+        title={editing ? `Change booking ${editing.token}` : "Checkout"}
+        subtitle={
+          editing
+            ? undefined
+            : "Review the rental, customer details, and payment before confirming."
+        }
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {!editing && !busy ? (
+              <CartSwitcher activeLabel={activeCustomer} />
+            ) : null}
+            <a
+              href="#checkout-summary-title"
+              className={cn(ghostButtonClass, "min-h-11 lg:hidden")}
             >
-              <div>
-                <h2
-                  ref={heading}
-                  id="checkout-step-title"
-                  tabIndex={-1}
-                  className="font-display text-xl font-semibold outline-none"
-                >
-                  {current.label}
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {step === "rental"
-                    ? "Set the dates and branch, then check the cart for available pieces."
-                    : step === "customer"
-                      ? editing
-                        ? "Review the customer linked to this booking."
-                        : "Find a saved customer, or enter a name and phone number."
-                      : step === "payment"
-                        ? "Enter any discount, payments collected and security deposit."
-                        : "Check the customer, dates and payment totals before saving."}
-                </p>
-              </div>
-              {step === "rental" ? (
-                <RentalSetup f={f} branchName={branchName} />
-              ) : null}
-              {step === "customer" ? (
-                editing ? (
-                  <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm">
-                    <p className="font-semibold">
-                      {editing.customers.full_name}
-                    </p>
-                    <p className="mt-1 text-muted-foreground">
-                      {editing.customers.phone}
-                    </p>
-                  </div>
-                ) : (
-                  <CustomerPicker
-                    showOptionalDetails
-                    selected={customer}
-                    onSelect={(selected) => {
-                      setCustomer(selected);
-                      set({ customerId: selected?.id ?? null });
-                    }}
-                    draft={d.customer}
-                    onDraft={(draft) => set({ customer: draft })}
-                    needsLicence={false}
-                  />
-                )
-              ) : null}
-              {step === "payment" ? <CheckoutPayment f={f} /> : null}
-              {step === "review" ? (
-                <CheckoutReview
-                  f={f}
-                  pickup={pickup}
-                  returns={returns}
-                  branchName={branchName}
+              <ArrowDown className="size-4" aria-hidden="true" /> Order summary
+            </a>
+          </div>
+        }
+      />
+
+      <form noValidate onSubmit={confirm}>
+        <fieldset
+          disabled={busy}
+          className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,0.72fr)] xl:gap-6"
+        >
+          <legend className="sr-only">Rental checkout</legend>
+          <div className="min-w-0 space-y-5 [&_input:not([type])]:min-h-11 [&_select]:min-h-11">
+            <Panel title="Rental details">
+              <RentalSetup f={f} branchName={branchName} />
+              <CheckoutCart f={f} />
+            </Panel>
+
+            <Panel title="Customer">
+              {editing ? (
+                <div className="text-sm">
+                  <p className="font-semibold">{editing.customers.full_name}</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {editing.customers.phone}
+                  </p>
+                </div>
+              ) : loadingCustomer ? (
+                <Skeleton className="h-16 w-full" />
+              ) : (
+                <CustomerPicker
+                  showOptionalDetails
+                  selected={customer}
+                  onSelect={(selected) => {
+                    setCustomer(selected);
+                    set({ customerId: selected?.id ?? null });
+                  }}
+                  draft={d.customer}
+                  onDraft={(draft) => set({ customer: draft })}
+                  needsLicence={false}
                 />
-              ) : null}
-            </section>
-            <CheckoutCart f={f} editable={step === "rental"} />
+              )}
+            </Panel>
+
+            <Panel title="Payment">
+              <CheckoutPayment f={f} />
+            </Panel>
           </div>
 
-          <footer className="shrink-0 space-y-2 border-t border-border bg-surface px-4 py-3 sm:px-6 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <aside
+            aria-labelledby="checkout-summary-title"
+            className="min-w-0 rounded-xl border border-border bg-surface p-4 sm:p-5 lg:sticky lg:top-6"
+          >
+            <CheckoutSummary f={f} />
             {pending ? (
-              <p role="status" className="text-sm text-muted-foreground">
-                {checkingStock
+              <p role="status" className="mt-4 text-sm text-muted-foreground">
+                {f.checkingStock
                   ? "Checking availability…"
                   : "Updating rental pricing…"}
               </p>
             ) : null}
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                {index > 0 ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className={ghostButtonClass}
-                    onClick={() => goTo(steps[index - 1].id)}
-                  >
-                    <ArrowLeft aria-hidden="true" className="size-4" /> Back
-                  </button>
-                ) : null}
-                {step === "rental" ? (
-                  <>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      className={cn(
-                        ghostButtonClass,
-                        "min-h-11 disabled:opacity-50",
-                      )}
-                      onClick={closeForm}
-                    >
-                      {editing ? "Cancel" : "Close (keep draft)"}
-                    </button>
-                    {!editing ? (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className={cn(
-                          dangerButtonClass,
-                          "min-h-11 rounded-lg px-4 text-[13px] text-foreground",
-                        )}
-                        onClick={() => setConfirmDiscard(true)}
-                      >
-                        Discard draft
-                      </button>
-                    ) : null}
-                  </>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                disabled={busy || pending}
-                className={cn(
-                  goldButtonClass,
-                  "ml-auto min-h-11",
-                  step === "rental" ? "max-sm:w-full" : "max-sm:flex-1",
-                )}
-                onClick={advance}
+            {attempted && issue && !pending ? (
+              <p
+                role="alert"
+                className="mt-4 rounded-md border border-rust/30 bg-rust/5 p-2.5 text-sm text-rust"
               >
-                {step === "review"
-                  ? busy
-                    ? "Saving booking…"
-                    : editing
-                      ? "Save change"
-                      : `Confirm Booking (${rupees(total)})`
-                  : current.next}
-                {step !== "review" ? (
-                  <ArrowRight aria-hidden="true" className="size-4" />
-                ) : null}
-              </button>
-            </div>
-          </footer>
-        </DialogContent>
-      </Dialog>
-
-      <Modal
-        open={!!booked}
-        onClose={() => router.push("/bookings")}
-        title="Booking confirmed"
-        description={
-          booked ? `${booked.customer} · ${booked.phone}` : undefined
-        }
-        footer={
-          <>
-            {booked ? (
-              <Link
-                href={`/print/rental/${booked.rentalId}`}
-                target="_blank"
-                className={ghostButtonClass}
-              >
-                Print receipt
-              </Link>
-            ) : null}
-            {booked?.wa ? (
-              <a
-                href={booked.wa}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={ghostButtonClass}
-                onClick={() => {
-                  void call("mark_reminder_sent", {
-                    p_rental_id: booked.rentalId,
-                    p_kind: "confirmation",
-                  }).catch(() => undefined);
-                }}
-              >
-                WhatsApp
-              </a>
+                {issue}
+              </p>
             ) : null}
             <button
-              className={goldButtonClass}
-              onClick={() => router.push("/bookings")}
+              type="submit"
+              disabled={busy || pending || loadingCustomer}
+              className={cn(goldButtonClass, "mt-4 min-h-11 w-full")}
             >
-              Done
+              {busy
+                ? "Saving booking…"
+                : editing
+                  ? "Save change"
+                  : "Confirm booking"}
             </button>
-          </>
-        }
-      >
-        {booked ? (
-          <div className="rounded-xl bg-accent/60 p-4 text-center">
-            <p className="text-2xl font-bold text-gold">{booked.token}</p>
-            <p className="mt-2 text-sm tabular-nums">
-              {isoToDisplay(isoToZoned(booked.start, tz).slice(0, 10))} →{" "}
-              {isoToDisplay(isoToZoned(booked.end, tz).slice(0, 10))}
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Total {rupees(booked.total)} · Paid {rupees(booked.paid)}
-              {booked.total - booked.paid > 0
-                ? ` · Due ${rupees(booked.total - booked.paid)}`
-                : ""}
-            </p>
-          </div>
-        ) : (
-          <span />
-        )}
-      </Modal>
+            {!editing && !busy ? (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <Link href="/catalog" className={ghostButtonClass}>
+                  <Plus className="size-4" aria-hidden="true" /> Add items
+                </Link>
+                <button
+                  type="button"
+                  className={dangerButtonClass}
+                  onClick={() => f.setConfirmDiscard(true)}
+                >
+                  Discard cart
+                </button>
+              </div>
+            ) : null}
+          </aside>
+        </fieldset>
+      </form>
+
       <Modal
-        open={confirmDiscard}
-        onClose={() => setConfirmDiscard(false)}
-        title="Discard this draft?"
-        description="All cart items and the customer details typed in are cleared."
+        open={f.confirmDiscard}
+        onClose={() => f.setConfirmDiscard(false)}
+        title="Discard this cart?"
+        description="This removes the items and checkout details for this cart."
         footer={
           <>
             <button
               className={ghostButtonClass}
-              onClick={() => setConfirmDiscard(false)}
+              onClick={() => f.setConfirmDiscard(false)}
             >
-              Keep it
+              Keep cart
             </button>
-            <button
-              className={goldButtonClass}
-              onClick={() => {
-                reset();
-                goTo("rental");
-              }}
-            >
+            <button className={dangerButtonClass} onClick={f.reset}>
               Discard
             </button>
           </>
@@ -644,5 +380,68 @@ export function BookingForm({ f }: { f: BookingFormState }): React.JSX.Element {
         <span />
       </Modal>
     </>
+  );
+}
+
+export function BookingConfirmation({
+  booked,
+  tz,
+  onDone,
+}: {
+  booked: BookedRental;
+  tz: string;
+  onDone: () => void;
+}): React.JSX.Element {
+  return (
+    <Modal
+      open
+      onClose={onDone}
+      title="Booking confirmed"
+      description={`${booked.customer} · ${booked.phone}`}
+      footer={
+        <>
+          <Link
+            href={`/print/rental/${booked.rentalId}`}
+            target="_blank"
+            className={ghostButtonClass}
+          >
+            Print receipt
+          </Link>
+          {booked.wa ? (
+            <a
+              href={booked.wa}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={ghostButtonClass}
+              onClick={() => {
+                void call("mark_reminder_sent", {
+                  p_rental_id: booked.rentalId,
+                  p_kind: "confirmation",
+                }).catch(() => undefined);
+              }}
+            >
+              WhatsApp
+            </a>
+          ) : null}
+          <button className={goldButtonClass} onClick={onDone}>
+            Done
+          </button>
+        </>
+      }
+    >
+      <div className="rounded-xl bg-accent/60 p-4 text-center">
+        <p className="text-2xl font-bold text-gold">{booked.token}</p>
+        <p className="mt-2 text-sm tabular-nums">
+          {isoToDisplay(isoToZoned(booked.start, tz).slice(0, 10))} →{" "}
+          {isoToDisplay(isoToZoned(booked.end, tz).slice(0, 10))}
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Total {rupees(booked.total)} · Paid {rupees(booked.paid)}
+          {booked.total - booked.paid > 0
+            ? ` · Due ${rupees(booked.total - booked.paid)}`
+            : ""}
+        </p>
+      </div>
+    </Modal>
   );
 }

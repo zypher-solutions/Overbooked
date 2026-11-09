@@ -28,8 +28,6 @@ export interface NavContext {
   canManage: boolean;
   isSupport: boolean;
   feature: (key: string) => boolean;
-  /** the shop's attributes in use (Colour, Size ...): each has its own page of values */
-  attributes: { id: string; label: string }[];
   word: (
     key: "item" | "items" | "unit" | "units" | "start" | "end",
     fallback?: string,

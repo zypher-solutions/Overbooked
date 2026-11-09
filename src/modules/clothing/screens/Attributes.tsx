@@ -11,8 +11,7 @@ import type { ShopAttribute } from "@/lib/shop/types";
 import { tidyName } from "../bulk";
 import { Field, Modal, PageHeader, Panel, ghostButtonClass, goldButtonClass, inputClass, linkClass, tableWrap, theadClass } from "@/components/shop/ui";
 
-// Admin > Attributes: the shop's own attributes (Colour, Size, Length, Material ...). Each one in use gets a page in the
-// menu for its preferred values. An attribute is archived, never deleted: products keep their values (migration 030).
+// Each active attribute links to its preferred values. Archiving keeps the values on existing products.
 export const attributeKey = (label: string) => label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40);
 
 /** moves row i up or down and numbers the list 1, 2, 3...; returns only the rows whose sort changed */
@@ -78,7 +77,7 @@ export default function Attributes() {
   const row = (a: ShopAttribute, i: number) => (
     <tr key={a.id} className={a.is_archived ? "opacity-60" : undefined}>
       <td className="px-6 py-3">
-        {a.is_archived ? <span className="font-medium">{a.label}</span> : <Link className={linkClass} href={`/admin/attributes/${a.id}`}>{a.label}</Link>}
+        <span className="font-medium">{a.label}</span>
       </td>
       <td className="px-6 py-3 text-muted-foreground">
         {a.shop_attribute_values.length ? a.shop_attribute_values.slice(0, 6).map((v) => v.value).join(", ") + (a.shop_attribute_values.length > 6 ? ` +${a.shop_attribute_values.length - 6}` : "") : "-"}
@@ -89,6 +88,9 @@ export default function Attributes() {
           {a.is_archived ? (
             <button className="rounded-md p-2 text-muted-foreground hover:bg-black/5 hover:text-foreground" aria-label={`Restore ${a.label}`} title="Restore" onClick={() => void setArchived(a, false)}><ArchiveRestore className="h-4 w-4" /></button>
           ) : <>
+            <Link href={`/admin/attributes/${a.id}`} className={`${linkClass} self-center whitespace-nowrap px-2 text-xs`} aria-label={`Manage ${a.label} values`}>
+              Manage values
+            </Link>
             <button className="rounded-md p-2 text-muted-foreground hover:bg-black/5 hover:text-foreground disabled:opacity-30" aria-label={`Move ${a.label} up`} title="Move up" disabled={i === 0} onClick={() => void move(i, -1)}><ArrowUp className="h-4 w-4" /></button>
             <button className="rounded-md p-2 text-muted-foreground hover:bg-black/5 hover:text-foreground disabled:opacity-30" aria-label={`Move ${a.label} down`} title="Move down" disabled={i === live.length - 1} onClick={() => void move(i, 1)}><ArrowDown className="h-4 w-4" /></button>
             <button className="rounded-md p-2 text-muted-foreground hover:bg-black/5 hover:text-foreground" aria-label={`Rename ${a.label}`} title="Rename" onClick={() => setEdit({ id: a.id, label: a.label })}><Pencil className="h-4 w-4" /></button>
@@ -101,7 +103,7 @@ export default function Attributes() {
 
   return (
     <>
-      <PageHeader title="Attributes" subtitle="What your products differ by: colour, size, length, material... Each one gets a page for its preferred values, offered as suggestions when adding a product."
+      <PageHeader title="Attributes" subtitle="Manage the colour, size, and other values suggested when adding products."
         actions={<button className={goldButtonClass} onClick={() => setEdit({ label: "" })}><Plus className="h-4 w-4" /> Add attribute</button>} />
       <div className={tableWrap}>
         <table className="w-full text-left text-sm">

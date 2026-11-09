@@ -267,11 +267,8 @@ export function StockCard({
                               "ml-auto min-h-11 px-4",
                             )}
                             onClick={() => {
-                              cart.add(branch.id, variant.id);
-                              if (
-                                !embedded &&
-                                (!cart.count || cart.branchId === branch.id)
-                              )
+                              const added = cart.add(branch.id, variant.id);
+                              if (!embedded && added)
                                 toast.success(
                                   `${product.name} · ${name} added to the cart`,
                                 );

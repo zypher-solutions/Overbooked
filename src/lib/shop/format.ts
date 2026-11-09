@@ -8,6 +8,11 @@ export function rupees(n: number | string | null | undefined) {
   return "₹" + v.toLocaleString("en-IN", { maximumFractionDigits: 2 });
 }
 
+export function inclusiveTaxBreakdown(total: number, rate: number): { taxable: number; tax: number } {
+  const taxable = Math.round((total / (1 + rate / 100)) * 100) / 100;
+  return { taxable, tax: Math.round((total - taxable) * 100) / 100 };
+}
+
 // a number typed into a form, or 0
 export function num(v: string | number | null | undefined) {
   const n = Number(String(v ?? "").replace(/,/g, ""));

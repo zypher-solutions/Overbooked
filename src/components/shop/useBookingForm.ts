@@ -58,15 +58,29 @@ export type Piece = { unit_id: string; code: string };
 type Availability = Record<string, { free: number; total: number }>;
 const EMPTY_AVAILABILITY: Availability = {};
 
+export interface BookedRental {
+  rentalId: string;
+  token: string;
+  wa: string;
+  customer: string;
+  phone: string;
+  start: string;
+  end: string;
+  total: number;
+  paid: number;
+}
+
 /** everything the booking form knows and does; the shared form and a module's own form draw it */
-export function useBookingForm() {
+export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
   const router = useRouter();
   const params = useSearchParams();
   const { shop, tz, myBranchId, activeBranches, categories, templates, addOns, templateOf, feature, setting, word, businessModule } = useShop();
   // TRENDZ rules for clothes: dates first, each booked piece chosen, cleaning days, no pickup in the past, back to Bookings
   const byPiece = !!shopModules[businessModule].bookingByPiece;
   const { products } = useCatalog();
-  const storageKey = `ob_booking_${shop.id}`;
+  const cart = useCart();
+  const legacyKey = `ob_booking_${shop.id}`;
+  const storageKey = byPiece ? cart.draftKey(cart.id) : legacyKey;
   // ?edit=<rental id>: change a booking that has not been picked up
   const editId = params.get("edit");
   const [editing, setEditing] = useState<RentalDetail | null>(null);
@@ -81,31 +95,45 @@ export function useBookingForm() {
   };
   const [d, setD] = useState<Draft>(initial);
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const restored = useRef(false);
+  const [restored, setRestored] = useState(false);
+  const [loadingCustomer, setLoadingCustomer] = useState(false);
+  const completed = useRef(false);
 
-  // keep a half-filled booking if the page is left by accident (this tab only)
+  // Checkout is keyed by cart id, so switching carts restores only that cart's fields.
   useEffect(() => {
-    if (restored.current || editId) return;
-    restored.current = true;
+    if (editId) return;
+    let live = true;
     try {
-      const saved = sessionStorage.getItem(storageKey);
+      const saved = sessionStorage.getItem(storageKey) ??
+        (byPiece && cart.id === 1 ? sessionStorage.getItem(legacyKey) : null);
       if (saved) {
         const draft = JSON.parse(saved) as Draft;
         const fresh = initial();
         const branchOk = activeBranches.some((b) => b.id === draft.branchId);
         setD({ ...fresh, ...draft, branchId: myBranchId ?? (branchOk ? draft.branchId : fresh.branchId) });
-        if (draft.customerId) {
+        if (draft.customerId && !params.get("customer")) {
+          setLoadingCustomer(true);
           void createClient().from("customers").select("*").eq("id", draft.customerId).maybeSingle()
-            .then(({ data }) => setCustomer((data as Customer) ?? null));
+            .then(({ data, error }) => {
+              if (!live) return;
+              if (error) toast.error("Could not restore the selected customer. Choose them again.");
+              setCustomer((data as Customer) ?? null);
+              setLoadingCustomer(false);
+            });
         }
       }
-    } catch { /* storage unavailable */ }
+    } catch { /* storage unavailable or unreadable */ }
+    setRestored(true);
+    return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    if (editId) return;
-    try { sessionStorage.setItem(storageKey, JSON.stringify({ ...d, customerId: customer?.id ?? null })); } catch { /* ignore */ }
-  }, [d, customer, storageKey, editId]);
+    if (editId || !restored || loadingCustomer || completed.current) return;
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify({ ...d, customerId: customer?.id ?? null, customerLabel: customer?.full_name }));
+      if (byPiece && cart.id === 1) sessionStorage.removeItem(legacyKey);
+    } catch { /* storage unavailable */ }
+  }, [d, customer, storageKey, editId, restored, loadingCustomer, byPiece, cart.id, legacyKey]);
 
   // the booking being changed, as a draft of this form
   useEffect(() => {
@@ -140,7 +168,6 @@ export function useBookingForm() {
 
   // A new booking takes its items and branch from the cart (filled from Inventory Search, All Rentals or
   // the list below); changing a booking works on its own copy.
-  const cart = useCart();
   const lines = editId ? d.lines : cart.lines;
   const branchId = editId ? d.branchId : (myBranchId ?? (cart.lines.length && cart.branchId ? cart.branchId : d.branchId));
   const setLines = (fn: (ls: Line[]) => Line[]) => {
@@ -181,9 +208,11 @@ export function useBookingForm() {
   // ?variation=... from the catalog's "Book" button
   const prefill = params.get("variation");
   useEffect(() => {
-    if (prefill && variations.has(prefill)) {
+    if (!editId && prefill && variations.has(prefill)) {
       if (!lines.some((l) => l.variation_id === prefill)) cart.add(branchId, prefill);
-      router.replace("/book");
+      const remaining = new URLSearchParams(params);
+      remaining.delete("variation");
+      router.replace(`${byPiece ? "/checkout" : "/book"}${remaining.size ? `?${remaining}` : ""}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill, variations, router]);
@@ -191,12 +220,20 @@ export function useBookingForm() {
   // ?customer=... from a customer's page
   const prefillCustomer = params.get("customer");
   useEffect(() => {
-    if (!prefillCustomer) return;
-    void createClient().from("customers").select("*").eq("id", prefillCustomer).maybeSingle().then(({ data }) => {
+    if (!prefillCustomer || editId) return;
+    let live = true;
+    setLoadingCustomer(true);
+    void createClient().from("customers").select("*").eq("id", prefillCustomer).maybeSingle().then(({ data, error }) => {
+      if (!live) return;
       if (data) { setCustomer(data as Customer); setD((x) => ({ ...x, customerId: (data as Customer).id })); }
-      router.replace("/book");
+      if (error || !data) toast.error("Could not load the selected customer.");
+      setLoadingCustomer(false);
+      const remaining = new URLSearchParams(params);
+      remaining.delete("customer");
+      router.replace(`${byPiece ? "/checkout" : "/book"}${remaining.size ? `?${remaining}` : ""}`);
     });
-  }, [prefillCustomer, router]);
+    return () => { live = false; };
+  }, [prefillCustomer, router, editId, byPiece, params]);
 
   const startIso = d.start ? zonedToIso(d.start, tz) : "";
   const endIso = d.end ? zonedToIso(d.end, tz) : "";
@@ -222,7 +259,8 @@ export function useBookingForm() {
   const wait = (k: "avail" | "pieces" | "quote", ms: number) => { const w = firstCheck.current[k] ? 0 : ms; firstCheck.current[k] = false; return w; };
 
   // ---- availability for the period ----
-  const availabilityKey = JSON.stringify([branchId, startIso, endIso, cleaning, editing?.id]);
+  const [checkVersion, setCheckVersion] = useState(0);
+  const availabilityKey = JSON.stringify([branchId, startIso, endIso, cleaning, editing?.id, checkVersion]);
   const [availability, setAvailability] = useState<{ key: string; rows: Availability; error?: string } | null>(null);
   const currentAvailability = availability?.key === availabilityKey ? availability : null;
   const avail = currentAvailability?.rows ?? EMPTY_AVAILABILITY;
@@ -339,8 +377,8 @@ export function useBookingForm() {
     ...(cleaning !== undefined ? { cleaning_days: cleaning } : {}),
   }), [branchId, startIso, endIso, adults, children, withDriver, hasVehicle, wholeProperty, lines, draftAddOns, cleaning]);
   const canQuote = periodOk && !!branchId && (lines.length > 0 || wholeProperty);
-  const [quoteResult, setQuoteResult] = useState<{ input: typeof quoteInput; quote?: Quote; error?: string } | null>(null);
-  const currentQuote = canQuote && quoteResult?.input === quoteInput ? quoteResult : null;
+  const [quoteResult, setQuoteResult] = useState<{ input: typeof quoteInput; version: number; quote?: Quote; error?: string } | null>(null);
+  const currentQuote = canQuote && quoteResult?.input === quoteInput && quoteResult.version === checkVersion ? quoteResult : null;
   const quote = currentQuote?.quote ?? null;
   const quoteError = currentQuote?.error ?? null;
   const quotePending = canQuote && !currentQuote;
@@ -351,13 +389,13 @@ export function useBookingForm() {
     const t = setTimeout(async () => {
       try {
         const quote = await call<Quote>("quote_rental", { p: quoteInput });
-        if (live) setQuoteResult({ input: quoteInput, quote });
+        if (live) setQuoteResult({ input: quoteInput, version: checkVersion, quote });
       } catch (e) {
-        if (live) setQuoteResult({ input: quoteInput, error: errorText(e) });
+        if (live) setQuoteResult({ input: quoteInput, version: checkVersion, error: errorText(e) });
       }
     }, wait("quote", 350));
     return () => { live = false; clearTimeout(t); };
-  }, [quoteInput, canQuote]);
+  }, [quoteInput, canQuote, checkVersion]);
 
   // ---- cart ----
   const addLine = (variationId: string) => {
@@ -371,8 +409,9 @@ export function useBookingForm() {
   const updateLine = (variationId: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => l.variation_id === variationId ? { ...l, ...patch } : l));
 
   // ---- submit ----
-  const [busy, setBusy] = useState(false);
-  const [booked, setBooked] = useState<{ rentalId: string; token: string; wa: string; customer: string; phone: string; start: string; end: string; total: number; paid: number } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const busy = saving || (byPiece && !editId && cart.booking);
+  const submitting = useRef(false);
   // changing a booking can also take money (the balance is the new total less what was paid)
   const [editPay, setEditPay] = useState<{ amount: string; method: Method | "" }>({ amount: "", method: "" });
   const total = Math.max(0, (quote?.total_before_discount ?? 0) - num(d.discount));
@@ -380,23 +419,24 @@ export function useBookingForm() {
   // what is wrong with the money fields; shown under a field once something is typed in it, and for all of them after a try to confirm
   const [tried, setTried] = useState(false);
   const money_ = {
-    discount: moneyError(d.discount, { label: "discount", max: quote?.total_before_discount ?? 0, maxText: `the rental total (${rupees(quote?.total_before_discount ?? 0)})` }),
+    discount: moneyError(d.discount, { label: "discount", max: quote?.total_before_discount, maxText: `the rental total (${rupees(quote?.total_before_discount)})` }),
     advance: moneyError(d.advance, {
       label: byPiece ? "advance paid" : "advance",
       required: byPiece && !editId,
-      max: total,
+      max: quote ? total : undefined,
       maxText: `the total (${rupees(total)})`,
     }),
     deposit: moneyError(byPiece && editing ? d.depositAgreed : d.deposit, { label: "deposit", max: 1_000_000 }),
     advanceMethod: num(d.advance) > 0 && !d.advanceMethod ? "Choose how the advance was paid." : null,
     depositMethod: num(d.deposit) > 0 && !d.depositMethod ? "Choose how the deposit was paid." : null,
     notes: textLimitError(d.notes, "notes", 500),
-    editPay: editing ? moneyError(editPay.amount, { label: "payment", positive: true, max: Math.max(0, total - money(editing).paid), maxText: `the balance after this change (${rupees(Math.max(0, total - money(editing).paid))})` }) : null,
+    editPay: editing ? moneyError(editPay.amount, { label: "payment", positive: true, max: quote ? Math.max(0, total - money(editing).paid) : undefined, maxText: `the balance after this change (${rupees(Math.max(0, total - money(editing).paid))})` }) : null,
     editPayMethod: editing && num(editPay.amount) > 0 && !editPay.method ? "Choose how the payment was made." : null,
   };
   const shown = (k: keyof typeof money_, typed: string) => (tried || typed.trim() ? money_[k] ?? undefined : undefined);
 
   const submit = async () => {
+    if (submitting.current || completed.current || loadingCustomer) return;
     setTried(true);
     const moneyBad = Object.values(money_).find(Boolean);
     if (moneyBad) return toast.error(moneyBad);
@@ -408,7 +448,10 @@ export function useBookingForm() {
     if (!customer) { const bad = customerProblem(d.customer); if (bad) return toast.error(bad); }
     if (num(d.advance) > 0 && !d.advanceMethod) return toast.error("Choose how the advance was paid.");
     if (num(d.deposit) > 0 && !d.depositMethod) return toast.error("Choose how the deposit was paid.");
-    setBusy(true);
+    const releaseCart = !editId && byPiece ? cart.beginBooking(cart.id) : undefined;
+    if (!editId && byPiece && !releaseCart) return;
+    submitting.current = true;
+    setSaving(true);
     try {
       if (editing) {
         const { branch_id: _branch, ...change } = quoteInput;
@@ -453,8 +496,8 @@ export function useBookingForm() {
           deposit: num(d.deposit) > 0 ? { amount: num(d.deposit), method: d.depositMethod } : null,
         },
       });
-      try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
-      cart.clear();
+      completed.current = true;
+      try { sessionStorage.removeItem(storageKey); } catch { /* storage unavailable */ }
       if (byPiece) {
         // bridal and groom: back to the Bookings list; the message to the customer is one tap on the notice
         const rental = await loadRental(res.rental_id).catch(() => null);
@@ -463,27 +506,35 @@ export function useBookingForm() {
           shopName: shop.name, branchName: br?.name, branchPhone: br?.phone ?? shop.phone, tz, startWord: word("start"), endWord: word("end"),
         })) : "";
         // a pop-up says it is done; closing it opens the Bookings list
-        setBooked({
+        const confirmation: BookedRental = {
           rentalId: res.rental_id, token: res.token, wa,
-          customer: rental?.customers.full_name ?? d.customer.full_name.trim(), phone: rental?.customers.phone ?? d.customer.phone,
+          customer: rental?.customers.full_name ?? customer?.full_name ?? d.customer.full_name.trim(),
+          phone: rental?.customers.phone ?? customer?.phone ?? d.customer.phone,
           start: rental?.start_at ?? startIso, end: rental?.end_at ?? endIso,
           total: rental ? Number(rental.total) : total, paid: rental ? Number(rental.paid) : num(d.advance),
-        });
+        };
+        cart.remove(cart.id);
+        if (onBooked) onBooked(confirmation);
+        else router.push("/bookings");
         return;
       }
+      cart.remove(cart.id);
       toast.success(`Booked: ${res.token}`);
       router.push(`/rentals/${res.rental_id}?new=1`);
     } catch (e) {
       toast.error(errorText(e));
+      if (byPiece && !completed.current) setCheckVersion((version) => version + 1);
     } finally {
-      setBusy(false);
+      submitting.current = false;
+      releaseCart?.();
+      setSaving(false);
     }
   };
 
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const reset = () => {
     try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
-    cart.clear();
+    cart.remove(cart.id);
     setCustomer(null);
     setD(initial());
     setConfirmDiscard(false);
@@ -497,8 +548,8 @@ export function useBookingForm() {
   const quoteLineFor = (variationId: string) => quote?.lines.find((l) => l.variation_id === variationId && l.reserve);
 
   return {
-    router, shop, tz, myBranchId, activeBranches, categories, addOns, templateOf, feature, word, businessModule, products, editId, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, kinds, hasRoom, hasVehicle, roomShop, avail, pieceLines, pieces, shortItems, checkingStock, quote, quoteError, addLine, updateLine, busy, editPay, setEditPay, total, shown, submit, booked, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, quoteLineFor,
-    stockError, quotePending, pieceProblem, moneyErrors: money_, suggestedDeposit,
+    router, shop, tz, myBranchId, activeBranches, categories, addOns, templateOf, feature, word, businessModule, products, editId, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, kinds, hasRoom, hasVehicle, roomShop, avail, pieceLines, pieces, shortItems, checkingStock, quote, quoteError, addLine, updateLine, busy, editPay, setEditPay, total, shown, submit, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, quoteLineFor, loadingCustomer,
+    stockError, quotePending, pieceProblem, moneyErrors: money_, suggestedDeposit, showErrors: () => setTried(true),
   };
 }
 export type BookingForm = ReturnType<typeof useBookingForm>;

@@ -1,7 +1,6 @@
 import {
   BarChart3,
   Barcode,
-  ListChecks,
   SlidersHorizontal,
   Boxes,
   Calendar,
@@ -85,8 +84,6 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
   {
     title: "Admin",
     items: [
-      // the shop's own attributes, one page each for their preferred values, and how system SKUs are made
-      ...c.attributes.map((a) => ({ href: `/admin/attributes/${a.id}`, label: a.label, icon: ListChecks, show: c.canManage })),
       { href: "/admin/attributes", label: "Attributes", icon: SlidersHorizontal, show: c.canManage },
       { href: "/admin/sku", label: "SKU", icon: Barcode, show: c.canManage },
       {
