@@ -8,12 +8,13 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
+import { createClient } from "@/lib/supabase/client";
 import { errorText, plural } from "@/lib/shop/format";
 import { useCatalog } from "@/lib/shop/useCatalog";
 import type { Product } from "@/lib/shop/types";
 import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { Field, Modal, PageHeader, Panel, StatusBadge, ghostButtonClass, goldButtonClass, inputClass, monoInputClass, tableWrap, theadClass } from "@/components/shop/ui";
-import { MONEY_KEYS, cleanMoney, parseTsv, planRows, rowsFromTable, rowsOfProducts, type BulkRow, type Col, type UnitLite } from "../bulk";
+import { MONEY_KEYS, cleanMoney, missingCategories, parseTsv, planRows, rowsFromTable, rowsOfProducts, type BulkRow, type Col, type UnitLite } from "../bulk";
 import { downloadTemplate, exportProducts, readSheet } from "../sheet";
 import { useBulkSetup } from "../useBulkSetup";
 
@@ -30,7 +31,7 @@ const cellClass = "w-full min-w-0 rounded-md border border-transparent bg-transp
 const widthOf = (c: Col) => (c.key === "name" ? 200 : c.key === "category" ? 160 : c.key === "sku" ? 130 : c.kind === "attr" ? 110 : c.kind === "pieces" ? 96 : 110);
 
 function BulkProducts() {
-  const { shop, categories, templates, canManage, activeBranches } = useShop();
+  const { shop, categories, templates, attributes, canManage, activeBranches, refresh } = useShop();
   const { cols, loadUnits } = useBulkSetup();
   const { products, reload } = useCatalog({ includeInactive: true });
   const [units, setUnits] = useState<UnitLite[] | null>(null);
@@ -43,6 +44,9 @@ function BulkProducts() {
   const [loadOpen, setLoadOpen] = useState(false);
   const [fillOpen, setFillOpen] = useState(false);
   const [askClear, setAskClear] = useState(false);
+  // categories in the rows the shop does not have: asked after a paste or file, and on Save all (then saving goes on)
+  const [askCats, setAskCats] = useState<"rows" | "save" | null>(null);
+  const [saveNext, setSaveNext] = useState(false);
   const [filter, setFilter] = useState("");
   const [lastSave, setLastSave] = useState<{ added: number; updated: number; failed: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -73,8 +77,9 @@ function BulkProducts() {
   const changed = useCallback((r: BulkRow) => !r.origin || JSON.stringify(r.cells) !== orig[r.uid], [orig]);
   const toSave = useMemo(() => rows.filter((r) => !isBlank(r) && changed(r)), [rows, changed]);
   const ready = products !== null && units !== null;
-  const plan = useMemo(() => (ready ? planRows(toSave, { cols, categories, products: products!, units: units!, branches: activeBranches.map((b) => ({ id: b.id, name: b.name })) }) : null),
-    [ready, toSave, cols, categories, products, units, activeBranches]);
+  const plan = useMemo(() => (ready ? planRows(toSave, { cols, categories, products: products!, units: units!, branches: activeBranches.map((b) => ({ id: b.id, name: b.name })), attributes }) : null),
+    [ready, toSave, cols, categories, products, units, activeBranches, attributes]);
+  const newCats = useMemo(() => missingCategories(toSave, categories), [toSave, categories]);
   const problems = (uid: string) => [...(checked ? plan?.errors[uid] ?? [] : []), ...(serverErrors[uid] ? [serverErrors[uid]] : [])];
   const problemCount = rows.filter((r) => problems(r.uid).length).length;
   const counts = { added: rows.filter((r) => !r.origin && !isBlank(r)).length, edited: rows.filter((r) => r.origin && changed(r)).length };
@@ -116,6 +121,7 @@ function BulkProducts() {
       return next;
     });
     setChecked(true);
+    setAskCats("rows");
     if (unknownHeaders.length) toast.warning(`Columns left out (not known here): ${unknownHeaders.join(", ")}`);
     return got.length;
   }, [cols]);
@@ -167,6 +173,7 @@ function BulkProducts() {
     setChecked(true);
     if (!plan) return toast.error("Still loading the products. Try again in a moment.");
     if (!toSave.length) return toast.message("Nothing to save yet: there are no new or changed rows.");
+    if (newCats.length) { setAskCats("save"); return; }
     if (!plan.items.length) return toast.error("Fix the rows marked in red first.");
     const failed: Record<string, string> = {};
     const savedUids = new Set<string>();
@@ -198,23 +205,47 @@ function BulkProducts() {
     await Promise.all([reload(), refreshUnits()]);
   };
 
+  // adds the missing categories (as clothing categories with their base SKUs); a name added meanwhile is left as it is
+  const addCategories = async () => {
+    const then = askCats;
+    setAskCats(null);
+    const template_key = templates.find((t) => t.kind === "wearable")?.key;
+    if (!template_key) return toast.error("This shop has no clothing business type to add categories to.");
+    const supabase = createClient();
+    let added = 0;
+    for (const c of newCats) {
+      const { error } = await supabase.from("categories").insert({ shop_id: shop.id, name: c.name, template_key, sku_prefix: c.sku_prefix });
+      if (!error) added++;
+      else if (error.code !== "23505") return toast.error(`Could not add ${c.name}: ${errorText(error)}`);
+    }
+    await refresh();
+    toast.success(`Added ${added} ${added === 1 ? "category" : "categories"}`);
+    if (then === "save") setSaveNext(true);
+  };
+  // after the categories are added on Save all, saving goes on once the table sees them
+  useEffect(() => {
+    if (!saveNext || newCats.length) return;
+    setSaveNext(false);
+    void saveAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveNext, newCats.length]);
+
   const exportAll = async () => {
     if (!products || !units) return;
     try { const n = await exportProducts(products, { cols, categories, units }); toast.success(`Exported ${plural(n, "row")}`); } catch (e) { toast.error(errorText(e)); }
   };
   const template = () => {
     const cat = categories[0];
-    const t = templates.find((x) => x.key === cat?.template_key);
     const example: Record<string, string> = { category: cat?.name ?? "", name: "Example lehenga", rate: "2500", deposit: "1000", mrp: "25000", purchase: "18000" };
     for (const c of cols) {
-      if (c.kind === "attr") example[c.key] = t?.variation_fields.find((f) => f.key === c.key.slice(5))?.suggestions?.[0] ?? "";
+      if (c.kind === "attr") example[c.key] = attributes.find((f) => f.key === c.key.slice(5))?.shop_attribute_values[0]?.value ?? "";
       if (c.kind === "pieces") example[c.key] = c === cols.find((x) => x.kind === "pieces") ? "2" : "";
     }
     void downloadTemplate(cols, example);
   };
 
   const suggestions = useMemo(() => Object.fromEntries(cols.filter((c) => c.kind === "attr").map((c) => [c.key,
-    Array.from(new Set(templates.flatMap((t) => t.variation_fields.find((f) => f.key === c.key.slice(5))?.suggestions ?? [])))])), [cols, templates]);
+    attributes.find((f) => f.key === c.key.slice(5))?.shop_attribute_values.map((v) => v.value) ?? []])), [cols, attributes]);
   const term = filter.trim().toLowerCase();
   const shown = term ? rows.filter((r) => Object.values(r.cells).join(" ").toLowerCase().includes(term)) : rows;
 
@@ -307,6 +338,14 @@ function BulkProducts() {
         setRows((rs) => rs.map((r) => (isBlank(r) ? r : { ...r, cells: { ...r.cells, [key]: fn(r.cells[key] ?? "") } })));
         setFillOpen(false);
       }} />
+      <ConfirmDialog open={askCats !== null && newCats.length > 0} title="New categories" confirmLabel={`Add ${newCats.length === 1 ? "it" : "them"}`} cancelLabel="Not now"
+        message={[
+          `${newCats.length === 1 ? "This category is" : "These categories are"} not in the system yet:`,
+          ...newCats.map((c) => `${c.name} (base SKU ${c.sku_prefix})`),
+          "",
+          `Add ${newCats.length === 1 ? "it" : "them"} to your categories?${askCats === "save" ? " The products are saved right after." : ""} You can change a base SKU later on the Categories page.`,
+        ].join("\n")}
+        onCancel={() => setAskCats(null)} onConfirm={() => void addCategories()} />
       <ConfirmDialog open={askClear} tone="danger" title="Clear the table?" confirmLabel="Clear" cancelLabel="Keep it"
         message="Rows that are not saved are lost. Products already saved stay in your catalog."
         onCancel={() => setAskClear(false)} onConfirm={() => { setRows([]); setOrig({}); setServerErrors({}); setChecked(false); setAskClear(false); }} />

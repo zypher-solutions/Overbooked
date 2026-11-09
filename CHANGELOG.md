@@ -1,6 +1,10 @@
 # Changelog
 
 ## 0.3.0 (unreleased): v2 rental engine
+- Admin section (migrations 30 and 31, 9 Nov 2026; tests: supabase/tests/attributes, scripts/check-bulk):
+  - each shop has its own attributes (`shop_attributes`: Colour, Size, Length ...) instead of the fixed business-type list; Admin > Attributes adds, renames, reorders and archives them
+  - one Admin page per attribute for its preferred values (`shop_attribute_values`), suggested on the product form and in bulk add; a new value saved on a product joins the list
+  - Admin > SKU: which attributes go into system-made variation SKUs and in what order (category + number first, piece number last); saved SKUs never change
 - Pre-launch rules (migrations 22 to 25, 29 Oct 2026), each with database tests (supabase/tests/launch, expenses, products,
   invoice) and browser tests (tests/launch.spec.ts):
   - a piece still out past its return date is no longer offered to new bookings (free counts, piece picker, chosen pieces, swaps)

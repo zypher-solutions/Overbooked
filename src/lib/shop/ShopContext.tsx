@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth, type Shop } from "@/lib/overbooked/AuthContext";
 import { DEFAULT_TZ } from "./format";
 import type { ModuleKey } from "./nav";
-import type { AddOn, Branch, Category, Role, Template } from "./types";
+import type { AddOn, Branch, Category, Role, ShopAttribute, Template } from "./types";
 
 // What every shop screen needs and rarely changes: the shop, who is signed in, branches,
 // categories with their business types, extras. Loaded once; screens call refresh() after edits.
@@ -25,6 +25,8 @@ interface ShopContextValue {
   categories: Category[];
   templates: Template[];
   addOns: AddOn[];
+  /** the shop's attributes and their preferred values, archived ones included, in their order */
+  attributes: ShopAttribute[];
   templateOf: (categoryId: string | null | undefined) => Template | undefined;
   feature: (key: string) => boolean;
   /** shop-level policy with a default */
@@ -47,22 +49,26 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [addOns, setAddOns] = useState<AddOn[]>([]);
+  const [attributes, setAttributes] = useState<ShopAttribute[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     const supabase = createClient();
-    const [b, c, t, a] = await Promise.all([
+    const [b, c, t, a, at] = await Promise.all([
       supabase.from("branches").select("id, name, slug, is_active, phone, address, email").order("created_at"),
       supabase.from("categories").select("id, name, template_key, sku_prefix").order("name"),
       supabase.from("business_templates").select("*").order("sort"),
       // "*": works before and after migration 029 adds category_ids and quantity
       supabase.from("add_ons").select("*").order("name"),
+      supabase.from("shop_attributes").select("id, key, label, sort, sku_position, is_archived, shop_attribute_values(id, value, sort)")
+        .order("sort").order("sort", { referencedTable: "shop_attribute_values" }),
     ]);
-    const err = b.error ?? c.error ?? t.error ?? a.error;
+    const err = b.error ?? c.error ?? t.error ?? a.error ?? at.error;
     if (err) toast.error("Could not load the shop setup: " + err.message);
     setBranches((b.data as Branch[]) ?? []);
     setCategories((c.data as Category[]) ?? []);
     setTemplates((t.data as Template[]) ?? []);
+    setAttributes((at.data as ShopAttribute[]) ?? []);
     setAddOns(((a.data as AddOn[]) ?? []).map((x) => ({ ...x, amount: Number(x.amount) })));
     setLoading(false);
   }, []);
@@ -104,6 +110,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       categories,
       templates: shopTemplates,
       addOns,
+      attributes,
       templateOf,
       feature,
       setting,
@@ -112,7 +119,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       loading,
       refresh,
     };
-  }, [shop, profile, branches, categories, templates, addOns, loading, refresh]);
+  }, [shop, profile, branches, categories, templates, addOns, attributes, loading, refresh]);
 
   if (!value) return null;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

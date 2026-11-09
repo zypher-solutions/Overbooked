@@ -73,7 +73,7 @@ export function stockTotals(
 }
 
 // "color" -> "Color": the attribute names of a variation, as TRENDZ writes them ("Color: Black, Size: M")
-// (the database keeps attributes alphabetically, so they are put back in the business type's own order: Color, then Size)
+// (the database keeps attributes alphabetically, so they are put back in the shop's own order: Color, then Size)
 const attributeText = (
   attrs: Record<string, unknown> | null | undefined,
   order: string[],
@@ -122,11 +122,9 @@ export function StockCard({
   only?: string;
   embedded?: boolean;
 }): React.JSX.Element {
-  const { activeBranches, myBranchId, templateOf } = useShop();
+  const { activeBranches, myBranchId, attributes } = useShop();
   const cart = useCart();
-  const order = (templateOf(product.category_id)?.variation_fields ?? []).map(
-    (field) => field.key,
-  );
+  const order = attributes.map((field) => field.key);
   const variations = matchingVariations(product);
   // A typed SKU or scanned piece takes precedence over the catalog filters.
   const exact = variations.find((variant) => variant.id === only);

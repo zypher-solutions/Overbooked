@@ -5,6 +5,9 @@ type Row = Record<string, string>;
 // bridal and groom SKUs, as in TRENDZ: BR-001, BR-001-GOLD-M
 export const SKU_PATTERN = /^[A-Z]{2,6}-[0-9]{3,4}(-[A-Za-z0-9]+)*$/;
 
+// the variation SKU rules live in bulk.ts so scripts/check-bulk.ts can run them on their own
+export { skuPart, skuKeys, variationSkuPart } from "./bulk";
+
 /** SKUs for a CSV import, as in TRENDZ: an item without a SKU gets its category's base SKU and the next number
  *  (an item that already exists keeps its own); typed SKUs must follow the pattern */
 export function importSkus(products: Product[], categories: Category[], fieldCols: string[]) {

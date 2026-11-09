@@ -66,14 +66,14 @@ export function RentProductDialog({
   dailyPrice: string;
   onClose: () => void;
 }): React.JSX.Element {
-  const { templateOf } = useShop();
+  const { attributes } = useShop();
   const cart = useCart();
   const variants = matchingVariations(product);
-  const templateFields =
-    templateOf(product.category_id)?.variation_fields ?? [];
+  // the shop's attributes in their order (Admin > Attributes)
+  const fields = attributes;
   const keys = [
     ...new Set([
-      ...templateFields.map((field) => field.key),
+      ...fields.map((field) => field.key),
       ...variants.flatMap((variant) => Object.keys(variant.attributes ?? {})),
     ]),
   ];
@@ -81,7 +81,7 @@ export function RentProductDialog({
     .map((key) => ({
       key,
       label:
-        templateFields.find((field) => field.key === key)?.label ??
+        fields.find((field) => field.key === key)?.label ??
         key.replace(/_/g, " ").replace(/^./, (letter) => letter.toUpperCase()),
       values: [
         ...new Set(
