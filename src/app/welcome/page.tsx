@@ -67,7 +67,7 @@ function Welcome() {
           {state === "invalid" && (
             <div className="text-center space-y-2">
               <h2 className="text-xl font-semibold">This link has expired</h2>
-              <p className="text-sm text-muted-foreground">Invite links work once and for one hour. Ask Zypher for a new link.</p>
+              <p className="text-sm text-muted-foreground">Links work once and for one hour. Ask your shop owner for a new link, or use &quot;Forgot your password?&quot; on the sign-in page.</p>
             </div>
           )}
           {state === "ready" && (

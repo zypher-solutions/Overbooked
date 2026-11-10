@@ -29,8 +29,8 @@ their shop, role and branch. The screens only make it pleasant; the database has
 | Role | Who | Can |
 | --- | --- | --- |
 | super_admin | Zypher staff | The console: setup and billing only. Opens a shop for **setup** (branches, staff and roles, stock location counts) and never sees its bookings, customers, money, products or photos: the database gives it no shop for business data |
-| support | Zypher's login for ONE shop | Works inside that shop like its owner, to find and fix a problem. No money corrections or deletions, does not use the shop's login limit, every setup change is audited. One credential exposes one shop |
-| owner | Shop owner | Runs the shop: all branches, bookings, products, money, corrections, shop settings (branches and staff are set up by Zypher) |
+| support | Zypher's login for ONE shop | Has no access at all until the shop's owner switches "Zypher support access" on (Account settings); off again whenever the owner chooses, each switch audited. While on, works inside that shop like its owner, to find and fix a problem. No money corrections or deletions, does not use the shop's login limit, every setup change is audited. One credential exposes one shop |
+| owner | Shop owner | Runs the shop: all branches, bookings, products, money, corrections, shop settings, and its people and branches (Staff management). Zypher sets the shop up only until the first owner signs in |
 | manager | Branch manager | Own branch: bookings, catalog and units there, money reports for the branch |
 | staff | Counter staff | Own branch: bookings, handovers, returns, customers; no money reports |
 
@@ -53,7 +53,7 @@ says "Check-in" and asks for guests, a car shop asks for odometer, fuel and lice
 | Customers | Search, history, what they owe, ID and licence, block |
 | Catalog | Items by category with prices per rate type, units per branch and their status, extras, categories, CSV import |
 | Money and reports | Money in by method, booked value, owed, deposits held, every money record (CSV), stock right now |
-| Branches (also the stock locations), Staff | Zypher only, on the shop's page in the console (Branches, Staff tabs); it never shows what a branch holds: branches, invite links, roles |
+| Branches (also the stock locations), Staff | The owner, on Staff management in the shop app; Zypher on the shop's page in the console (Branches, Staff tabs) until the owner has signed in, then only Zypher support logins and an owner's reset email. Branches added by the owner show in the console too |
 | Settings | Owner: shop rules (grace time, check-in/out times, licence rule) |
 
 ### Bridal and groom shops: the TRENDZ screens
@@ -68,7 +68,7 @@ admin panel Overbooked grew from. Cars, bikes and resorts keep the screens above
 | | Inventory Search (`/scan`) | Scan a tag (camera or USB scanner) or type a name, SKU, piece code or booking no. Find and book: stock per branch (Total / Avail / Rented), Add to Cart. Receive back: a scanned piece opens its return with that piece ticked |
 | | All Rentals | Products with stock per branch; tap for Add to Cart per size and branch, and who has it out |
 | Products | All Products, Add New Product, Categories | Add New Product is a 3-step form: basic info, attributes (Colour, Size...), variations and pieces per branch (pieces are created with codes for QR tags). Changing a product uses the same form |
-| Admin | Branch / Staff Management, Stock Locations (Zypher only), Shop settings (owner) | Stock Locations: pieces per branch (free, out, service, lost). CSV Import sits under Products |
+| Admin | Staff management (`/staff`, owner), Branch management (`/branches`, owner: branches plus the shop settings), Stock Locations (Zypher support only) | A page hidden from someone's menu sends them to Today if opened by its address (`ShopShell`). Stock Locations: pieces per branch (free, out, service, lost). CSV Import sits under Products |
 
 The cart (`src/lib/shop/cart.tsx`) keeps items per person and shop on the device; a floating Checkout (n)
 opens the booking form with them. On a return, clothes are ticked piece by piece (scanned, typed or tapped);

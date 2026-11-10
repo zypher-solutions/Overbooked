@@ -50,6 +50,11 @@ export function ShopShell({ children }: { children: ReactNode }) {
   const navCtx = { isOwner, canManage, isSupport, feature, word };
   const groups: NavGroup[] = loading ? [] : mod.nav(navCtx);
   const visible = groups.map((g) => ({ ...g, items: g.items.filter((n) => n.show) })).filter((g) => g.items.length);
+  // a page hidden from this person's menu (typed or left open in the address bar) sends them to Today;
+  // the database refuses its data anyway, this keeps the screen itself away
+  const hiddenHere = groups.some((g) => g.items.some((n) => !n.show && n.href === pathname))
+    && !visible.some((g) => g.items.some((n) => n.href === pathname));
+  useEffect(() => { if (hiddenHere) router.replace("/"); }, [hiddenHere, router]);
 
   const myBranch = myBranchId
     ? branches.find((b) => b.id === myBranchId)?.name ?? (loading ? "Loading branch…" : "Branch unavailable")
@@ -124,7 +129,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
         <div className="mx-auto max-w-[1480px]">
           <OfflineBanner />
           <SubscriptionBanner />
-          {children}
+          {hiddenHere ? null : children}
         </div>
       </main>
 

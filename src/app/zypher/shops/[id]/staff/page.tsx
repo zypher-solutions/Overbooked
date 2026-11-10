@@ -52,6 +52,11 @@ export default function ShopStaff() {
   useEffect(() => { void load(); }, [load]);
 
   const needsBranch = invite.role === "manager" || invite.role === "staff";
+  // once the owner has signed in, they run the shop's people; Zypher keeps only its support login (migration 033)
+  const ownerTookOver = (people ?? []).some((p) => p.role === "owner" && p.is_active && !p.pending);
+  const inviteRoles = ownerTookOver ? (["support"] as Role[]) : ROLES;
+  const locked = (p: Person) => ownerTookOver && p.role !== "support";
+  useEffect(() => { if (ownerTookOver) setInvite((v) => ({ ...v, role: "support", branchId: "" })); }, [ownerTookOver]);
 
   const sendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,8 +78,9 @@ export default function ShopStaff() {
   const freshLink = async (p: Person) => {
     setWorkingId(p.id);
     try {
-      const { link } = await newInviteLink(id, p.id);
-      setShare({ name: p.full_name, link });
+      const { link, emailedTo } = await newInviteLink(id, p.id);
+      if (link) setShare({ name: p.full_name, link });
+      else if (emailedTo) toast.success(`A password reset email was sent to ${emailedTo}.`);
     } catch (err: any) {
       toast.error(err.message || "Could not create a new link");
     } finally {
@@ -109,7 +115,7 @@ export default function ShopStaff() {
             onChange={(e) => setInvite({ ...invite, email: e.target.value })} />
           <select aria-label="Role" className={inputClass} value={invite.role}
             onChange={(e) => setInvite({ ...invite, role: e.target.value as Role, branchId: "" })}>
-            {ROLES.map((r) => <option key={r} value={r}>{r === "support" ? "Zypher support" : r}</option>)}
+            {inviteRoles.map((r) => <option key={r} value={r}>{r === "support" ? "Zypher support" : r}</option>)}
           </select>
           <select aria-label="Branch" className={inputClass} value={invite.branchId} disabled={!needsBranch} required={needsBranch}
             onChange={(e) => setInvite({ ...invite, branchId: e.target.value })}>
@@ -121,7 +127,14 @@ export default function ShopStaff() {
         <p className="mt-2 text-xs text-muted-foreground">
           You get a link to send on WhatsApp. It works once, for one hour; the person opens it and chooses a password.
           A Zypher support login is Zypher&apos;s own sign-in to this shop for fixing problems; it does not use up the plan&apos;s login limit.
+          It works only while the shop&apos;s owner has switched on Zypher support access in their Account settings.
         </p>
+        {ownerTookOver ? (
+          <p className="mt-2 text-xs font-medium text-foreground">
+            The owner has signed in and now manages this shop&apos;s staff and branches. Here you can only add or switch off
+            Zypher support logins, and send the owner a password reset email.
+          </p>
+        ) : null}
       </form>
 
       {people === null ? <p className="py-10 text-center text-muted-foreground">Loading staff...</p> : (
@@ -138,14 +151,14 @@ export default function ShopStaff() {
                     <span className="block text-xs text-muted-foreground">{p.email} · {p.pending ? "never signed in" : "last sign-in " + fmtWhen(p.last_sign_in_at)}</span>
                   </td>
                   <td className="px-4 py-2.5">
-                    <select aria-label={"Role for " + p.full_name} className={inputClass + " w-auto min-w-[7.5rem] py-1 text-xs"} value={p.role} disabled={workingId === p.id}
+                    <select aria-label={"Role for " + p.full_name} className={inputClass + " w-auto min-w-[7.5rem] py-1 text-xs"} value={p.role} disabled={workingId === p.id || locked(p)}
                       onChange={(e) => ask(p, { role: e.target.value as Role }, `Change ${p.full_name} to ${e.target.value}?`)}>
                       {ROLES.map((r) => <option key={r} value={r}>{r === "support" ? "Zypher support" : r}</option>)}
                     </select>
                   </td>
                   <td className="px-4 py-2.5">
                     {p.role === "owner" || p.role === "support" ? <span className="text-xs text-muted-foreground">All branches</span> : (
-                      <select aria-label={"Branch for " + p.full_name} className={inputClass + " w-auto min-w-[7.5rem] py-1 text-xs"} value={p.branch_id ?? ""} disabled={workingId === p.id}
+                      <select aria-label={"Branch for " + p.full_name} className={inputClass + " w-auto min-w-[7.5rem] py-1 text-xs"} value={p.branch_id ?? ""} disabled={workingId === p.id || locked(p)}
                         onChange={(e) => ask(p, { branch_id: e.target.value || null }, `Move ${p.full_name} to ${branches.find((b) => b.id === e.target.value)?.name ?? "no branch"}?`)}>
                         <option value="">Unassigned</option>
                         {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -153,18 +166,18 @@ export default function ShopStaff() {
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    <button type="button" disabled={workingId === p.id} aria-label={(p.is_active ? "Deactivate " : "Activate ") + p.full_name}
+                    <button type="button" disabled={workingId === p.id || locked(p)} aria-label={(p.is_active ? "Deactivate " : "Activate ") + p.full_name}
                       onClick={() => ask(p, { is_active: !p.is_active }, p.is_active ? `Deactivate ${p.full_name}? They lose access straight away.` : `Reactivate ${p.full_name}? They can sign in again.`)}>
                       <StatusBadge tone={p.is_active ? "emerald" : "rust"}>{p.is_active ? "Active" : "Inactive"}</StatusBadge>
                     </button>
                     {p.pending ? <StatusBadge tone="indigo">Invite pending</StatusBadge> : null}
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <button type="button" disabled={workingId === p.id} onClick={() => void freshLink(p)} aria-label={"New login link for " + p.full_name}
+                    {(locked(p) && p.role !== "owner") || !p.is_active ? null : <button type="button" disabled={workingId === p.id} onClick={() => void freshLink(p)} aria-label={"New login link for " + p.full_name}
                       title={p.pending ? "New invite link" : "New login link (forgotten password)"}
                       className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50">
-                      <Link2 className="h-3.5 w-3.5" /> {p.pending ? "New invite link" : "Login link"}
-                    </button>
+                      <Link2 className="h-3.5 w-3.5" /> {locked(p) ? "Email reset link" : p.pending ? "New invite link" : "Login link"}
+                    </button>}
                   </td>
                 </tr>
               ))}

@@ -102,7 +102,7 @@ export function SubscriptionBanner() {
         {left < 0 ? `Your Overbooked subscription is ${-left} days overdue.` : left === 0 ? "Your Overbooked subscription is due today."
           : `Your Overbooked subscription is due in ${left} days (${fmtDate(shop.paid_until)}).`}
       </span>
-      <Link href="/settings" className="font-medium underline">How to pay</Link>
+      <Link href="/branches" className="font-medium underline">How to pay</Link>
     </div>
   );
 }

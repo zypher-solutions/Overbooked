@@ -121,10 +121,22 @@ The seed creates one shop per business type, plus one Zypher admin. Logins are a
 ## Who signs in where
 - **Zypher admin:** signs in to the console at `/zypher`: shops, plans and fees, feature switches, bank
   payments, pausing a shop, new shops from business types, and, on each shop's page, Branches and Staff tabs to set
-  it up. Zypher never sees a shop's bookings, customers or money.
-- **Owners:** invite staff from **Staff**. They get a one-hour link to send on WhatsApp; the person opens
-  it and chooses a password. The same screen makes a new link for a forgotten password.
+  it up (the first owner, branches). Once that owner has signed in, the owner runs the shop's people: Zypher's Staff
+  tab is read-only except for Zypher support logins and a password reset **email** to the owner. Zypher team logins
+  are invited from the console's **Team** page; never create logins in the Supabase dashboard (they start inactive).
+- **Owners:** invite staff, change roles and branches, switch people off, and add or close branches from
+  **Staff management** (migration 033). They get a one-hour link to send on WhatsApp; the person opens it and
+  chooses a password. The same screen makes a new link for a forgotten password.
   Invites need `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` (server only).
+- **Anyone:** "Forgot your password?" on the sign-in page emails a reset link.
+
+### Password reset email (Supabase dashboard, once per project)
+The sign-in page's "Forgot your password?" and Zypher's "Email reset link" use Supabase's reset email. Its link
+must open `/welcome` with a token, so in **Authentication → Email Templates → Reset password**, set the link to:
+`{{ .SiteURL }}/welcome?token_hash={{ .TokenHash }}&type=recovery`
+and set **Authentication → URL Configuration → Site URL** to the app's address (`http://localhost:3000` for
+development). Supabase's built-in mailer only sends a few emails an hour and only to the project team's addresses;
+before real shops use it, set up your own SMTP under **Authentication → SMTP Settings**.
 
 ## Common problems
 | Symptom | Fix |
