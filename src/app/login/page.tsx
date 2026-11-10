@@ -40,6 +40,8 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) throw error;
+      // the shop's activity log (owner only); a support login is logged after its two-step code instead
+      await supabase.rpc("log_account_event", { p_kind: "signed_in" }).then(() => undefined, () => undefined);
 
       // Zypher staff and Zypher support logins must also pass two-step sign-in before the app opens for them
       const { data: needsCode } = await supabase.rpc("mfa_required");

@@ -25,6 +25,8 @@ from zero; `npx supabase test db` then runs the database tests in `supabase/test
 | `20261101000027_finance_open_money.sql` | The rentals where money is still open, for Finance's outstanding and deposits held |
 | `20261101000032_support_access_consent.sql` | A Zypher support login reaches a shop only while its owner has switched support access on (`support_access`, `set_support_access`); every switch is audited |
 | `20261101000033_owner_runs_staff.sql` | The shop's owner uses the setup functions (people, invites, roles, branches) for their own shop; once the owner has signed in, Zypher only manages its support login and can only email the owner a reset link |
+| `20261101000034_activity_log.sql` | The shop's activity log (`activity_log`): one plain-words entry per action a person takes, written by triggers on the shop tables (`_act_*` functions) and by `log_setup_event` / `log_account_event`; one save is one entry; only the owner reads it; nobody changes it. Rules for new features: "Activity log" in `CLAUDE.md` |
+| `20261101000035_activity_log_gaps.sql` | Activity log, part 2: cart actions reported by the app (`log_cart_event`: piece added or removed, customer set, cart discarded; area `carts`), the condition and photos at pickup and return, subscription payments Zypher records, reordering attributes and values; `_act_log` never blocks the action it records |
 
 ## Business types are data
 A **template** (`business_templates`) describes a type of business: its kind (`wearable` by day,
@@ -67,6 +69,7 @@ fee); 0 ≤ paid ≤ total; deposit given back + kept ≤ deposit received; end 
 | Reports | `inventory_status`, `dashboard_summary` |
 | Setup (Zypher only, each names the shop) | `setup_branches`, `setup_save_branch`, `setup_delete_branch`, `setup_people`, `setup_set_person`, `setup_check_invite`, `setup_check_person` |
 | Shop details (owner) | `update_my_shop` |
+| Activity log | `log_account_event` (sign-in, password set; the caller only), `log_cart_event` (cart actions kept in the browser), `activity_people` (the people in the log, for the filter). Everything else is written by triggers |
 | Zypher only | `create_shop`, `update_shop`, `record_shop_payment`, `platform_overview`, `console_summary`, `shop_detail`, `pause_overdue_shops` (also nightly) |
 
 Each function checks the caller's role, branch and shop itself. Shop functions are owned by `app_rpc`,

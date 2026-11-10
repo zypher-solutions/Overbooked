@@ -14,6 +14,7 @@ import { emptyCustomer, type NewCustomer } from "@/components/shop/CustomerPicke
 import { customerProblem } from "@/components/shop/CustomerForm";
 import { moneyError, normalizeEmail, normalizePhone, textLimitError } from "@/lib/validate";
 import { buildMessage, waLink } from "@/lib/shop/whatsapp";
+import { logCartEvent } from "@/lib/shop/activity";
 import { shopModules } from "@/modules/registry";
 
 // The booking form's state and rules, shared by every kind of shop. The screens are in src/app/(shop)/book/page.tsx
@@ -134,6 +135,22 @@ export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
       if (byPiece && cart.id === 1) sessionStorage.removeItem(legacyKey);
     } catch { /* storage unavailable */ }
   }, [d, customer, storageKey, editId, restored, loadingCustomer, byPiece, cart.id, legacyKey]);
+
+  // the activity log: who the cart is for, once the name stops changing (not every key pressed)
+  const cartCustomer = customer?.full_name ?? d.customer.full_name.trim();
+  useEffect(() => {
+    if (!byPiece || editId || !restored || loadingCustomer || completed.current || !cartCustomer) return;
+    const t = setTimeout(() => {
+      try {
+        const loggedKey = storageKey + "_logged_customer";
+        const previous = sessionStorage.getItem(loggedKey) ?? "";
+        if (previous === cartCustomer) return;
+        sessionStorage.setItem(loggedKey, cartCustomer);
+        logCartEvent({ kind: "customer_set", cart: cart.id, customer: cartCustomer, previous });
+      } catch { /* storage unavailable */ }
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [cartCustomer, byPiece, editId, restored, loadingCustomer, storageKey, cart.id]);
 
   // the booking being changed, as a draft of this form
   useEffect(() => {
@@ -497,7 +514,7 @@ export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
         },
       });
       completed.current = true;
-      try { sessionStorage.removeItem(storageKey); } catch { /* storage unavailable */ }
+      try { sessionStorage.removeItem(storageKey); sessionStorage.removeItem(storageKey + "_logged_customer"); } catch { /* storage unavailable */ }
       if (byPiece) {
         // bridal and groom: back to the Bookings list; the message to the customer is one tap on the notice
         const rental = await loadRental(res.rental_id).catch(() => null);
@@ -533,7 +550,9 @@ export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
 
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const reset = () => {
-    try { sessionStorage.removeItem(storageKey); } catch { /* ignore */ }
+    if (byPiece && (cart.count > 0 || cartCustomer))
+      logCartEvent({ kind: "cart_discarded", cart: cart.id, customer: cartCustomer || undefined, items: cart.count });
+    try { sessionStorage.removeItem(storageKey); sessionStorage.removeItem(storageKey + "_logged_customer"); } catch { /* ignore */ }
     cart.remove(cart.id);
     setCustomer(null);
     setD(initial());
