@@ -52,6 +52,8 @@ export default function MfaPage() {
     setBusy(false);
     if (error) { setCode(""); return toast.error("That code did not work. Check the time on your phone and try the next code."); }
     toast.success("Signed in with two steps.");
+    // the shop's activity log (a sign-in already logged by the sign-in screen is not logged twice)
+    await supabase.rpc("log_account_event", { p_kind: "signed_in" }).then(() => undefined, () => undefined);
     await done();
   };
 

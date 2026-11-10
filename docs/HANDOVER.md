@@ -32,6 +32,9 @@ exactly like TRENDZ). Car development starts only when clothing is done properly
   were clicked through on the shared project with the ZEEZ RENTAL shop, including a full booking, hand over and return.
   The database tests and Playwright tests have **not** been run since the move to the shared cloud project (they need
   Docker; last green 29 Oct: 358 database tests, 25 browser tests).
+- **Activity log** (10 Nov 2026, branch `feature/activity-log`): Admin > Activity log for the owner, written by the
+  database (migration 034). Every new feature that changes shop data must log: see "Activity log" in `CLAUDE.md`.
+  Database tests run on Docker that day: 429 passing, including `activity.test.sql`.
 - Test data on the shared project: booking `ZR-2026-0003` for "Claude Test" (9000000001), returned and paid ₹400.
   Delete or cancel it when it gets in the way.
 - Not done yet, on purpose: shop data export, voiding a wrong Zypher payment, usage page, announcements, offboarding, the

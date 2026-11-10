@@ -45,6 +45,7 @@ function Welcome() {
     const { error } = await supabase.auth.updateUser({ password });
     setSaving(false);
     if (error) return toast.error(error.message || "Could not save the password.");
+    await supabase.rpc("log_account_event", { p_kind: "password_changed" }).then(() => undefined, () => undefined);
     toast.success("Password set. Welcome!");
     const { data: needsCode } = await supabase.rpc("mfa_required");
     router.push(needsCode ? "/mfa" : "/");

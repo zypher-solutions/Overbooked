@@ -144,11 +144,13 @@ function PasswordDialog({ open, onClose }: { open: boolean; onClose: () => void 
 
     setBusy(true);
     try {
-      const { error } = await createClient().auth.updateUser({ password });
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password });
       if (error) {
         toast.error(error.message || "Could not change password.");
         return;
       }
+      await supabase.rpc("log_account_event", { p_kind: "password_changed" }).then(() => undefined, () => undefined);
       toast.success("Password changed.");
       setPassword("");
       setConfirmation("");

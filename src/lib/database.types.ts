@@ -23,16 +23,36 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "add_ons": {
+            "activity_log": {
                   Row: {
-                    "amount": number,"basis": string,"created_at": string,"id": string,"is_active": boolean,"name": string,"shop_id": string,"template_keys": (string)[]
+                    "action": string,"actor_id": string | null,"actor_name": string,"actor_role": string,"area": string,"branch_id": string | null,"changes": Json | null,"id": number,"important": boolean,"level": number,"occurred_at": string,"reason": string | null,"record_id": string | null,"record_label": string | null,"record_type": string | null,"shop_id": string,"snapshot": Json | null,"summary": string,"txid": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount": number,"basis": string,"created_at"?: string,"id"?: string,"is_active"?: boolean,"name": string,"shop_id": string,"template_keys"?: (string)[]
+                    "action": string,"actor_id"?: string | null,"actor_name": string,"actor_role": string,"area": string,"branch_id"?: string | null,"changes"?: Json | null,"id"?: never,"important"?: boolean,"level": number,"occurred_at"?: string,"reason"?: string | null,"record_id"?: string | null,"record_label"?: string | null,"record_type"?: string | null,"shop_id": string,"snapshot"?: Json | null,"summary": string,"txid"?: number
                   }
                   Update: {
-                    "amount"?: number,"basis"?: string,"created_at"?: string,"id"?: string,"is_active"?: boolean,"name"?: string,"shop_id"?: string,"template_keys"?: (string)[]
+                    "action"?: string,"actor_id"?: string | null,"actor_name"?: string,"actor_role"?: string,"area"?: string,"branch_id"?: string | null,"changes"?: Json | null,"id"?: never,"important"?: boolean,"level"?: number,"occurred_at"?: string,"reason"?: string | null,"record_id"?: string | null,"record_label"?: string | null,"record_type"?: string | null,"shop_id"?: string,"snapshot"?: Json | null,"summary"?: string,"txid"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "activity_log_shop_id_fkey"
+      columns: ["shop_id"]
+isOneToOne: false
+      referencedRelation: "shops"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"add_ons": {
+                  Row: {
+                    "amount": number,"basis": string,"category_ids": (string)[],"created_at": string,"id": string,"is_active": boolean,"name": string,"quantity": number | null,"shop_id": string,"template_keys": (string)[]
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"basis": string,"category_ids"?: (string)[],"created_at"?: string,"id"?: string,"is_active"?: boolean,"name": string,"quantity"?: number | null,"shop_id": string,"template_keys"?: (string)[]
+                  }
+                  Update: {
+                    "amount"?: number,"basis"?: string,"category_ids"?: (string)[],"created_at"?: string,"id"?: string,"is_active"?: boolean,"name"?: string,"quantity"?: number | null,"shop_id"?: string,"template_keys"?: (string)[]
                   }
                   Relationships: [
                     {
@@ -325,14 +345,14 @@ isOneToOne: false
                   ]
                 },"product_variations": {
                   Row: {
-                    "attributes": NonNullable<Json>,"base_occupancy": number | null,"created_at": string,"id": string,"is_enabled": boolean,"km_included_per_day": number | null,"max_occupancy": number | null,"name": string,"product_id": string,"shop_id": string,"sku": string,"turnaround": string
+                    "archived_at": string | null,"attributes": NonNullable<Json>,"base_occupancy": number | null,"created_at": string,"id": string,"is_enabled": boolean,"km_included_per_day": number | null,"max_occupancy": number | null,"name": string,"product_id": string,"shop_id": string,"sku": string,"turnaround": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "attributes"?: NonNullable<Json>,"base_occupancy"?: number | null,"created_at"?: string,"id"?: string,"is_enabled"?: boolean,"km_included_per_day"?: number | null,"max_occupancy"?: number | null,"name": string,"product_id": string,"shop_id": string,"sku": string,"turnaround"?: string
+                    "archived_at"?: string | null,"attributes"?: NonNullable<Json>,"base_occupancy"?: number | null,"created_at"?: string,"id"?: string,"is_enabled"?: boolean,"km_included_per_day"?: number | null,"max_occupancy"?: number | null,"name": string,"product_id": string,"shop_id": string,"sku": string,"turnaround"?: string
                   }
                   Update: {
-                    "attributes"?: NonNullable<Json>,"base_occupancy"?: number | null,"created_at"?: string,"id"?: string,"is_enabled"?: boolean,"km_included_per_day"?: number | null,"max_occupancy"?: number | null,"name"?: string,"product_id"?: string,"shop_id"?: string,"sku"?: string,"turnaround"?: string
+                    "archived_at"?: string | null,"attributes"?: NonNullable<Json>,"base_occupancy"?: number | null,"created_at"?: string,"id"?: string,"is_enabled"?: boolean,"km_included_per_day"?: number | null,"max_occupancy"?: number | null,"name"?: string,"product_id"?: string,"shop_id"?: string,"sku"?: string,"turnaround"?: string
                   }
                   Relationships: [
                     {
@@ -351,14 +371,14 @@ isOneToOne: false
                   ]
                 },"products": {
                   Row: {
-                    "category_id": string,"created_at": string,"description": string | null,"id": string,"image_url": string | null,"is_active": boolean,"is_set": boolean,"name": string,"purchase_price": number,"replacement_value": number,"shop_id": string,"sku": string,"updated_at": string
+                    "category_id": string,"created_at": string,"description": string | null,"id": string,"image_url": string | null,"is_active": boolean,"is_set": boolean,"mrp": number,"name": string,"purchase_price": number,"replacement_value": number,"security_deposit": number,"shop_id": string,"sku": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "category_id": string,"created_at"?: string,"description"?: string | null,"id"?: string,"image_url"?: string | null,"is_active"?: boolean,"is_set"?: boolean,"name": string,"purchase_price"?: number,"replacement_value"?: number,"shop_id": string,"sku": string,"updated_at"?: string
+                    "category_id": string,"created_at"?: string,"description"?: string | null,"id"?: string,"image_url"?: string | null,"is_active"?: boolean,"is_set"?: boolean,"mrp"?: number,"name": string,"purchase_price"?: number,"replacement_value"?: number,"security_deposit"?: number,"shop_id": string,"sku": string,"updated_at"?: string
                   }
                   Update: {
-                    "category_id"?: string,"created_at"?: string,"description"?: string | null,"id"?: string,"image_url"?: string | null,"is_active"?: boolean,"is_set"?: boolean,"name"?: string,"purchase_price"?: number,"replacement_value"?: number,"shop_id"?: string,"sku"?: string,"updated_at"?: string
+                    "category_id"?: string,"created_at"?: string,"description"?: string | null,"id"?: string,"image_url"?: string | null,"is_active"?: boolean,"is_set"?: boolean,"mrp"?: number,"name"?: string,"purchase_price"?: number,"replacement_value"?: number,"security_deposit"?: number,"shop_id"?: string,"sku"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -661,6 +681,52 @@ isOneToOne: false
       referencedColumns: ["shop_id","id"]
     }
                   ]
+                },"shop_attribute_values": {
+                  Row: {
+                    "attribute_id": string,"created_at": string,"id": string,"shop_id": string,"sort": number,"value": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attribute_id": string,"created_at"?: string,"id"?: string,"shop_id": string,"sort"?: number,"value": string
+                  }
+                  Update: {
+                    "attribute_id"?: string,"created_at"?: string,"id"?: string,"shop_id"?: string,"sort"?: number,"value"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "shop_attribute_values_attribute_fkey"
+      columns: ["shop_id","attribute_id"]
+isOneToOne: false
+      referencedRelation: "shop_attributes"
+      referencedColumns: ["shop_id","id"]
+    },{
+      foreignKeyName: "shop_attribute_values_shop_id_fkey"
+      columns: ["shop_id"]
+isOneToOne: false
+      referencedRelation: "shops"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"shop_attributes": {
+                  Row: {
+                    "created_at": string,"id": string,"is_archived": boolean,"key": string,"label": string,"shop_id": string,"sku_position": number | null,"sort": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"is_archived"?: boolean,"key": string,"label": string,"shop_id": string,"sku_position"?: number | null,"sort"?: number
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"is_archived"?: boolean,"key"?: string,"label"?: string,"shop_id"?: string,"sku_position"?: number | null,"sort"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "shop_attributes_shop_id_fkey"
+      columns: ["shop_id"]
+isOneToOne: false
+      referencedRelation: "shops"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"shop_counters": {
                   Row: {
                     "kind": string,"period": string,"shop_id": string,"value": number
@@ -749,6 +815,26 @@ isOneToOne: false
       foreignKeyName: "staff_invites_shop_id_fkey"
       columns: ["shop_id"]
 isOneToOne: false
+      referencedRelation: "shops"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"support_access": {
+                  Row: {
+                    "granted_at": string,"granted_by": string,"shop_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "granted_at"?: string,"granted_by": string,"shop_id": string
+                  }
+                  Update: {
+                    "granted_at"?: string,"granted_by"?: string,"shop_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "support_access_shop_id_fkey"
+      columns: ["shop_id"]
+isOneToOne: true
       referencedRelation: "shops"
       referencedColumns: ["id"]
     }
@@ -861,11 +947,80 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "_audit":
+            "_act_arr_minus":
+{ Args: { "a": (string)[],"b": (string)[] }; Returns: (string)[]
+                           },
+"_act_arr_text":
+{ Args: { "a": (string)[] }; Returns: string
+                           },
+"_act_branch_name":
+{ Args: { "p": string }; Returns: string
+                           },
+"_act_change":
+{ Args: { "p_from": string,"p_label": string,"p_to": string }; Returns: Json
+                           },
+"_act_charge_label":
+{ Args: { "p": string }; Returns: string
+                           },
+"_act_count":
+{ Args: { "p_label": string,"p_n": number }; Returns: Json
+                           },
+"_act_day":
+{ Args: { "p_at": string,"p_tz": string }; Returns: string
+                           },
+"_act_inr":
+{ Args: { "n": number }; Returns: string
+                           },
+"_act_item_text":
+{ Args: { "p_amount": number,"p_name": string,"p_qty": number }; Returns: string
+                           },
+"_act_log":
+{ Args: { "p_action": string,"p_actor"?: string,"p_area": string,"p_branch": string,"p_changes"?: Json,"p_created_summary"?: string,"p_important"?: boolean,"p_label": string,"p_level": number,"p_reason"?: string,"p_record_id": string,"p_record_type": string,"p_shop": string,"p_snapshot"?: Json,"p_summary": string }; Returns: undefined
+                           },
+"_act_mask":
+{ Args: { "p": string }; Returns: string
+                           },
+"_act_merge":
+{ Args: { "a": Json,"b": Json }; Returns: Json
+                           },
+"_act_method":
+{ Args: { "p": string }; Returns: string
+                           },
+"_act_pay_kind":
+{ Args: { "p": string }; Returns: string
+                           },
+"_act_product_log":
+{ Args: { "p_changes": Json,"p_important"?: boolean,"p_product": string }; Returns: undefined
+                           },
+"_act_rate_label":
+{ Args: { "p": string }; Returns: string
+                           },
+"_act_role_label":
+{ Args: { "p": string }; Returns: string
+                           },
+"_act_tz":
+{ Args: { "p_shop": string }; Returns: string
+                           },
+"_act_unit_status":
+{ Args: { "p": string }; Returns: string
+                           },
+"_act_when":
+{ Args: { "p_at": string,"p_tz": string }; Returns: string
+                           },
+"_act_words":
+{ Args: { "p": string }; Returns: string
+                           },
+"_act_yesno":
+{ Args: { "b": boolean }; Returns: string
+                           },
+"_audit":
 { Args: { "p_id": string,"p_new": Json,"p_old": Json,"p_reason": string,"p_table": string }; Returns: undefined
                            },
 "_complete_rental_core":
 { Args: { "p"?: Json,"p_rental_id": string }; Returns: Json
+                           },
+"_import_catalog_core":
+{ Args: { "p": Json }; Returns: Json
                            },
 "_insert_lines":
 { Args: { "p_branch": string,"p_end": string,"p_prefer"?: (string)[],"p_quote": Json,"p_rental_id": string,"p_start": string }; Returns: undefined
@@ -911,11 +1066,28 @@ isOneToOne: false
 "_save_product_core":
 { Args: { "p": Json }; Returns: string
                            },
+"_save_product_money":
+{ Args: { "p": Json,"p_product": string }; Returns: undefined
+                           },
+"_save_product_pieces":
+{ Args: { "p": Json }; Returns: string
+                           },
+"_seed_shop_attributes":
+{ Args: { "p_shop": string }; Returns: undefined
+                           },
+"_shop_has_live_owner":
+{ Args: { "p_shop_id": string }; Returns: boolean
+                           },
 "_shop_tz":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
 "_unit_kept_late":
 { Args: { "p_unit_id": string }; Returns: boolean
+                           },
+"activity_people":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "actor_id": string,"actor_name": string,"actor_role": string
+            }[]
                            },
 "add_expense":
 { Args: { "p": Json }; Returns: string
@@ -1029,6 +1201,9 @@ isOneToOne: false
 "issue_invoice":
 { Args: { "p_rental_id": string }; Returns: Json
                            },
+"log_account_event":
+{ Args: { "p_kind": string }; Returns: undefined
+                           },
 "log_setup_event":
 { Args: { "p_action": string,"p_detail"?: Json,"p_shop_id": string }; Returns: undefined
                            },
@@ -1057,6 +1232,11 @@ isOneToOne: false
                            },
 "price_line":
 { Args: { "p_end": string,"p_qty": number,"p_start": string,"p_tz": string,"p_variation_id": string }; Returns: Record<string, unknown>
+                           },
+"product_earnings":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "earned": number,"product_id": string,"times_rented": number
+            }[]
                            },
 "quote_rental":
 { Args: { "p": Json }; Returns: Json
@@ -1087,6 +1267,9 @@ isOneToOne: false
                            },
 "save_set_items":
 { Args: { "p_items": Json,"p_product_id": string }; Returns: undefined
+                           },
+"set_support_access":
+{ Args: { "p_allow": boolean }; Returns: undefined
                            },
 "set_unit_status":
 { Args: { "p_reason"?: string,"p_status": string,"p_unit_id": string }; Returns: Json
@@ -1120,6 +1303,9 @@ isOneToOne: false
                            },
 "start_rental":
 { Args: { "p"?: Json,"p_rental_id": string }; Returns: Json
+                           },
+"support_waiting_for_consent":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "swap_unit":
 { Args: { "p_new_unit_id": string,"p_old_unit_id": string,"p_rental_id": string }; Returns: undefined

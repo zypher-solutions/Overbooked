@@ -13,12 +13,14 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/overbooked/AuthContext";
 import { useShop } from "@/lib/shop/ShopContext";
 import { Modal, ghostButtonClass, goldButtonClass } from "@/components/shop/ui";
+import { logCartEvent } from "@/lib/shop/activity";
 import {
   cartStorageKey,
   checkoutDraftKey,
   emptyCart,
   emptyCollection,
   readCartCollection,
+  readDraftPreview,
   type Cart,
   type CartCollection,
   type CartLine,
@@ -127,6 +129,11 @@ export function CartProvider({
     emptyCart;
   const draftKey = (id: number): string =>
     checkoutDraftKey(shopId, profileId, id);
+  // the customer chosen on a cart's booking draft, for the activity log
+  const customerOf = (id: number): string | undefined => {
+    const draft = readDraftPreview(draftKey(id));
+    return draft?.customerLabel || draft?.customer?.full_name?.trim() || undefined;
+  };
 
   useEffect(() => {
     const loaded = {
@@ -220,6 +227,8 @@ export function CartProvider({
       if (!added) toast.info("This piece is already in the active cart.");
       return next;
     });
+    if (added)
+      logCartEvent({ kind: "item_added", cart: active.id, customer: customerOf(active.id), variationId, unitId, branchId });
     return added;
   }
 
@@ -267,7 +276,9 @@ export function CartProvider({
     draftKey,
     beginBooking,
     add,
-    setLines: (update) =>
+    setLines: (update) => {
+      const removed: { variationId: string; qty: number }[] = [];
+      const added: { variationId: string; qty: number }[] = [];
       updateCart(active.id, (cart) => {
         const lines = update(cart.lines).filter((line) => line.qty > 0);
         if (
@@ -275,8 +286,23 @@ export function CartProvider({
           lines.every((line, index) => line === cart.lines[index])
         )
           return cart;
+        // more or fewer of an item (or an item removed) changed at checkout
+        for (const before of cart.lines) {
+          const after = lines.find((line) => line.variation_id === before.variation_id)?.qty ?? 0;
+          if (after < before.qty) removed.push({ variationId: before.variation_id, qty: before.qty - after });
+          if (after > before.qty) added.push({ variationId: before.variation_id, qty: after - before.qty });
+        }
+        for (const line of lines)
+          if (!cart.lines.some((before) => before.variation_id === line.variation_id))
+            added.push({ variationId: line.variation_id, qty: line.qty });
         return { ...cart, lines };
-      }),
+      });
+      const customer = removed.length || added.length ? customerOf(active.id) : undefined;
+      for (const r of added)
+        logCartEvent({ kind: "item_added", cart: active.id, customer, variationId: r.variationId, qty: r.qty, branchId: active.branchId });
+      for (const r of removed)
+        logCartEvent({ kind: "item_removed", cart: active.id, customer, variationId: r.variationId, qty: r.qty, branchId: active.branchId });
+    },
     setBranch: (branchId) =>
       updateCart(active.id, (cart) => ({
         ...cart,
@@ -299,6 +325,8 @@ export function CartProvider({
     const itemCart = withItem(emptyCart, branchId, variationId, unitId);
     if (multiple) commit((current) => appendCart(current, itemCart));
     else updateCart(cartId, () => ({ ...itemCart, id: cartId }));
+    const newCartId = multiple ? latest.current.collection.activeId : cartId;
+    logCartEvent({ kind: "item_added", cart: newCartId, variationId, unitId, branchId });
     setPending(null);
   }
 

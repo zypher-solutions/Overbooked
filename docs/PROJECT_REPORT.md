@@ -863,6 +863,8 @@ These are listed again, ranked, in Part 8 (group F). In short:
 ## 7.5 The audit log
 Every deletion, every owner correction, every setup change by Zypher and every backdated return is written down, with who did it, when, and the reason. Users cannot change or delete these entries. They are kept forever. Price changes (a discount or an agreed price) are kept in their own list, which owners and managers can read, with who made the change.
 
+**The shop's activity log** (Admin > Activity log, owner only, from 10 Nov 2026) is the readable version for the shop owner: every action a person takes in the shop (bookings made, changed, handed over, returned, cancelled; payments, refunds, deposits, charges, expenses; customers, measurements; products, prices, pieces, categories, extras, attributes; appointments; staff, branches, shop settings, Zypher support access; sign-ins and password changes), each as one sentence with who, when, the area, the reason, and the values before and after. Deletions keep the whole record so it can be typed back in. It can be filtered and downloaded as a spreadsheet. Clicks, page views and searches are not logged. The database writes it (`activity_log`), so no screen can skip it.
+
 # 8. What is wrong or risky today
 
 > **What this means for you:** this is the honest list. Nothing here stops the product from working. Each line says how serious it is, why it matters, and the simplest fix. "High" means fix before a real shop goes live. "Medium" means fix in the first month. "Low" means fix when convenient.

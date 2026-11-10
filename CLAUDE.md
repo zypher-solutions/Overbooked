@@ -46,6 +46,32 @@ There is no Python in this project.
   deposit refund <= deposit held; no overlapping bookings of the same unit; return date >= start date;
   no negative amounts; dashboard/ledger figures equal the underlying records.
 
+## Activity log (every feature that changes shop data must log)
+The owner's Admin > Activity log (`/admin/activity`, `src/components/shop/ActivityLog.tsx`) shows who did what, when and
+where, in plain words. It is written ONLY by the database (migration `20261101000034_activity_log.sql`, table
+`activity_log`), never by the browser, so it cannot be skipped or forged. Before finishing a feature, check:
+- **New table holding shop data?** Add a trigger: `CREATE TRIGGER trg_activity AFTER INSERT OR UPDATE OR DELETE ON public.<t>
+  FOR EACH ROW EXECUTE FUNCTION public._act_<t>()`, whose function calls `public._act_log(...)` (shop, branch, area, action,
+  level 0 created / 1 changed / 2 named event / 3 deleted, record type and id, label, one plain sentence, important?, changes,
+  snapshot for deletions). Copy one of the `_act_*` functions in that migration.
+- **New column people edit on an existing table?** Add it to that table's `_act_*` function with `_act_change('Label', old, new)`
+  (formatted: `_act_inr` for money, `_act_when` for times, `_act_mask` for ID numbers). Otherwise the change is invisible.
+- **New status or event** (a new rental status, a new payment kind, a new charge type)? Give it its own sentence and action key.
+- **Child rows of one record** (pieces of a product, lines of a booking)? Log under the parent's record type and id, so one
+  save stays one entry (counts with `_act_count`, see `_act_units`).
+- **Something only the app knows** (sign-in, a link emailed)? Use `log_account_event` or `log_setup_event`; never insert into
+  `activity_log` from the app.
+- **Saved only in the browser** (localStorage/sessionStorage, like the cart and its booking draft)? The database never sees it,
+  so report each deliberate action with `logCartEvent` (`src/lib/shop/activity.ts`, database `log_cart_event`, migration 035)
+  or a function like it. Report a finished choice, not keystrokes (the cart's customer is logged after 2.5 s without typing).
+  Drafts that only autosave a form (product wizard, bulk sheet) are not logged; the real save is.
+- The log must never block the work: `_act_log` swallows its own errors (migration 035). Keep it that way.
+- Wording: plain words a shop owner understands ("Cancelled booking KAL-2026-0004 for Anjali"), no table or column names.
+  Mark `important` for deletions, cancellations, money corrections, staff/role/access changes. Pass the reason when there is one.
+- Do NOT log reads, page views, searches, filters, the cart, quotes, or columns the database keeps up to date itself.
+- Add a check to `supabase/tests/activity.test.sql`; a new `area` value needs the CHECK on `activity_log.area` and a label in
+  `ActivityLog.tsx`.
+
 ## Commands
 - `npm run dev`: app on http://localhost:3000, connected to the shared cloud Supabase (.env.local)
 - `npm run build`, `npm run lint`, `npm run typecheck`: no database needed
