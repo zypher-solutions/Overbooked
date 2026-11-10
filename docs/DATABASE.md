@@ -23,6 +23,8 @@ from zero; `npx supabase test db` then runs the database tests in `supabase/test
 | `20261101000025_invoice_numbers.sql` | Tax invoice number and date, fixed when issued |
 | `20261101000026_trial_in_console.sql` | The console shows a shop's trial end; a shop in its trial is not overdue |
 | `20261101000027_finance_open_money.sql` | The rentals where money is still open, for Finance's outstanding and deposits held |
+| `20261101000032_support_access_consent.sql` | A Zypher support login reaches a shop only while its owner has switched support access on (`support_access`, `set_support_access`); every switch is audited |
+| `20261101000033_owner_runs_staff.sql` | The shop's owner uses the setup functions (people, invites, roles, branches) for their own shop; once the owner has signed in, Zypher only manages its support login and can only email the owner a reset link |
 
 ## Business types are data
 A **template** (`business_templates`) describes a type of business: its kind (`wearable` by day,

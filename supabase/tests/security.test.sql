@@ -3,7 +3,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(56);
+SELECT plan(66);
 
 \set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
@@ -56,8 +56,8 @@ SELECT is((SELECT count(*) FROM products WHERE name = 'hacked'), 0::bigint, '...
 SELECT pg_temp.act_as(:bridal_owner);
 SELECT throws_like($$ SELECT public.update_shop('5a000000-0000-0000-0000-000000000001', '{"plan":"business"}') $$, 'Only Zypher can do this', 'an owner cannot change their own plan');
 SELECT throws_like($$ SELECT public.record_shop_payment('5a000000-0000-0000-0000-000000000001', 1, CURRENT_DATE, CURRENT_DATE, 'cash', 'x', 'subscription') $$, 'Only Zypher can do this', 'an owner cannot record Zypher billing');
-SELECT throws_like($$ SELECT public.setup_branches('5a000000-0000-0000-0000-000000000002') $$, 'Only Zypher can do this', 'an owner cannot read another shop''s setup');
-SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000013', '{"role":"owner"}') $$, 'Only Zypher can do this', 'an owner cannot promote staff');
+SELECT throws_like($$ SELECT public.setup_branches('5a000000-0000-0000-0000-000000000002') $$, 'Only Zypher or the shop owner can do this', 'an owner cannot read another shop''s setup');
+SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000013', '{"role":"support"}') $$, 'A Zypher support login can only%', 'an owner cannot make staff a Zypher support login');
 SELECT throws_ok($$ UPDATE shops SET plan = 'business' WHERE id = '5a000000-0000-0000-0000-000000000001' $$, '42501', NULL, 'nor edit the shop row directly');
 SELECT throws_ok($$ INSERT INTO staff_invites (shop_id, email, role) VALUES ('5a000000-0000-0000-0000-000000000001', 'x@x.test', 'owner') $$, '42501', NULL, 'nor invite people');
 SELECT throws_ok($$ UPDATE profiles SET role = 'super_admin', shop_id = NULL WHERE id = 'aaaaaaaa-0000-0000-0000-000000000011' $$, '42501', NULL, 'nor make themselves Zypher');
@@ -147,7 +147,26 @@ SELECT throws_ok($$ UPDATE platform_settings SET require_mfa = false $$, '42501'
 SELECT pg_temp.act_as(:bridal_support, 'aal1');
 SELECT is(public.current_shop_id(), NULL::uuid, 'a support login with only a password has no shop');
 SELECT pg_temp.act_as(:bridal_support, 'aal2');
-SELECT is(public.current_shop_id(), :kalyani::uuid, 'with the code it works in its shop');
+SELECT is(public.current_shop_id(), NULL::uuid, 'with the code but without the owner''s consent it has no shop');
+SELECT is(public.support_waiting_for_consent(), true, 'and the sign-in screen can tell it why');
+SELECT throws_like($$ SELECT public.set_support_access(true) $$, 'Your account is not active in a shop', 'support cannot let itself in');
+SELECT pg_temp.act_as(:bridal_manager);
+SELECT throws_like($$ SELECT public.set_support_access(true) $$, 'Your role (manager)%', 'a manager cannot allow support');
+SELECT pg_temp.act_as(:groom_owner);
+SELECT throws_ok($$ INSERT INTO support_access (shop_id, granted_by) VALUES ('5a000000-0000-0000-0000-000000000001', auth.uid()) $$,
+  '42501', NULL, 'nobody writes consent directly');
+SELECT pg_temp.act_as(:bridal_owner);
+SELECT lives_ok($$ SELECT public.set_support_access(true) $$, 'the owner allows support');
+SELECT pg_temp.act_as(:bridal_support, 'aal2');
+SELECT is(public.current_shop_id(), :kalyani::uuid, 'with consent it works in its shop');
+SELECT throws_like($$ SELECT public.set_support_access(false) $$, 'Only the shop owner%', 'but cannot change the consent');
+SELECT pg_temp.act_as(:bridal_owner);
+SELECT lives_ok($$ SELECT public.set_support_access(false) $$, 'the owner turns it off');
+SELECT pg_temp.act_as(:bridal_support, 'aal2');
+SELECT is(public.current_shop_id(), NULL::uuid, 'and support is out again');
+SELECT pg_temp.as_postgres();
+SELECT is((SELECT array_agg(action ORDER BY id) FROM audit_log WHERE table_name = 'support_access' AND shop_id = :kalyani),
+  ARRAY['support_access_on', 'support_access_off'], 'both switches are in the audit log');
 SELECT pg_temp.act_as(:bridal_owner, 'aal1');
 SELECT is(public.mfa_required(), false, 'a shop owner is not forced to use it');
 

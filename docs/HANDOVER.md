@@ -44,7 +44,8 @@ exactly like TRENDZ). Car development starts only when clothing is done properly
 A shop whose business types are all clothes uses it; other shops use the shared ("standard") screens.
 - **Menu** (`nav.ts`): Dashboard, Finance; Rentals (Bookings, Inventory Search, All Rentals, Calendar, Customers,
   Appointments); Products (All Products, Add New Product, Categories, Extras, CSV Import); Admin (Stock Locations:
-  Zypher support only; Shop settings: owner). Branches and staff are set up by Zypher in its console.
+  Zypher support only; Staff management and Branch management, which holds the shop settings: owner). Zypher sets
+  up a new shop's first owner in its console; after the owner signs in, the owner runs staff and branches (migration 033).
 - **Screens** (`screens/`): Bookings, Inventory Search, All Rentals, Finance, Stock Locations, and Create Booking
   (`BookingForm.tsx`). The booking state and rules are shared (`src/components/shop/useBookingForm.ts`); the clothing
   rules there (dates first, each piece chosen, cleaning days, no pickup in the past) switch on `bookingByPiece`.

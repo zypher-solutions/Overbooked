@@ -8,6 +8,7 @@ import {
   LineChart,
   Settings,
   UserSquare,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -82,9 +83,10 @@ export const standardNav = (c: NavContext): NavGroup[] => [
   {
     title: "Administration",
     items: [
+      { href: "/staff", label: "Staff management", icon: Users, show: c.isOwner && !c.isSupport },
       {
-        href: "/settings",
-        label: "Shop settings",
+        href: "/branches",
+        label: "Branch management",
         icon: Settings,
         show: c.isOwner,
       },

@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { AtSign, BriefcaseBusiness, KeyRound, MapPin, Phone, UserRound, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AtSign, BriefcaseBusiness, KeyRound, LifeBuoy, MapPin, Phone, UserRound, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordField, passwordIsStrong } from "@/components/overbooked/PasswordField";
 import { Modal, PageHeader, Panel, ghostButtonClass, goldButtonClass } from "@/components/shop/ui";
 import { useAuth } from "@/lib/overbooked/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
+import { call } from "@/lib/shop/api";
+import { fmtDateTime } from "@/lib/shop/format";
 
 export default function AccountPage() {
   const { profile, user } = useAuth();
@@ -54,11 +56,51 @@ export default function AccountPage() {
             </button>
           </Panel>
 
+          {role === "owner" && !isSupport && <SupportAccessPanel />}
         </div>
       </div>
 
       <PasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
     </div>
+  );
+}
+
+// The owner's consent for Zypher support to sign in to this shop. The database enforces it; this only switches it.
+function SupportAccessPanel() {
+  const { shop } = useAuth();
+  const [grantedAt, setGrantedAt] = useState<string | null | undefined>(undefined); // undefined = loading
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void createClient().from("support_access").select("granted_at").maybeSingle()
+      .then(({ data }) => setGrantedAt(data?.granted_at ?? null));
+  }, []);
+
+  const toggle = async (allow: boolean): Promise<void> => {
+    setBusy(true);
+    try {
+      await call("set_support_access", { p_allow: allow });
+      setGrantedAt(allow ? new Date().toISOString() : null);
+      toast.success(allow ? "Zypher support can now sign in to your shop." : "Zypher support access turned off.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not change support access.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Panel title="Zypher support access" className="p-5 sm:p-6">
+      <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
+        {grantedAt === undefined ? "Loading…"
+          : grantedAt ? `On since ${fmtDateTime(grantedAt, shop?.timezone ?? undefined)}. Zypher support can sign in and work in your shop (no money corrections). Turn it off when the problem is fixed.`
+            : "Off. Zypher cannot see your shop's customers, bookings or money. Turn it on only when you want Zypher to help with a problem."}
+      </p>
+      <button type="button" disabled={busy || grantedAt === undefined} onClick={() => void toggle(!grantedAt)}
+        className={`${grantedAt ? ghostButtonClass : goldButtonClass} min-h-11 w-full`}>
+        <LifeBuoy className="h-4 w-4" aria-hidden="true" /> {busy ? "Saving..." : grantedAt ? "Turn off support access" : "Allow Zypher support"}
+      </button>
+    </Panel>
   );
 }
 

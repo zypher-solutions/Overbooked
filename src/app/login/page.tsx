@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Mail, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { emailError, normalizeEmail } from "@/lib/validate";
 import { inputClass, goldButtonClass } from "@/components/overbooked/primitives";
 import { PasswordField } from "@/components/overbooked/PasswordField";
 
@@ -12,8 +13,21 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  // the email's template points at /welcome with the token (docs/SETUP.md, "Password reset email")
+  const sendReset = async () => {
+    const bad = emailError(email);
+    if (bad) return void toast.error(bad);
+    setSending(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizeEmail(email), { redirectTo: `${window.location.origin}/welcome` });
+    setSending(false);
+    if (error && /rate|too many/i.test(error.message)) return void toast.error("Too many tries. Wait a few minutes and try again.");
+    // the same words whether or not the account exists, so the screen never says which accounts exist
+    toast.success("If this email has an account, a reset link is on its way. It works once, for one hour.");
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +119,12 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-xs text-muted-foreground">Forgot your password? Ask Zypher for a new link.</p>
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            <button type="button" disabled={sending} onClick={() => void sendReset()} className="font-medium text-gold hover:underline disabled:opacity-50">
+              {sending ? "Sending..." : "Forgot your password?"}
+            </button>{" "}
+            Enter your email above and we send you a reset link. Staff can also ask their shop owner.
+          </p>
         </div>
       </div>
     </div>

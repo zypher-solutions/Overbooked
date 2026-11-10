@@ -16,6 +16,7 @@ import {
   TrendingUp,
   Wallet,
   UserSquare,
+  Users,
 } from "lucide-react";
 import type { NavContext, NavGroup } from "@/lib/shop/nav";
 
@@ -80,10 +81,11 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
       { href: "/customers", label: "Customers", icon: UserSquare, show: true },
     ],
   },
-  // branches and staff are set up by Zypher in its console; where stock is kept shows for a Zypher support login
+  // the owner runs staff and branches; where stock is kept shows for a Zypher support login
   {
     title: "Admin",
     items: [
+      { href: "/staff", label: "Staff management", icon: Users, show: c.isOwner && !c.isSupport },
       { href: "/admin/attributes", label: "Attributes", icon: SlidersHorizontal, show: c.canManage },
       { href: "/admin/sku", label: "SKU", icon: Barcode, show: c.canManage },
       {
@@ -93,8 +95,8 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
         show: c.isSupport,
       },
       {
-        href: "/settings",
-        label: "Shop settings",
+        href: "/branches",
+        label: "Branch management",
         icon: Settings,
         show: c.isOwner,
       },

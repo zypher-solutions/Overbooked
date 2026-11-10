@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const supabase = createClient();
-  const [notice, setNotice] = useState<"session" | "deactivated" | "paused" | null>(null);
+  const [notice, setNotice] = useState<"session" | "deactivated" | "paused" | "no_consent" | null>(null);
   // True while we end the session ourselves, so SIGNED_OUT is not reported as a lost session.
   const endingOnPurpose = useRef(false);
   const userIdRef = useRef<string | null>(null);
@@ -117,8 +117,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
       if (profileData.is_active === false || !role) {
+        // a support login whose shop owner has not switched Zypher support on
+        const { data: waiting } = profileData.role === "support" ? await supabase.rpc("support_waiting_for_consent") : { data: false };
+        if (!mounted) return;
         endingOnPurpose.current = true;
-        setNotice("deactivated");
+        setNotice(waiting ? "no_consent" : "deactivated");
         await supabase.auth.signOut({ scope: "local" });
         return;
       }
@@ -211,17 +214,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ session, user, profile, shop, isLoading, signOut }}>
-      {checking || notice === "deactivated" || notice === "paused" ? null : children}
+      {checking || notice === "deactivated" || notice === "paused" || notice === "no_consent" ? null : children}
       <AlertDialog open={notice !== null}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {notice === "deactivated" ? "Account deactivated" : notice === "paused" ? "Account paused" : "Session ended"}
+              {notice === "deactivated" ? "Account deactivated" : notice === "no_consent" ? "No access to this shop" : notice === "paused" ? "Account paused" : "Session ended"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {notice === "deactivated"
                 ? "Your account or your branch has been deactivated. Contact the owner."
-                : notice === "paused"
+                : notice === "no_consent"
+                  ? "The shop owner has not allowed Zypher support access. Ask them to switch it on in Account settings."
+                  : notice === "paused"
                   ? "Your shop's Overbooked account is paused. Please contact Zypher."
                   : "Your session ended, please sign in again."}
             </AlertDialogDescription>

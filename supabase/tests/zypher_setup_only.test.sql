@@ -81,7 +81,9 @@ SELECT throws_like($$ SELECT public.setup_delete_branch('5a000000-0000-0000-0000
 SELECT throws_like($$ SELECT public.setup_check_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001') $$,
   'Use Change password%', 'no login link for oneself');
 
--- ===== the per-shop support login =====
+-- ===== the per-shop support login (the owner has allowed it; consent itself is tested in security.test.sql) =====
+SELECT set_config('role', 'postgres', true);
+INSERT INTO support_access (shop_id, granted_by) VALUES (:kalyani, :bridal_owner);
 SELECT pg_temp.act_as(:bridal_support);
 SELECT is(public.current_shop_id(), :kalyani::uuid, 'support works inside its own shop');
 SELECT cmp_ok((SELECT count(*) FROM customers), '>=', 0::bigint, 'and sees that shop''s data');
@@ -89,7 +91,7 @@ SELECT is((SELECT count(*) FROM rentals WHERE shop_id <> :kalyani), 0::bigint, '
 SELECT throws_like($$ SELECT public.admin_delete_rental((SELECT id FROM rentals LIMIT 1), 'support cleanup') $$,
   'A Zypher support login cannot change or delete money records', 'support cannot delete money records');
 SELECT cmp_ok((SELECT count(*) FROM products), '>', 0::bigint, 'support can read the catalog');
-SELECT throws_like($$ SELECT public.setup_people('5a000000-0000-0000-0000-000000000001') $$, 'Only Zypher can do this', 'and a support login cannot use the setup functions');
+SELECT throws_like($$ SELECT public.setup_people('5a000000-0000-0000-0000-000000000001') $$, 'Only Zypher or the shop owner can do this', 'and a support login cannot use the setup functions');
 
 -- ===== the shop's own people are unchanged =====
 SELECT pg_temp.act_as(:bridal_owner);
@@ -97,7 +99,7 @@ SELECT is(public.current_shop_id(), :kalyani::uuid, 'an owner still works in the
 SELECT is((SELECT count(*) FROM profiles WHERE role = 'support' AND is_active) , 1::bigint, 'the owner can see that a support login exists');
 SELECT cmp_ok((SELECT count(*) FROM rentals), '>', 0::bigint, 'the shop has bookings the owner sees (so the zero counts above mean something)');
 SELECT cmp_ok((SELECT count(*) FROM customers), '>', 0::bigint, 'and customers');
-SELECT throws_like($$ SELECT public.setup_branches('5a000000-0000-0000-0000-000000000001') $$, 'Only Zypher can do this', 'but an owner cannot use the setup functions');
+SELECT cmp_ok(jsonb_array_length(public.setup_branches('5a000000-0000-0000-0000-000000000001')), '>', 0, 'and the owner runs their own shop''s branches');
 
 SELECT * FROM finish();
 ROLLBACK;

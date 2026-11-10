@@ -149,10 +149,10 @@ SELECT is((public.admin_delete_payment((SELECT p.id FROM payments p JOIN rentals
 -- ===========================================================================
 -- Staff management, invites, login limit
 -- ===========================================================================
--- branches and staff are Zypher's job: the shop's own owner is refused
-SELECT throws_like($$ SELECT public.setup_people('5a000000-0000-0000-0000-000000000001') $$, 'Only Zypher can do this', 'an owner cannot list the logins');
-SELECT throws_like($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000013', '{"branch_id":"b0000000-0000-0000-0000-000000000002"}') $$,
-  'Only Zypher can do this', 'an owner cannot move staff between branches');
+-- the shop's owner runs its staff through the setup functions (033); free-form table writes stay closed
+SELECT is(jsonb_array_length(public.setup_people('5a000000-0000-0000-0000-000000000001')), 4, 'an owner lists their shop''s logins');
+SELECT lives_ok($$ SELECT public.setup_set_person('5a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000013', '{"branch_id":"b0000000-0000-0000-0000-000000000001"}') $$,
+  'an owner assigns their staff to a branch');
 SELECT throws_ok($$ INSERT INTO branches (shop_id, name, slug) VALUES ('5a000000-0000-0000-0000-000000000001', 'Third', 'third') $$,
   '42501', NULL, 'an owner cannot add a branch');
 -- Zypher does it from the shop's page in the console, naming the shop
