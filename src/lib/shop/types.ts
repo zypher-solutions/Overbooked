@@ -144,6 +144,12 @@ export interface Rental {
   id_verified_at: string | null;
   /** a note that stops the hand over until removed (migration 037) */
   handover_hold_note?: string | null;
+  /** tax invoice: number, date and the amount billed at issue (migrations 025, 040) */
+  invoice_no?: string | null;
+  invoice_date?: string | null;
+  invoice_total?: number | null;
+  /** the late rules in force when it was booked (migration 037) */
+  late_terms?: Record<string, unknown> | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
   notes: string | null;
@@ -199,6 +205,20 @@ export interface Payment {
   /** set when the payment was voided (migration 039); a voided payment counts nowhere */
   voided_at?: string | null;
   void_reason?: string | null;
+  /** the receipt number of this payment (migration 040) */
+  receipt_no?: string | null;
+}
+
+/** a credit note or supplementary bill after a tax invoice (migration 040) */
+export interface RentalDocument {
+  id: string;
+  rental_id: string;
+  kind: "credit_note" | "supplementary";
+  number: string;
+  amount: number;
+  reason: string | null;
+  doc_date: string;
+  created_at?: string;
 }
 
 // quote_rental output

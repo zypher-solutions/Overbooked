@@ -267,14 +267,14 @@ isOneToOne: false
                   ]
                 },"payments": {
                   Row: {
-                    "amount": number,"created_at": string,"id": string,"kind": string,"method": string | null,"note": string | null,"paid_at": string,"recorded_by": string | null,"rental_id": string,"shop_id": string,"void_reason": string | null,"voided_at": string | null,"voided_by": string | null
+                    "amount": number,"created_at": string,"id": string,"kind": string,"method": string | null,"note": string | null,"paid_at": string,"recorded_by": string | null,"receipt_no": string | null,"rental_id": string,"shop_id": string,"void_reason": string | null,"voided_at": string | null,"voided_by": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount": number,"created_at"?: string,"id"?: string,"kind": string,"method"?: string | null,"note"?: string | null,"paid_at"?: string,"recorded_by"?: string | null,"rental_id": string,"shop_id": string,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
+                    "amount": number,"created_at"?: string,"id"?: string,"kind": string,"method"?: string | null,"note"?: string | null,"paid_at"?: string,"recorded_by"?: string | null,"receipt_no"?: string | null,"rental_id": string,"shop_id": string,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
                   }
                   Update: {
-                    "amount"?: number,"created_at"?: string,"id"?: string,"kind"?: string,"method"?: string | null,"note"?: string | null,"paid_at"?: string,"recorded_by"?: string | null,"rental_id"?: string,"shop_id"?: string,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
+                    "amount"?: number,"created_at"?: string,"id"?: string,"kind"?: string,"method"?: string | null,"note"?: string | null,"paid_at"?: string,"recorded_by"?: string | null,"receipt_no"?: string | null,"rental_id"?: string,"shop_id"?: string,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
                   }
                   Relationships: [
                     {
@@ -311,6 +311,18 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"rental_documents": {
+                  Row: {
+                    "amount": number,"created_at": string,"doc_date": string,"id": string,"issued_by": string | null,"kind": string,"number": string,"reason": string | null,"rental_id": string,"shop_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"created_at"?: string,"doc_date": string,"id"?: string,"issued_by"?: string | null,"kind": string,"number": string,"reason"?: string | null,"rental_id": string,"shop_id": string
+                  }
+                  Update: {
+                    "amount"?: number,"created_at"?: string,"doc_date"?: string,"id"?: string,"issued_by"?: string | null,"kind"?: string,"number"?: string,"reason"?: string | null,"rental_id"?: string,"shop_id"?: string
+                  }
+                  Relationships: []
                 },"price_changes": {
                   Row: {
                     "amount": number,"created_at": string,"created_by": string | null,"id": string,"kind": string,"line_id": string | null,"previous": number,"rental_id": string,"shop_id": string
@@ -601,14 +613,14 @@ isOneToOne: false
                   ]
                 },"rentals": {
                   Row: {
-                    "actual_end_at": string | null,"actual_start_at": string | null,"add_ons_total": number,"adults": number,"branch_id": string,"cancel_reason": string | null,"cancellation_fee": number,"cancelled_at": string | null,"cancelled_by": string | null,"charges_total": number,"children": number,"cleaning_days": number | null,"created_at": string,"created_by": string | null,"customer_id": string,"deposit_agreed": number,"deposit_applied": number,"deposit_received": number,"deposit_refunded": number,"discount": number,"end_at": string,"id": string,"id_verified_at": string | null,"id_verified_by": string | null,"handover_hold_at": string | null,"handover_hold_by": string | null,"handover_hold_note": string | null,"invoice_date": string | null,"late_terms": Json | null,"invoice_no": string | null,"items_total": number,"notes": string | null,"paid": number,"shop_id": string,"start_at": string,"status": string,"token": string,"total": number | null,"updated_at": string,"whole_property": boolean,"with_driver": boolean
+                    "actual_end_at": string | null,"actual_start_at": string | null,"add_ons_total": number,"adults": number,"branch_id": string,"cancel_reason": string | null,"cancellation_fee": number,"cancelled_at": string | null,"cancelled_by": string | null,"charges_total": number,"children": number,"cleaning_days": number | null,"created_at": string,"created_by": string | null,"customer_id": string,"deposit_agreed": number,"deposit_applied": number,"deposit_received": number,"deposit_refunded": number,"discount": number,"end_at": string,"id": string,"id_verified_at": string | null,"id_verified_by": string | null,"handover_hold_at": string | null,"handover_hold_by": string | null,"handover_hold_note": string | null,"invoice_date": string | null,"late_terms": Json | null,"invoice_no": string | null,"invoice_total": number | null,"items_total": number,"notes": string | null,"paid": number,"shop_id": string,"start_at": string,"status": string,"token": string,"total": number | null,"updated_at": string,"whole_property": boolean,"with_driver": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id": string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id": string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at": string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"handover_hold_at"?: string | null,"handover_hold_by"?: string | null,"handover_hold_note"?: string | null,"invoice_date"?: string | null,"late_terms"?: Json | null,"invoice_no"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id": string,"start_at": string,"status"?: string,"token": string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
+                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id": string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id": string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at": string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"handover_hold_at"?: string | null,"handover_hold_by"?: string | null,"handover_hold_note"?: string | null,"invoice_date"?: string | null,"late_terms"?: Json | null,"invoice_no"?: string | null,"invoice_total"?: number | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id": string,"start_at": string,"status"?: string,"token": string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
                   }
                   Update: {
-                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id"?: string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at"?: string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"handover_hold_at"?: string | null,"handover_hold_by"?: string | null,"handover_hold_note"?: string | null,"invoice_date"?: string | null,"late_terms"?: Json | null,"invoice_no"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id"?: string,"start_at"?: string,"status"?: string,"token"?: string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
+                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id"?: string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at"?: string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"handover_hold_at"?: string | null,"handover_hold_by"?: string | null,"handover_hold_note"?: string | null,"invoice_date"?: string | null,"late_terms"?: Json | null,"invoice_no"?: string | null,"invoice_total"?: number | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id"?: string,"start_at"?: string,"status"?: string,"token"?: string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
                   }
                   Relationships: [
                     {
@@ -1273,6 +1285,9 @@ isOneToOne: false
                            },
 "void_payment":
 { Args: { "p_payment_id": string,"p_reason": string,"p_replacement"?: Json }; Returns: Json
+                           },
+"issue_credit_note":
+{ Args: { "p_amount": number,"p_reason": string,"p_rental_id": string }; Returns: Json
                            },
 "set_handover_hold":
 { Args: { "p_note": string,"p_rental_id": string }; Returns: undefined

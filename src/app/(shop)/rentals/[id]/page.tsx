@@ -40,6 +40,7 @@ import {
 import { isoToDisplay } from "@/components/shop/DateInput";
 import { EditRentalDialog } from "@/components/shop/EditRentalDialog";
 import { BookingPaymentSummary } from "@/components/shop/BookingPaymentSummary";
+import { BillsPanel } from "@/components/shop/BillsPanel";
 import {
   FUEL_LABELS,
   PickupDialog,
@@ -792,6 +793,8 @@ function RentalView() {
           />
         ) : null}
       </div>
+      {/* the tax invoice, credit notes and supplementary bills (migration 040); nothing for a shop without GST */}
+      {seeMoney ? <BillsPanel rental={r} onDone={load} /> : null}
 
       {showAppointments || showMeasurements ? (
         <div

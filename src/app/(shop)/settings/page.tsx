@@ -14,7 +14,7 @@ import {
 
 // The shop's settings as one table (docs/SETTINGS_PAGE_PLAN.md). "All branches" edits the shop's values; a branch view
 // edits that branch's own values, which win over the shop's (update_branch_settings, migration 038).
-type Kind = "switch" | "number" | "money" | "select" | "time" | "text" | "note";
+type Kind = "switch" | "number" | "money" | "select" | "time" | "text" | "line" | "note";
 interface Row {
   key: string;
   section: string;
@@ -31,6 +31,12 @@ interface Row {
   optional?: boolean;
   /** a choice saved as a number */
   asNumber?: boolean;
+  /** longest text (notes: 200 unless set) */
+  maxLen?: number;
+  /** a text pattern the database checks too, with its message */
+  pattern?: [RegExp, string];
+  /** upper-case what is typed */
+  upper?: boolean;
   /** shown only when this is true for the shop and the row being edited */
   when?: (v: (key: string) => unknown) => boolean;
 }
@@ -43,9 +49,24 @@ function rowsFor(o: { clothing: boolean; hasRoom: boolean; hasVehicle: boolean }
     { key: "gst_percent", section: "Receipts & tax", label: "GST included in prices (%)", kind: "number", min: 0, max: 28, fallback: 0, perBranch: false,
       hint: "With a GSTIN and a rate above 0, a returned rental gets a tax invoice with CGST and SGST" },
     { key: "sac_code", section: "Receipts & tax", label: "SAC code on tax invoices", kind: "text", fallback: "", perBranch: false,
-      hint: "The service code your accountant gives you, 4 to 8 digits. Empty: none printed" },
+      hint: "The service code your accountant gives you, 4 to 8 digits. Needed to issue a tax invoice" },
     { key: "receipt_note", section: "Receipts & tax", label: "Receipt note", kind: "note", fallback: "", perBranch: true,
       hint: "Printed at the bottom of receipts and invoices, at most 200 characters" },
+    // the bill (migration 040)
+    { key: "invoice_timing", section: "Receipts & tax", label: "When the tax invoice is issued", kind: "select", fallback: "after_return", perBranch: false,
+      options: [["after_return", "After the return (final amounts)"], ["at_booking", "At booking (charges added later go on a supplementary bill)"]],
+      hint: "Always by the Issue tax invoice button on the booking; printing never issues one. A change affects bookings not yet invoiced" },
+    { key: "bill_terms", section: "Receipts & tax", label: "Terms on the bill", kind: "note", maxLen: 600, fallback: "", perBranch: false,
+      hint: "One per line. The late-fee line is added from the late-return rules, so the bill and the return screen agree" },
+    { key: "cancel_keeps_advance", section: "Receipts & tax", label: "Advance is kept when a booking is cancelled", kind: "switch", fallback: false, perBranch: false,
+      hint: "Fills in the cancellation fee with what was paid, and prints the rule on the bill" },
+    { key: "bank_name", section: "Receipts & tax", label: "Bank name (optional)", kind: "line", maxLen: 60, fallback: "", perBranch: false,
+      hint: "Printed on the bill so customers can pay by transfer" },
+    { key: "bank_holder", section: "Receipts & tax", label: "Account holder (optional)", kind: "line", maxLen: 80, fallback: "", perBranch: false, hint: "" },
+    { key: "bank_last4", section: "Receipts & tax", label: "Last 4 digits of the account (optional)", kind: "text", maxLen: 4, fallback: "", perBranch: false,
+      pattern: [/^([0-9]{4})?$/, "Enter only the last 4 digits."], hint: "Only the last 4 digits are kept; prints as XXXX1234. Never enter the full number" },
+    { key: "bank_ifsc", section: "Receipts & tax", label: "IFSC (optional)", kind: "line", maxLen: 11, upper: true, fallback: "", perBranch: false,
+      pattern: [/^([A-Z]{4}0[A-Z0-9]{6})?$/, "The IFSC is 11 characters, like SBIN0001234."], hint: "" },
   ];
   if (o.clothing) {
     const on = (v: (k: string) => unknown) => v("late_fee_on") !== false;
@@ -126,7 +147,8 @@ function problem(row: Row, raw: string): string | null {
     if (row.kind === "money" && Math.round(n * 100) !== n * 100) return "Use rupees and paise.";
   }
   if (row.key === "sac_code" && raw.trim() && !/^\d{4,8}$/.test(raw.trim())) return "The SAC code is 4 to 8 digits.";
-  if (row.kind === "note" && raw.length > 200) return "At most 200 characters.";
+  if ((row.kind === "note" || row.kind === "line" || row.kind === "text") && raw.length > (row.maxLen ?? (row.kind === "note" ? 200 : 300))) return `At most ${row.maxLen ?? 200} characters.`;
+  if (row.pattern && !row.pattern[0].test(raw.trim())) return row.pattern[1];
   if (row.kind === "time" && row.key !== "late_cutoff_time" && !raw) return "Enter a time.";
   return null;
 }
@@ -293,14 +315,16 @@ function Editor({ row, value, onChange }: { row: Row; value: string | boolean; o
           {row.options?.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
         </select>
       ) : row.kind === "note" ? (
-        <textarea className={inputClass} rows={3} maxLength={200} value={v} onChange={(e) => onChange(e.target.value)} />
+        <textarea className={inputClass} rows={row.maxLen && row.maxLen > 200 ? 6 : 3} maxLength={row.maxLen ?? 200} value={v} onChange={(e) => onChange(e.target.value)} />
       ) : row.kind === "time" ? (
         <div className="flex gap-2">
           <input type="time" className={inputClass} value={v} onChange={(e) => onChange(e.target.value)} />
           {row.key === "late_cutoff_time" && v ? <button type="button" className={ghostButtonClass} onClick={() => onChange("")}>Clear</button> : null}
         </div>
+      ) : row.kind === "line" ? (
+        <input className={inputClass} maxLength={row.maxLen} value={v} onChange={(e) => onChange(row.upper ? e.target.value.toUpperCase() : e.target.value)} />
       ) : (
-        <input className={monoInputClass} inputMode={row.kind === "text" ? "numeric" : "decimal"} value={v} onChange={(e) => onChange(e.target.value)} />
+        <input className={monoInputClass} maxLength={row.maxLen} inputMode={row.kind === "text" ? "numeric" : "decimal"} value={v} onChange={(e) => onChange(e.target.value)} />
       )}
     </Field>
   );

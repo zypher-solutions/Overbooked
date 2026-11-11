@@ -50,7 +50,7 @@ SELECT throws_like(format($f$ SELECT public.issue_invoice(%L) $f$, (SELECT id FR
   'This shop prints receipts%', 'a shop without a GSTIN issues no tax invoice');
 
 SELECT pg_temp.as_postgres();
-UPDATE shops SET gstin = '32ABCDE1234F1Z5', settings = settings || '{"gst_percent": 5}' WHERE id = '5a000000-0000-0000-0000-000000000001';
+UPDATE shops SET gstin = '32ABCDE1234F1Z5', settings = settings || '{"gst_percent": 5, "sac_code": "997329", "invoice_timing": "after_return"}' WHERE id = '5a000000-0000-0000-0000-000000000001';
 SELECT pg_temp.act_as(:bridal_staff);
 SELECT throws_like(format($f$ SELECT public.issue_invoice(%L) $f$, (SELECT id FROM t_ids WHERE name = 'one')),
   'A tax invoice is issued after the rental is returned%', 'not before the return: the amounts are not final');

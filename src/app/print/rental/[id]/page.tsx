@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/overbooked/AuthContext";
 import { createClient } from "@/lib/supabase/client";
-import { call, loadRental, money, type RentalDetail } from "@/lib/shop/api";
+import { loadRental, money, type RentalDetail } from "@/lib/shop/api";
+import { shopModules } from "@/modules/registry";
 import {
   BASIS_LABELS, CHARGE_LABELS, DEFAULT_TZ, METHOD_LABELS, PAYMENT_LABELS, fmtDate, fmtDateTime, inclusiveTaxBreakdown, lineMath, rupees,
 } from "@/lib/shop/format";
@@ -17,33 +18,51 @@ export default function PrintRental() {
   const [r, setR] = useState<RentalDetail | null>(null);
   const [branch, setBranch] = useState<Branch | null>(null);
   const [error, setError] = useState("");
-  // a tax invoice has its own number and date, fixed the first time it is issued (after the return)
-  const [inv, setInv] = useState<{ invoice_no: string; invoice_date: string } | null>(null);
+  // a shop whose business types are all clothes prints the clothing bill (src/modules/clothing/print)
+  const [clothing, setClothing] = useState<boolean | null>(null);
 
+  // printing only reads: the tax invoice is issued from the booking page (migration 040)
   useEffect(() => {
     if (!shop) return;
-    void loadRental(id).then(async (rental) => {
+    const supabase = createClient();
+    void Promise.all([
+      loadRental(id),
+      supabase.from("business_templates").select("key, kind").in("key", shop.business_types),
+    ]).then(async ([rental, t]) => {
       if (!rental) return setError("Booking not found.");
       setR(rental);
-      if (shop.gstin && Number(shop.settings?.gst_percent ?? 0) > 0 && rental.status === "completed") {
-        setInv(await call<{ invoice_no: string; invoice_date: string }>("issue_invoice", { p_rental_id: rental.id }));
-      }
-      const { data } = await createClient().from("branches").select("*").eq("id", rental.branch_id).maybeSingle();
+      const kinds = (t.data ?? []).map((x) => x.kind);
+      setClothing(kinds.length > 0 && kinds.every((k) => k === "wearable"));
+      const { data } = await supabase.from("branches").select("*").eq("id", rental.branch_id).maybeSingle();
       setBranch((data as Branch) ?? null);
     }).catch((e) => setError(String(e?.message ?? e)));
   }, [id, shop]);
 
-  if (isLoading || (!r && !error)) return <p className="p-8 text-sm">Loading...</p>;
+  if (isLoading || (!r && !error) || (r && clothing === null)) return <p className="p-8 text-sm">Loading...</p>;
   if (error || !r || !shop) return <p className="p-8 text-sm">{error || "Not available."}</p>;
-  if (shop.gstin && Number(shop.settings?.gst_percent ?? 0) > 0 && r.status === "completed" && inv === null) return <p className="p-8 text-sm">Preparing the invoice...</p>;
 
   const tz = shop.timezone || DEFAULT_TZ;
+  const PrintBill = clothing ? shopModules.clothing.PrintBill : undefined;
+  if (PrintBill) {
+    return (
+      <div className="min-h-screen bg-white text-black">
+        <style>{`@media print { .no-print { display: none !important; } @page { size: A4; margin: 10mm; } body { background: white; } }`}</style>
+        <div className="no-print sticky top-0 flex justify-between gap-2 border-b bg-gray-50 px-6 py-3">
+          <button onClick={() => history.back()} className="rounded border px-3 py-1.5 text-sm">Back</button>
+          <button onClick={() => window.print()} className="rounded bg-black px-4 py-1.5 text-sm font-semibold text-white">Print or save as PDF</button>
+        </div>
+        <PrintBill shop={shop} branch={branch} r={r} tz={tz} />
+      </div>
+    );
+  }
   const m = money(r);
   const gst = Number(shop.settings?.gst_percent ?? 0);
   const closed = r.status === "cancelled" || r.status === "no_show";
-  const isInvoice = !!shop.gstin && gst > 0 && r.status === "completed" && inv !== null;
+  const inv = r.invoice_no ? { invoice_no: r.invoice_no, invoice_date: r.invoice_date ?? "" } : null;
+  const isInvoice = inv !== null;
   const sac: string = shop.settings?.sac_code ?? "";
-  const { taxable, tax } = inclusiveTaxBreakdown(m.total, gst);
+  // the invoice states what it billed; later changes are on credit notes and supplementary bills
+  const { taxable, tax } = inclusiveTaxBreakdown(isInvoice ? Number(r.invoice_total ?? m.total) : m.total, gst);
   // the booking's branch may have its own note (migration 038)
   const note = String((branch?.settings as Record<string, unknown> | undefined)?.receipt_note ?? shop.settings?.receipt_note ?? "");
   const isRoom = r.rental_lines.every((l) => l.kind === "room");
@@ -166,7 +185,7 @@ export default function PrintRental() {
         ) : null}
 
         {isInvoice ? <p className="mt-2 text-[11px] text-gray-500">Prices include GST.{sac ? ` SAC ${sac}.` : ""}</p> : null}
-        {!isInvoice && shop.gstin && gst > 0 && !closed ? <p className="mt-2 text-[11px] text-gray-500">This is a receipt. The tax invoice is issued when the rental is returned.</p> : null}
+        {!isInvoice && shop.gstin && gst > 0 && !closed ? <p className="mt-2 text-[11px] text-gray-500">This is a receipt. The tax invoice is issued from the booking.</p> : null}
         {note ? <p className="mt-4 whitespace-pre-line border-t pt-3 text-[12px]">{note}</p> : null}
         <p className="mt-8 text-center text-[10px] text-gray-400">Generated by Overbooked</p>
       </div>

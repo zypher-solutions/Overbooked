@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { MoreHorizontal } from "lucide-react";
 import {
   DropdownMenu,
@@ -157,6 +158,12 @@ export function BookingPaymentSummary({
                       {date}
                       {payment.note ? ` · ${payment.note}` : ""}
                     </p>
+                    {/* every payment has its own receipt number (migration 040) */}
+                    {payment.receipt_no ? (
+                      <Link href={`/print/document/${payment.id}?type=receipt`} className="mt-0.5 inline-block text-xs text-gold underline">
+                        Receipt {payment.receipt_no}
+                      </Link>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-1">
                     <span className={cn("font-semibold tabular-nums", voided && "line-through")}>

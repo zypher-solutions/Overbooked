@@ -7,6 +7,7 @@ import { TrendzDashboard } from "@/modules/clothing/components/TrendzDashboard";
 import { ProductWizard } from "@/modules/clothing/components/ProductWizard";
 import { importSkus } from "@/modules/clothing/sku";
 import { BookingForm } from "@/modules/clothing/screens/BookingForm";
+import { ClothingBill } from "@/modules/clothing/print/ClothingBill";
 
 // The one place the shop app picks a module. A new business type: add its key to ModuleKey (src/lib/shop/nav.ts) and an entry here.
 export interface ShopModule {
@@ -29,6 +30,8 @@ export interface ShopModule {
   /** booking rules of clothes: dates first, each booked piece chosen, cleaning days per booking, no pickup in the past,
    *  and after saving back to Bookings with a WhatsApp button */
   bookingByPiece?: boolean;
+  /** its own printed bill (receipt or tax invoice); without it, the shared layout */
+  PrintBill?: typeof ClothingBill;
 }
 
 export const shopModules: Record<ModuleKey, ShopModule> = {
@@ -36,7 +39,7 @@ export const shopModules: Record<ModuleKey, ShopModule> = {
     nav: clothingNav, Home: TrendzDashboard, tagline: "Rental Studio",
     screens: ["/checkout", "/finance", "/bookings", "/active-rentals", "/history", "/all-rentals", "/scan","/catalog/bulk", "/catalog/earnings", "/admin/attributes", "/admin/sku"],
     ProductForm: ProductWizard, productsTitle: "All Products", importSkus,
-    BookingForm, bookingByPiece: true,
+    BookingForm, bookingByPiece: true, PrintBill: ClothingBill,
     replace: (path, canManage) => (path === "/rentals" ? "/bookings" : path === "/all-rentals" ? "/catalog" : path === "/dashboard" ? (canManage ? "/finance" : "/")
       : path === "/catalog/import" ? "/catalog/bulk" : null),
   },
