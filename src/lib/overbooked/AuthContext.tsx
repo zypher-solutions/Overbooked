@@ -90,7 +90,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("id", userId)
         .single();
       if (!mounted || !profileData) return;
-      const shopId = profileData.role === "super_admin" ? null : profileData.shop_id;
+      // a Zypher admin has a shop only while visiting one as support (owner's consent is checked by the database)
+      const shopId = profileData.role === "super_admin"
+        ? ((await supabase.rpc("current_shop_id")).data as string | null)
+        : profileData.shop_id;
       // the shop and the role are asked together, not one after the other
       const roleCall = profileData.is_active === false ? Promise.resolve({ data: null }) : supabase.rpc("get_my_role");
       const { data: shopData } = shopId
@@ -200,6 +203,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     // Sign out first: if the network is down the session survives, so keep the draft and say so.
     endingOnPurpose.current = true;
+    // signing out ends a Zypher support visit too
+    if (profile?.role === "super_admin") await supabase.rpc("leave_support").then(() => undefined, () => undefined);
     const { error } = await supabase.auth.signOut({ scope: "local" });
     if (error) {
       endingOnPurpose.current = false;

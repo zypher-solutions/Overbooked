@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   BarChart3, Boxes, Building2, Calendar, CalendarClock, CalendarDays, CalendarPlus, ChevronDown, ClipboardList, Home, LayoutGrid, LineChart,
-  LogOut, MapPin, Menu, Plus, ScanLine, Settings2, ShoppingBag, Store, Tag, Upload, Users, UserRound, Wallet, X, type LucideIcon,
+  LifeBuoy, LogOut, MapPin, Menu, Plus, ScanLine, Settings2, ShoppingBag, Store, Tag, Upload, Users, UserRound, Wallet, X, type LucideIcon,
 } from "lucide-react";
 import { useCart } from "@/modules/clothing/cart";
 import { CartSwitcher } from "@/modules/clothing/components/CartSwitcher";
@@ -16,7 +16,15 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { OfflineBanner } from "@/components/overbooked/OfflineBanner";
 import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { StatusBadge, goldButtonClass } from "./ui";
+import { StatusBadge, ghostButtonClass, goldButtonClass } from "./ui";
+import { createClient } from "@/lib/supabase/client";
+
+// a Zypher admin visiting this shop as support goes back to the console
+async function leaveSupport() {
+  const { error } = await createClient().rpc("leave_support");
+  if (error) return void toast.error("Could not leave the shop. Check your connection and try again.");
+  window.location.href = "/zypher";
+}
 import { SubscriptionBanner } from "./Subscription";
 import { shopModules } from "@/modules/registry";
 import type { NavGroup } from "@/lib/shop/nav";
@@ -128,6 +136,13 @@ export function ShopShell({ children }: { children: ReactNode }) {
       <main className="min-w-0 px-4 pb-24 pt-[calc(4.5rem+env(safe-area-inset-top))] sm:px-6 lg:ml-64 lg:px-8 lg:pb-12 lg:pt-8">
         <div className="mx-auto max-w-[1480px]">
           <OfflineBanner />
+          {profile?.role === "super_admin" ? (
+            <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gold/40 bg-gold/10 px-4 py-2.5 text-sm">
+              <span className="flex min-w-0 items-center gap-2"><LifeBuoy className="h-4 w-4 shrink-0 text-gold" aria-hidden="true" />
+                You are in {shop.name} as Zypher support. The owner can see this in their activity log.</span>
+              <button type="button" onClick={() => void leaveSupport()} className={cn(ghostButtonClass, "min-h-9")}>Leave shop</button>
+            </div>
+          ) : null}
           <SubscriptionBanner />
           {hiddenHere ? null : children}
         </div>

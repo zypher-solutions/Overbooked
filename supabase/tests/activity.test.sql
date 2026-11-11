@@ -4,8 +4,9 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(34);
+SELECT plan(36);
 
+\set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
 \set bridal_manager '''aaaaaaaa-0000-0000-0000-000000000012'''
 \set bridal_support '''aaaaaaaa-0000-0000-0000-000000000014'''
@@ -127,6 +128,17 @@ SELECT pg_temp.act_as(:bridal_owner);
 SELECT public.set_support_access(true);
 SELECT pg_temp.act_as(:bridal_support, 'aal2');
 SELECT is((SELECT count(*) FROM activity_log), 0::bigint, 'a Zypher support login does not, even with access switched on');
+
+-- a Zypher admin entering and leaving the shop as support (migration 036) is in the owner's log under their own name
+SELECT pg_temp.act_as(:zypher, 'aal2');
+SELECT public.enter_support(:kalyani);
+SELECT public.leave_support();
+SELECT pg_temp.act_as(:bridal_owner);
+SELECT ok((SELECT important AND actor_id = :zypher::uuid AND summary = 'Entered the shop as Zypher support'
+           FROM activity_log WHERE shop_id = :kalyani AND action = 'support_entered' ORDER BY occurred_at DESC LIMIT 1),
+  'a Zypher admin entering as support is logged, marked important, under their own name');
+SELECT is((SELECT count(*) FROM activity_log WHERE shop_id = :kalyani AND action = 'support_left' AND actor_id = :zypher::uuid), 1::bigint,
+  'and leaving is logged too');
 
 -- ===== nobody changes it =====
 SELECT pg_temp.act_as(:bridal_owner);

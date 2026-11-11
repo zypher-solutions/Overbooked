@@ -4,7 +4,7 @@ import { addressError, amountError, businessNameError, emailError, normalizeEmai
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Pause, Play, UserPlus, Wallet } from "lucide-react";
+import { LifeBuoy, Pause, Play, UserPlus, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -45,13 +45,17 @@ export default function ShopDetail() {
   const [share, setShare] = useState<{ name: string; link: string } | null>(null);
   const [confirmPause, setConfirmPause] = useState(false);
   const [addType, setAddType] = useState<Template | null>(null);
+  // since when the owner allows Zypher support (null = not allowed); undefined while loading
+  const [supportSince, setSupportSince] = useState<string | null | undefined>(undefined);
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const [res, t] = await Promise.all([
+    const [res, t, sa] = await Promise.all([
       supabase.rpc("shop_detail", { p_shop_id: id }),
       supabase.from("business_templates").select("*").order("sort"),
+      supabase.from("support_access").select("granted_at").eq("shop_id", id).maybeSingle(),
     ]);
+    setSupportSince(sa.data?.granted_at ?? null);
     if (res.error) {
       if (/not found|invalid input/i.test(res.error.message)) setMissing(true);
       else toast.error("Could not load the shop: " + res.error.message);
@@ -66,6 +70,14 @@ export default function ShopDetail() {
   }, [id]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // opens the shop app inside this shop; the database refuses it unless the owner allows support
+  const enterSupport = async () => {
+    setBusy(true);
+    const { error } = await createClient().rpc("enter_support", { p_shop_id: id });
+    if (error) { setBusy(false); toast.error(error.message); return; }
+    window.location.href = "/";
+  };
 
   const update = async (p: Record<string, unknown>, success: string) => {
     setBusy(true);
@@ -117,9 +129,16 @@ export default function ShopDetail() {
           <BillingBadge shop={s} />
           {s.business_types.map((t) => <StatusBadge key={t} tone="indigo">{typeName(t)}</StatusBadge>)}
           <span className="text-xs">Client since {fmtDay(s.created_at)}</span>
+          {supportSince === undefined ? null : supportSince
+            ? <StatusBadge tone="gold">Support allowed since {fmtWhen(supportSince)}</StatusBadge>
+            : <StatusBadge tone="muted">Owner has not allowed support</StatusBadge>}
         </span>}
         actions={<>
           <button className={goldButtonClass} onClick={() => setPayOpen(true)}><Wallet className="h-4 w-4" /> Record payment</button>
+          <button className={ghostButtonClass} disabled={busy || !supportSince || s.status !== "active"} onClick={() => void enterSupport()}
+            title={supportSince ? "Open this shop as Zypher support (shown in the owner's activity log)" : "The owner switches this on in their Account settings"}>
+            <LifeBuoy className="h-4 w-4" /> Enter shop as support
+          </button>
           <button className={ghostButtonClass} onClick={() => setInviteOpen(true)}><UserPlus className="h-4 w-4" /> Invite owner</button>
           <button className={ghostButtonClass} disabled={busy} onClick={() => s.status === "active" ? setConfirmPause(true) : void update({ status: "active" }, `${s.name} resumed`)}>
             {s.status === "active" ? <><Pause className="h-4 w-4" /> Pause</> : <><Play className="h-4 w-4" /> Resume</>}

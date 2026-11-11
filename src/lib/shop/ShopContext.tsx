@@ -80,7 +80,8 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ShopContextValue | null>(() => {
     if (!shop || !profile) return null;
     // a Zypher support login works like the owner of its one shop (the database removes its destructive powers)
-    const isSupport = profile.role === "support";
+    // a Zypher admin visiting this shop as support is the same (migration 036)
+    const isSupport = profile.role === "support" || profile.role === "super_admin";
     const role = (isSupport ? "owner" : profile.role) as Role;
     const shopTemplates = templates.filter((t) => shop.business_types.includes(t.key));
     const templateOf = (categoryId: string | null | undefined) => {
