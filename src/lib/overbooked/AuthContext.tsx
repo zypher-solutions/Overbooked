@@ -112,7 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: needsCode } = await supabase.rpc("mfa_required");
         if (!mounted) return;
         if (needsCode) {
-          if (!window.location.pathname.startsWith("/mfa")) window.location.replace("/mfa");
+          // /welcome sends them to /mfa itself once the password is saved
+          const path = window.location.pathname;
+          if (!path.startsWith("/mfa") && !path.startsWith("/welcome")) window.location.replace("/mfa");
           return;
         }
       }
