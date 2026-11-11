@@ -122,7 +122,7 @@ function RentalView() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const params = useSearchParams();
-  const { tz, branches, role, isOwner, canManage, word, feature, branchSetting } = useShop();
+  const { tz, branches, role, isOwner, canManage, word, feature, setting, branchSetting } = useShop();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [editAppt, setEditAppt] = useState<Appointment | null>(null);
   const [r, setR] = useState<RentalDetail | null | undefined>(undefined);
@@ -787,6 +787,7 @@ function RentalView() {
             rental={r}
             tz={tz}
             isOwner={isOwner}
+            canVoid={isOwner || (role === "manager" && setting<string>("void_payment_role", "owner") === "owner_manager")}
             onCorrection={setFix}
           />
         ) : null}

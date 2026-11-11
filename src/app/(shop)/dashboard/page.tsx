@@ -79,7 +79,7 @@ export default function Dashboard() {
       const size = limit ? Math.min(limit, 1000) : 1000;
       let q = supabase.from("payments")
         .select("*, rentals!payments_shop_rental_fkey!inner(token, branch_id, customers!rentals_shop_customer_fkey(full_name))", i === 0 ? { count: "exact" } : undefined)
-        .gte("paid_at", dayRange(from, tz).from).lt("paid_at", dayRange(to, tz).to).order("paid_at", { ascending: false }).order("id").range(i, i + size - 1);
+        .is("voided_at", null).gte("paid_at", dayRange(from, tz).from).lt("paid_at", dayRange(to, tz).to).order("paid_at", { ascending: false }).order("id").range(i, i + size - 1);
       if (branch) q = q.eq("rentals.branch_id", branch);
       const { data, error, count: c } = await q;
       if (error) { toast.error(errorText(error)); break; }

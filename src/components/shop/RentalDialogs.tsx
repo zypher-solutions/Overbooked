@@ -30,7 +30,7 @@ function useBusy() {
 // ==========================================================================
 export function PaymentDialog({ rental, open, onClose, onDone }: DialogProps) {
   const m = money(rental);
-  const { isOwner } = useShop();
+  const { isOwner, role, setting } = useShop();
   const [kind, setKind] = useState<PaymentKind>("payment");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<Method | "">("");
@@ -51,7 +51,8 @@ export function PaymentDialog({ rental, open, onClose, onDone }: DialogProps) {
   }, [open]);
 
   // while the piece is out, only the owner can give the deposit back (the database enforces it); staff do it at return
-  const refundNow = isOwner || rental.status === "completed";
+  // before the return only the owner, or managers when Settings > Staff controls allows it (migration 039)
+  const refundNow = isOwner || (role === "manager" && setting<string>("early_deposit_refund_role", "owner") === "owner_manager") || rental.status === "completed";
   const kinds: PaymentKind[] = rental.status === "cancelled" || rental.status === "no_show"
     ? ["deposit_refund"] : ["payment", "deposit", ...(refundNow ? ["deposit_refund" as const] : [])];
 
@@ -330,6 +331,7 @@ type Fix =
   | { kind: "line"; id: string; label: string; amount: number }
   | { kind: "payment"; id: string; label: string; amount: number; method: Method | null }
   | { kind: "delete_payment"; id: string; label: string }
+  | { kind: "void_payment"; id: string; label: string; amount: number; method: Method | null }
   | { kind: "delete_charge"; id: string; label: string }
   | { kind: "delete_rental" };
 
@@ -337,6 +339,8 @@ export function CorrectionDialog({ rental, fix, onClose, onDone }: { rental: Ren
   const [value, setValue] = useState("");
   const [method, setMethod] = useState<Method | "">("");
   const [reason, setReason] = useState("");
+  // voiding: enter the correct payment in the same step (migration 039)
+  const [replace, setReplace] = useState(false);
   const [tried, setTried] = useState(false);
   const { busy, run } = useBusy();
 
@@ -345,17 +349,19 @@ export function CorrectionDialog({ rental, fix, onClose, onDone }: { rental: Ren
     setTried(false);
     setReason("");
     setValue(fix.kind === "discount" ? String(rental.discount) : fix.kind === "line" || fix.kind === "payment" ? String(fix.amount) : "");
-    setMethod(fix.kind === "payment" ? fix.method ?? "" : "");
+    setMethod(fix.kind === "payment" || fix.kind === "void_payment" ? fix.method ?? "" : "");
+    setReplace(false);
   }, [fix, rental.discount]);
 
   if (!fix) return null;
   const title = {
-    discount: "Change the discount", line: `Change the price of ${"label" in fix ? fix.label : ""}`, payment: "Correct a payment",
-    delete_payment: "Delete a payment", delete_charge: "Remove a charge", delete_rental: `Delete ${rental.token} for good`,
+    discount: "Change the discount", line: `Change the price of ${"label" in fix ? fix.label : ""}`, payment: "Change how it was paid",
+    delete_payment: "Delete a payment", void_payment: "Void a payment", delete_charge: "Remove a charge", delete_rental: `Delete ${rental.token} for good`,
   }[fix.kind];
-  const destructive = fix.kind.startsWith("delete");
+  const destructive = fix.kind.startsWith("delete") || fix.kind === "void_payment";
 
-  const asksAmount = fix.kind === "discount" || fix.kind === "line" || fix.kind === "payment";
+  // a payment's amount is no longer changed in place: a wrong amount is voided and entered again
+  const asksAmount = fix.kind === "discount" || fix.kind === "line" || (fix.kind === "void_payment" && replace);
   const errs = {
     value: asksAmount ? moneyError(value, { required: true, positive: fix.kind !== "discount", max: 10_000_000 }) : null,
     reason: reasonError(reason, "reason (it is kept in the audit log)"),
@@ -366,7 +372,9 @@ export function CorrectionDialog({ rental, fix, onClose, onDone }: { rental: Ren
     if (bad) throw new Error(Object.values(errs).find(Boolean)!);
     if (fix.kind === "discount") await call("admin_set_discount", { p_rental_id: rental.id, p_discount: num(value), p_reason: reason });
     if (fix.kind === "line") await call("admin_set_line_amount", { p_line_id: fix.id, p_amount: num(value), p_reason: reason });
-    if (fix.kind === "payment") await call("admin_update_payment", { p_payment_id: fix.id, p_amount: num(value), p_method: method || null, p_reason: reason });
+    if (fix.kind === "payment") await call("admin_update_payment", { p_payment_id: fix.id, p_amount: fix.amount, p_method: method || null, p_reason: reason });
+    if (fix.kind === "void_payment") await call("void_payment", { p_payment_id: fix.id, p_reason: reason,
+      p_replacement: replace ? { amount: num(value), method: method || null } : null });
     if (fix.kind === "delete_payment") await call("admin_delete_payment", { p_payment_id: fix.id, p_reason: reason });
     if (fix.kind === "delete_charge") await call("admin_delete_charge", { p_charge_id: fix.id, p_reason: reason });
     if (fix.kind === "delete_rental") await call("admin_delete_rental", { p_rental_id: rental.id, p_reason: reason });
@@ -377,16 +385,24 @@ export function CorrectionDialog({ rental, fix, onClose, onDone }: { rental: Ren
 
   return (
     <Modal open onClose={onClose} title={title}
-      description={fix.kind === "delete_rental" ? "The booking, its items, charges and payments are removed. Only finished or cancelled bookings can be deleted." : "Owners only. The change and its reason are kept in the audit log."}
+      description={fix.kind === "delete_rental" ? "The booking, its items, charges and payments are removed. Only finished or cancelled bookings can be deleted."
+        : fix.kind === "void_payment" ? "It stays on the booking, struck through, with your reason, and no longer counts in any total."
+        : "Owners only. The change and its reason are kept in the audit log."}
       footer={<><button className={ghostButtonClass} onClick={onClose}>Cancel</button>
-        <button className={destructive ? dangerButtonClass : goldButtonClass} disabled={busy || (tried && bad)} onClick={save}>{busy ? "Saving..." : destructive ? "Delete" : "Save"}</button></>}>
+        <button className={destructive ? dangerButtonClass : goldButtonClass} disabled={busy || (tried && bad)} onClick={save}>{busy ? "Saving..." : fix.kind === "void_payment" ? "Void" : destructive ? "Delete" : "Save"}</button></>}>
       {"label" in fix && destructive ? <p className="text-sm">{fix.label}</p> : null}
-      {fix.kind === "discount" || fix.kind === "line" || fix.kind === "payment" ? (
+      {fix.kind === "void_payment" ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={replace} onChange={(e) => { setReplace(e.target.checked); if (e.target.checked && !value) setValue(String(fix.amount)); }} />
+          Enter the correct payment now
+        </label>
+      ) : null}
+      {asksAmount ? (
         <Field label="Amount" error={tried || value.trim() ? errs.value ?? undefined : undefined}>
           <input className={monoInputClass} inputMode="decimal" maxLength={10} value={value} onChange={(e) => setValue(e.target.value)} />
         </Field>
       ) : null}
-      {fix.kind === "payment" && fix.method ? <MethodPicker value={method} onChange={setMethod} /> : null}
+      {(fix.kind === "payment" || (fix.kind === "void_payment" && replace)) && fix.method ? <MethodPicker value={method} onChange={setMethod} /> : null}
       <Field label="Reason" error={tried || reason.trim() ? errs.reason ?? undefined : undefined}><input className={inputClass} maxLength={320} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
     </Modal>
   );

@@ -1,6 +1,18 @@
 # Changelog
 
 ## 0.3.0 (unreleased): v2 rental engine
+- Staff controls and voiding payments (migration 39, 11 Nov 2026; APPLIED to the shared cloud project and checked there in rolled-back
+  transactions; pgTAP not yet run; tests: supabase/tests/staff_controls; plan: docs/LAUNCH_PACK_1_PLAN.md part C):
+  - Settings > Staff controls (whole shop; every default is the old behaviour, every rule checked in the database): most discount
+    staff and managers may give (discount plus prices agreed below the list price, as % of the price), who may void a payment, lower
+    the suggested late fee, cancel a booking that has payments, give a deposit back before the return, and after how many hours a
+    back-dated return needs a manager (2, 6 or 24)
+  - a wrong payment is voided with a reason: it stays on the booking, struck through, and counts nowhere (booking, Finance,
+    dashboard, printed receipt); the correct payment can be entered in the same step; Delete is no longer offered in the app and
+    "Change how it was paid" changes only the method
+  - activity log: voids are important entries with the reason; a "Money changes" button filters to them
+  - fixed the same day on the shared project: for a few minutes after 39 was applied, the discount check crashed any booking saved
+    with a discount or an agreed price
 - Settings page with a branch switch (migration 38, 11 Nov 2026; APPLIED to the shared cloud project and checked there in
   rolled-back transactions; pgTAP not yet run; tests: supabase/tests/branch_settings; plan: docs/SETTINGS_PAGE_PLAN.md):
   - new Admin > Settings page (owner): every setting in one searchable table (setting, value, applies to, edit); each row is

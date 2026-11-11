@@ -14,6 +14,7 @@ import {
   PAYMENT_LABELS,
   rupees,
 } from "@/lib/shop/format";
+import { cn } from "@/lib/utils";
 import type { Fix } from "./RentalDialogs";
 
 function MoneyRow({
@@ -42,11 +43,14 @@ export function BookingPaymentSummary({
   rental,
   tz,
   isOwner,
+  canVoid,
   onCorrection,
 }: {
   rental: RentalDetail;
   tz: string;
   isOwner: boolean;
+  /** the owner, or a manager when Settings > Staff controls allows it (migration 039) */
+  canVoid: boolean;
   onCorrection: (fix: Fix) => void;
 }): React.JSX.Element {
   const { total, paid, balance, depositHeld } = money(rental);
@@ -131,13 +135,19 @@ export function BookingPaymentSummary({
               const date = fmtDateTime(payment.paid_at, tz);
               const refund =
                 payment.kind === "refund" || payment.kind === "deposit_refund";
+              const voided = !!payment.voided_at;
               return (
                 <li
                   key={payment.id}
-                  className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1 py-2"
+                  className={cn("flex flex-wrap items-start justify-between gap-x-2 gap-y-1 py-2", voided && "text-muted-foreground")}
                 >
                   <div className="min-w-0 flex-1 wrap-break-word">
-                    <p className="font-medium">
+                    {voided ? (
+                      <p className="text-xs font-semibold uppercase tracking-wide text-rust">
+                        Void{payment.void_reason ? `: ${payment.void_reason}` : ""}
+                      </p>
+                    ) : null}
+                    <p className={cn("font-medium", voided && "line-through")}>
                       {label}
                       {payment.method
                         ? ` · ${METHOD_LABELS[payment.method]}`
@@ -149,11 +159,11 @@ export function BookingPaymentSummary({
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="font-semibold tabular-nums">
+                    <span className={cn("font-semibold tabular-nums", voided && "line-through")}>
                       {refund ? "−" : ""}
                       {rupees(payment.amount)}
                     </span>
-                    {isOwner ? (
+                    {!voided && (canVoid || (isOwner && payment.method)) ? (
                       <DropdownMenu>
                         <DropdownMenuTrigger
                           type="button"
@@ -166,31 +176,38 @@ export function BookingPaymentSummary({
                           />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() =>
-                              onCorrection({
-                                kind: "payment",
-                                id: payment.id,
-                                label,
-                                amount: Number(payment.amount),
-                                method: payment.method,
-                              })
-                            }
-                          >
-                            Correct amount or method
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-rust"
-                            onClick={() =>
-                              onCorrection({
-                                kind: "delete_payment",
-                                id: payment.id,
-                                label: `${label} ${rupees(payment.amount)} on ${date}`,
-                              })
-                            }
-                          >
-                            Delete
-                          </DropdownMenuItem>
+                          {/* a wrong amount is voided and entered again, so the record keeps both; only the method is changed in place */}
+                          {isOwner && payment.method ? (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                onCorrection({
+                                  kind: "payment",
+                                  id: payment.id,
+                                  label,
+                                  amount: Number(payment.amount),
+                                  method: payment.method,
+                                })
+                              }
+                            >
+                              Change how it was paid
+                            </DropdownMenuItem>
+                          ) : null}
+                          {canVoid ? (
+                            <DropdownMenuItem
+                              className="text-rust"
+                              onClick={() =>
+                                onCorrection({
+                                  kind: "void_payment",
+                                  id: payment.id,
+                                  label: `${label} ${rupees(payment.amount)} on ${date}`,
+                                  amount: Number(payment.amount),
+                                  method: payment.method,
+                                })
+                              }
+                            >
+                              Void (and enter the correct one)
+                            </DropdownMenuItem>
+                          ) : null}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : null}
