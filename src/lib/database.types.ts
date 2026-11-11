@@ -129,14 +129,14 @@ isOneToOne: false
                   ]
                 },"branches": {
                   Row: {
-                    "address": string | null,"created_at": string,"email": string | null,"id": string,"is_active": boolean,"name": string,"phone": string | null,"shop_id": string,"slug": string
+                    "address": string | null,"city": string | null,"pincode": string | null,"settings": Json,"state": string | null,"created_at": string,"email": string | null,"id": string,"is_active": boolean,"name": string,"phone": string | null,"shop_id": string,"slug": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"created_at"?: string,"email"?: string | null,"id"?: string,"is_active"?: boolean,"name": string,"phone"?: string | null,"shop_id": string,"slug": string
+                    "address"?: string | null,"city"?: string | null,"pincode"?: string | null,"settings"?: Json,"state"?: string | null,"created_at"?: string,"email"?: string | null,"id"?: string,"is_active"?: boolean,"name": string,"phone"?: string | null,"shop_id": string,"slug": string
                   }
                   Update: {
-                    "address"?: string | null,"created_at"?: string,"email"?: string | null,"id"?: string,"is_active"?: boolean,"name"?: string,"phone"?: string | null,"shop_id"?: string,"slug"?: string
+                    "address"?: string | null,"city"?: string | null,"pincode"?: string | null,"settings"?: Json,"state"?: string | null,"created_at"?: string,"email"?: string | null,"id"?: string,"is_active"?: boolean,"name"?: string,"phone"?: string | null,"shop_id"?: string,"slug"?: string
                   }
                   Relationships: [
                     {
@@ -371,14 +371,14 @@ isOneToOne: false
                   ]
                 },"products": {
                   Row: {
-                    "category_id": string,"created_at": string,"description": string | null,"id": string,"image_url": string | null,"is_active": boolean,"is_set": boolean,"mrp": number,"name": string,"purchase_price": number,"replacement_value": number,"security_deposit": number,"shop_id": string,"sku": string,"updated_at": string
+                    "category_id": string,"created_at": string,"description": string | null,"id": string,"image_url": string | null,"is_active": boolean,"is_set": boolean,"late_fee_per_day": number | null,"mrp": number,"name": string,"purchase_price": number,"replacement_value": number,"security_deposit": number,"shop_id": string,"sku": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "category_id": string,"created_at"?: string,"description"?: string | null,"id"?: string,"image_url"?: string | null,"is_active"?: boolean,"is_set"?: boolean,"mrp"?: number,"name": string,"purchase_price"?: number,"replacement_value"?: number,"security_deposit"?: number,"shop_id": string,"sku": string,"updated_at"?: string
+                    "category_id": string,"created_at"?: string,"description"?: string | null,"id"?: string,"image_url"?: string | null,"is_active"?: boolean,"is_set"?: boolean,"late_fee_per_day"?: number | null,"mrp"?: number,"name": string,"purchase_price"?: number,"replacement_value"?: number,"security_deposit"?: number,"shop_id": string,"sku": string,"updated_at"?: string
                   }
                   Update: {
-                    "category_id"?: string,"created_at"?: string,"description"?: string | null,"id"?: string,"image_url"?: string | null,"is_active"?: boolean,"is_set"?: boolean,"mrp"?: number,"name"?: string,"purchase_price"?: number,"replacement_value"?: number,"security_deposit"?: number,"shop_id"?: string,"sku"?: string,"updated_at"?: string
+                    "category_id"?: string,"created_at"?: string,"description"?: string | null,"id"?: string,"image_url"?: string | null,"is_active"?: boolean,"is_set"?: boolean,"late_fee_per_day"?: number | null,"mrp"?: number,"name"?: string,"purchase_price"?: number,"replacement_value"?: number,"security_deposit"?: number,"shop_id"?: string,"sku"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -601,14 +601,14 @@ isOneToOne: false
                   ]
                 },"rentals": {
                   Row: {
-                    "actual_end_at": string | null,"actual_start_at": string | null,"add_ons_total": number,"adults": number,"branch_id": string,"cancel_reason": string | null,"cancellation_fee": number,"cancelled_at": string | null,"cancelled_by": string | null,"charges_total": number,"children": number,"cleaning_days": number | null,"created_at": string,"created_by": string | null,"customer_id": string,"deposit_agreed": number,"deposit_applied": number,"deposit_received": number,"deposit_refunded": number,"discount": number,"end_at": string,"id": string,"id_verified_at": string | null,"id_verified_by": string | null,"invoice_date": string | null,"invoice_no": string | null,"items_total": number,"notes": string | null,"paid": number,"shop_id": string,"start_at": string,"status": string,"token": string,"total": number | null,"updated_at": string,"whole_property": boolean,"with_driver": boolean
+                    "actual_end_at": string | null,"actual_start_at": string | null,"add_ons_total": number,"adults": number,"branch_id": string,"cancel_reason": string | null,"cancellation_fee": number,"cancelled_at": string | null,"cancelled_by": string | null,"charges_total": number,"children": number,"cleaning_days": number | null,"created_at": string,"created_by": string | null,"customer_id": string,"deposit_agreed": number,"deposit_applied": number,"deposit_received": number,"deposit_refunded": number,"discount": number,"end_at": string,"id": string,"id_verified_at": string | null,"id_verified_by": string | null,"handover_hold_at": string | null,"handover_hold_by": string | null,"handover_hold_note": string | null,"invoice_date": string | null,"late_terms": Json | null,"invoice_no": string | null,"items_total": number,"notes": string | null,"paid": number,"shop_id": string,"start_at": string,"status": string,"token": string,"total": number | null,"updated_at": string,"whole_property": boolean,"with_driver": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id": string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id": string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at": string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"invoice_date"?: string | null,"invoice_no"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id": string,"start_at": string,"status"?: string,"token": string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
+                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id": string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id": string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at": string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"handover_hold_at"?: string | null,"handover_hold_by"?: string | null,"handover_hold_note"?: string | null,"invoice_date"?: string | null,"late_terms"?: Json | null,"invoice_no"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id": string,"start_at": string,"status"?: string,"token": string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
                   }
                   Update: {
-                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id"?: string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at"?: string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"invoice_date"?: string | null,"invoice_no"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id"?: string,"start_at"?: string,"status"?: string,"token"?: string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
+                    "actual_end_at"?: string | null,"actual_start_at"?: string | null,"add_ons_total"?: number,"adults"?: number,"branch_id"?: string,"cancel_reason"?: string | null,"cancellation_fee"?: number,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"charges_total"?: number,"children"?: number,"cleaning_days"?: number | null,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string,"deposit_agreed"?: number,"deposit_applied"?: number,"deposit_received"?: number,"deposit_refunded"?: number,"discount"?: number,"end_at"?: string,"id"?: string,"id_verified_at"?: string | null,"id_verified_by"?: string | null,"handover_hold_at"?: string | null,"handover_hold_by"?: string | null,"handover_hold_note"?: string | null,"invoice_date"?: string | null,"late_terms"?: Json | null,"invoice_no"?: string | null,"items_total"?: number,"notes"?: string | null,"paid"?: number,"shop_id"?: string,"start_at"?: string,"status"?: string,"token"?: string,"total"?: never,"updated_at"?: string,"whole_property"?: boolean,"with_driver"?: boolean
                   }
                   Relationships: [
                     {
@@ -775,14 +775,14 @@ isOneToOne: false
                   ]
                 },"shops": {
                   Row: {
-                    "address": string | null,"business_types": (string)[],"created_at": string,"email": string | null,"gstin": string | null,"id": string,"logo_url": string | null,"monthly_fee": number,"name": string,"notes": string | null,"paid_until": string | null,"phone": string | null,"plan": string,"settings": NonNullable<Json>,"slug": string,"status": string,"timezone": string,"token_prefix": string,"trial_ends": string | null
+                    "address": string | null,"city": string | null,"pincode": string | null,"state": string | null,"business_types": (string)[],"created_at": string,"email": string | null,"gstin": string | null,"id": string,"logo_url": string | null,"monthly_fee": number,"name": string,"notes": string | null,"paid_until": string | null,"phone": string | null,"plan": string,"settings": NonNullable<Json>,"slug": string,"status": string,"timezone": string,"token_prefix": string,"trial_ends": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"business_types": (string)[],"created_at"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: string,"logo_url"?: string | null,"monthly_fee"?: number,"name": string,"notes"?: string | null,"paid_until"?: string | null,"phone"?: string | null,"plan"?: string,"settings"?: NonNullable<Json>,"slug": string,"status"?: string,"timezone"?: string,"token_prefix": string,"trial_ends"?: string | null
+                    "address"?: string | null,"city"?: string | null,"pincode"?: string | null,"state"?: string | null,"business_types": (string)[],"created_at"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: string,"logo_url"?: string | null,"monthly_fee"?: number,"name": string,"notes"?: string | null,"paid_until"?: string | null,"phone"?: string | null,"plan"?: string,"settings"?: NonNullable<Json>,"slug": string,"status"?: string,"timezone"?: string,"token_prefix": string,"trial_ends"?: string | null
                   }
                   Update: {
-                    "address"?: string | null,"business_types"?: (string)[],"created_at"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: string,"logo_url"?: string | null,"monthly_fee"?: number,"name"?: string,"notes"?: string | null,"paid_until"?: string | null,"phone"?: string | null,"plan"?: string,"settings"?: NonNullable<Json>,"slug"?: string,"status"?: string,"timezone"?: string,"token_prefix"?: string,"trial_ends"?: string | null
+                    "address"?: string | null,"city"?: string | null,"pincode"?: string | null,"state"?: string | null,"business_types"?: (string)[],"created_at"?: string,"email"?: string | null,"gstin"?: string | null,"id"?: string,"logo_url"?: string | null,"monthly_fee"?: number,"name"?: string,"notes"?: string | null,"paid_until"?: string | null,"phone"?: string | null,"plan"?: string,"settings"?: NonNullable<Json>,"slug"?: string,"status"?: string,"timezone"?: string,"token_prefix"?: string,"trial_ends"?: string | null
                   }
                   Relationships: [
                     
@@ -1264,6 +1264,18 @@ isOneToOne: false
                            },
 "rental_hours":
 { Args: { "p_end": string,"p_start": string }; Returns: number
+                           },
+"late_clashes":
+{ Args: never; Returns: { "due_at": string,"late_rental_id": string,"late_token": string,"next_hold_note": string | null,"next_rental_id": string,"next_start": string,"next_token": string,"unit_code": string,"unit_id": string }[]
+                           },
+"update_branch_settings":
+{ Args: { "p_branch_id": string,"p_clear"?: string[],"p_set"?: Json }; Returns: undefined
+                           },
+"set_handover_hold":
+{ Args: { "p_note": string,"p_rental_id": string }; Returns: undefined
+                           },
+"set_product_late_fee":
+{ Args: { "p_amount": number,"p_product_id": string }; Returns: undefined
                            },
 "return_suggestions":
 { Args: { "p_odometers"?: Json,"p_rental_id": string,"p_returned_at"?: string }; Returns: Json

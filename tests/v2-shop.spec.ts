@@ -186,8 +186,9 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   await page.getByRole("dialog", { name: "Booking confirmed" }).getByRole("button", { name: "Done" }).click(); // the pop-up, then the list
   await expect(page).toHaveURL(/\/bookings$/, { timeout: 15_000 }); // a confirmed booking goes to the Bookings list
   await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);
-  const pickupSection = page.getByRole("region", { name: "Pickups & Returns" });
-  const liveSection = page.getByRole("region", { name: "Live Bookings" });
+  // one page per job: Bookings (waiting for pickup), Active rentals (out), History (returned, cancelled)
+  const pickupSection = page.getByRole("region", { name: "Waiting for pickup" });
+  const liveSection = page.getByRole("region", { name: "Out with customers" });
   const bookingLink = { name: new RegExp(phone) };
   await expect(pickupSection.getByRole("link", bookingLink)).toBeVisible();
   await openBooking(page, "Playwright Bride");
@@ -207,8 +208,10 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
 
   await page.goto("/bookings");
   await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);
-  await expect(liveSection.getByRole("link", bookingLink)).toBeVisible();
   await expect(pickupSection.getByRole("link", bookingLink)).toHaveCount(0);
+  await page.goto("/active-rentals");
+  await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);
+  await expect(liveSection.getByRole("link", bookingLink)).toBeVisible();
 
   await page.goto(bookingUrl);
   await overview.getByRole("button", { name: "Mark returned" }).click();
@@ -226,11 +229,12 @@ test("bridal: book, hand over and return with a damage charge", async ({ page })
   await expect(page.getByText("₹2,900").first()).toBeVisible(); // 2,400 + 500 damage
   await expect(page.getByText("Paid", { exact: true }).first()).toBeVisible();
 
-  await page.goto("/bookings");
+  await page.goto("/history");
   await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);
-  const completed = page.getByRole("region", { name: "Completed Bookings" });
-  await completed.getByRole("button", { name: "Show" }).click();
+  const completed = page.getByRole("region", { name: "Returned" });
   await expect(completed.getByRole("link", bookingLink)).toBeVisible();
+  await page.goto("/active-rentals");
+  await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);
   await expect(liveSection.getByRole("link", bookingLink)).toHaveCount(0);
 });
 
@@ -490,10 +494,9 @@ test("bridal: Edit changes a booking and takes a payment in the same card; the m
   await expect(page.getByText("Cancelled", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("region", { name: "Booking overview" }).getByText("Cancellation recorded")).toBeVisible();
 
-  await page.goto("/bookings");
+  await page.goto("/history");
   await page.getByRole("textbox", { name: "Search bookings" }).fill(phone);
-  await page.getByRole("combobox", { name: "Status", exact: true }).selectOption("cancelled");
-  const cancelled = page.getByRole("region", { name: "Cancelled Bookings" });
+  const cancelled = page.getByRole("region", { name: "Cancelled & no-shows" });
   await expect(cancelled.getByRole("link", { name: new RegExp(phone) })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Pickups & Returns" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Waiting for pickup" })).toHaveCount(0);
 });

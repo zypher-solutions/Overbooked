@@ -337,19 +337,21 @@ The screen updates itself about a second and a half after any rental changes.
 - The expenses hint text (rent, salaries, cleaning, tailoring) is fixed for clothing shops.
 - The Ledger list downloads every row in the chosen dates into the browser. This will slow down for a very big shop. The cards no longer have this problem.
 
-## 5.5 Bookings (`/bookings`)
+## 5.5 Bookings (`/bookings`), Active rentals (`/active-rentals`), History (`/history`)
 
-**What it is for:** every booking as a card, to find, check and open.
+**What they are for:** one page per job at the counter (11 Nov 2026). **Bookings**: bookings waiting for pickup, with
+Hand over. **Active rentals**: everything out with customers, "Due back today & overdue" first, then "Out with
+customers", with Return. **History**: "Returned" and "Cancelled & no-shows". One screen (`screens/Bookings.tsx`, `view`)
+draws all three; each page loads only its own lists.
 
 | Item | What it does |
 |---|---|
 | **New rental** | Goes to Inventory Search |
 | Search | Customer, phone, booking number, SKU or description, as you type |
-| Status filter | All, Booked (waiting for pickup), Out, Returned, Cancelled |
-| Pickup date filter | All, Today, Tomorrow, or a chosen date |
+| Pickup date filter | All, Today, Tomorrow, or a chosen date (Bookings and History) |
 | Branch filter | For owners with more than one branch |
 | A booking card | Shows the number, status, customer, phone, pickup and return dates, "Buffer" days and the day the piece is free again, a money summary (Total, Paid, Rem, Dep), and the piece codes. Clicking opens the booking |
-| **Completed Bookings** | A fold-out list. Pages of 60 with **Show more** |
+| Each list | Pages of 60 with **Show more** |
 
 **Problems**
 - "Cancelled" in the filter also includes no-shows.

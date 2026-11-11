@@ -1,4 +1,6 @@
 import {
+  Archive,
+  PackageOpen,
   BarChart3,
   Barcode,
   SlidersHorizontal,
@@ -9,6 +11,7 @@ import {
   LayoutGrid,
   Plus,
   Settings,
+  Store,
   Gem,
   History,
   Sheet,
@@ -27,7 +30,10 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
     items: [
       { href: "/", label: "Dashboard", icon: BarChart3, show: true },
       { href: "/finance", label: "Finance", icon: Wallet, show: c.canManage },
+      // one page per job at the counter: hand over a booking, take a return, look something up
       { href: "/bookings", label: "Bookings", icon: Calendar, show: true },
+      { href: "/active-rentals", label: "Active rentals", icon: PackageOpen, show: true },
+      { href: "/history", label: "History", icon: Archive, show: true },
       { href: "/calendar", label: "Calendar", icon: CalendarDays, show: true },
       {
         href: "/appointments",
@@ -91,9 +97,10 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
       {
         href: "/branches",
         label: "Branch management",
-        icon: Settings,
+        icon: Store,
         show: c.isOwner,
       },
+      { href: "/settings", label: "Settings", icon: Settings, show: c.isOwner },
       { href: "/admin/activity", label: "Activity log", icon: History, show: c.isOwner && !c.isSupport },
     ],
   },

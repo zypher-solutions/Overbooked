@@ -1,6 +1,30 @@
 # Changelog
 
 ## 0.3.0 (unreleased): v2 rental engine
+- Settings page with a branch switch (migration 38, 11 Nov 2026; APPLIED to the shared cloud project and checked there in
+  rolled-back transactions; pgTAP not yet run; tests: supabase/tests/branch_settings; plan: docs/SETTINGS_PAGE_PLAN.md):
+  - new Admin > Settings page (owner): every setting in one searchable table (setting, value, applies to, edit); each row is
+    edited in a small dialog and saved on its own
+  - "Settings for" switch: All branches (the shop's values) or one branch; a branch can give itself its own value for the
+    receipt note, the late-return rules, grace time and check-in/out times ("Branch only"), and go back with "Use shop
+    default"; GST %, SAC and the licence rule stay for the whole shop
+  - bookings use their branch's values: the late rules copied onto a new booking, the grace time at return, the receipt
+    note on the print, the usual check-in/out times on a new booking, the order of the late-piece buttons
+  - Branch management keeps the branches and the shop's details only; the owner can now rename the shop; the shop and each
+    branch get city, state (list of states and UTs) and PIN code; the settings tabs added earlier the same day moved to Settings
+- Late returns (migration 37, 11 Nov 2026; APPLIED to the shared cloud project and checked there in rolled-back transactions;
+  pgTAP not yet run, Docker would not start; tests: supabase/tests/late_returns;
+  plan: docs/LAUNCH_PACK_1_PLAN.md parts A and B):
+  - Branch management shows its settings in tabs (Shop details, Receipts & tax, and for clothing shops Late returns); one Save as before
+  - Late returns: late fee on or off; a % of the piece's day price (catalogue rate or agreed price, 0 to 300%) or a fixed amount
+    per piece per day; calendar days with an optional latest return time, or 24-hour blocks; optional maximum (% of the rent or
+    the replacement value); a live example. Defaults are the old rule, so nothing changes until the owner changes it
+  - each new booking keeps a copy of the rules (`rentals.late_terms`); bookings made earlier keep the old formula
+  - the return screen's late-fee suggestion shows the working ("2 days late x ₹800 ... = ₹1,600"); staff still confirm it
+  - a product can have its own late fee per day (product form; kept apart from its prices so other saves never clear it)
+  - a piece still out late with one customer: its next booking shows a warning with "Swap piece" and "Hold hand over" (the shop
+    setting picks which comes first); a held booking cannot be handed over until the hold is removed; the lists show
+    "Piece still out late" and "Next booking waiting"; holds and product late fees are in the activity log
 - Zypher support with your own login (migration 36, 11 Nov 2026; APPLIED to the shared cloud project; tests: supabase/tests/support_visits, activity):
   - a Zypher admin opens a shop with "Enter shop as support" in the console, only while its owner allows Zypher support and after two-step sign-in
   - inside the shop they have exactly the limits of a support login (no money corrections, no consent switch, no staff changes, no activity log)

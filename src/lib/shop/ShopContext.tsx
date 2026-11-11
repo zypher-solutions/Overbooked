@@ -31,6 +31,8 @@ interface ShopContextValue {
   feature: (key: string) => boolean;
   /** shop-level policy with a default */
   setting: <T>(key: string, fallback: T) => T;
+  /** a branch's own value, else the shop's (migration 038); no branch = the shop's */
+  branchSetting: <T>(branchId: string | null | undefined, key: string, fallback: T) => T;
   /** wording for the whole shop: one business type uses its own words, mixed shops use neutral ones */
   word: (key: "item" | "items" | "unit" | "units" | "start" | "end", fallback?: string) => string;
   /** which module's screens this shop uses (src/modules/registry.ts): bridal and groom shops use clothing, the rest standard */
@@ -55,7 +57,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const supabase = createClient();
     const [b, c, t, a, at] = await Promise.all([
-      supabase.from("branches").select("id, name, slug, is_active, phone, address, email").order("created_at"),
+      supabase.from("branches").select("id, name, slug, is_active, phone, address, email, city, state, pincode, settings").order("created_at"),
       supabase.from("categories").select("id, name, template_key, sku_prefix").order("name"),
       supabase.from("business_templates").select("*").order("sort"),
       // "*": works before and after migration 029 adds category_ids and quantity
@@ -94,6 +96,8 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       return shopTemplates.some((t) => t.features?.[key] === true);
     };
     const setting = <T,>(key: string, fallback: T): T => (shop.settings?.[key] ?? fallback) as T;
+    const branchSetting = <T,>(branchId: string | null | undefined, key: string, fallback: T): T =>
+      (branches.find((b) => b.id === branchId)?.settings?.[key] ?? setting(key, fallback)) as T;
     const word = (key: keyof typeof NEUTRAL, fallback?: string) => {
       const labels = shopTemplates.map((t) => t.labels?.[key]).filter(Boolean);
       return labels.length > 0 && labels.every((l) => l === labels[0]) ? labels[0] : fallback ?? NEUTRAL[key];
@@ -115,6 +119,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       templateOf,
       feature,
       setting,
+      branchSetting,
       word,
       businessModule: shopTemplates.length > 0 && shopTemplates.every((t) => t.kind === "wearable") ? "clothing" : "standard",
       loading,

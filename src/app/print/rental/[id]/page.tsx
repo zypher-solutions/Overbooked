@@ -44,7 +44,8 @@ export default function PrintRental() {
   const isInvoice = !!shop.gstin && gst > 0 && r.status === "completed" && inv !== null;
   const sac: string = shop.settings?.sac_code ?? "";
   const { taxable, tax } = inclusiveTaxBreakdown(m.total, gst);
-  const note: string = shop.settings?.receipt_note ?? "";
+  // the booking's branch may have its own note (migration 038)
+  const note = String((branch?.settings as Record<string, unknown> | undefined)?.receipt_note ?? shop.settings?.receipt_note ?? "");
   const isRoom = r.rental_lines.every((l) => l.kind === "room");
 
   return (

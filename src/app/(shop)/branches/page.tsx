@@ -1,7 +1,8 @@
 "use client";
 
-import { addressError, businessNameError, emailError, gstinError, normalizeEmail, normalizePhone, phoneError, textLimitError } from "@/lib/validate";
+import { addressError, businessNameError, emailError, gstinError, normalizeEmail, normalizePhone, phoneError } from "@/lib/validate";
 import { useState } from "react";
+import Link from "next/link";
 import { Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -15,45 +16,53 @@ import {
 } from "@/components/shop/ui";
 import { SubscriptionPanel } from "@/components/shop/Subscription";
 
-// Branch management: the shop's branches, then the shop's own settings (they were one "Shop settings" page before).
+// India's states and union territories, for the address of the shop and its branches
+const STATES = [
+  "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chandigarh", "Chhattisgarh",
+  "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir",
+  "Jharkhand", "Karnataka", "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya",
+  "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura",
+  "Uttar Pradesh", "Uttarakhand", "West Bengal",
+];
+const pinError = (pin: string) => (pin.trim() && !/^[1-9]\d{5}$/.test(pin.trim()) ? "The PIN code is 6 digits." : null);
+const cityError = (city: string) => (city.trim().length > 60 ? "The city is at most 60 characters." : null);
+
+function StateSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <select className={inputClass} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Not set</option>
+      {/* a state saved before this list keeps showing */}
+      {value && !STATES.includes(value) ? <option value={value}>{value}</option> : null}
+      {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+    </select>
+  );
+}
+
+// Branch management: the shop's branches and its basic details. Everything about how the shop works is on Settings.
 export default function BranchManagement() {
-  const { shop, templates, isOwner, isSupport, setting, businessModule } = useShop();
-  const hasRoom = templates.some((t) => t.kind === "room");
-  const hasVehicle = templates.some((t) => t.kind === "vehicle");
+  const { shop, isOwner, isSupport } = useShop();
   const [f, setF] = useState({
-    phone: shop.phone ?? "", email: shop.email ?? "", address: shop.address ?? "", gstin: shop.gstin ?? "",
-    grace_minutes: String(setting("grace_minutes", 60)),
-    check_in_time: setting("check_in_time", "14:00"), check_out_time: setting("check_out_time", "11:00"),
-    require_licence: setting("require_licence", true),
-    gst_percent: String(setting("gst_percent", 0)),
-    receipt_note: setting("receipt_note", ""),
-    sac_code: setting("sac_code", ""),
+    name: shop.name, phone: shop.phone ?? "", email: shop.email ?? "", address: shop.address ?? "",
+    city: shop.city ?? "", state: shop.state ?? "", pincode: shop.pincode ?? "", gstin: shop.gstin ?? "",
   });
   const [busy, setBusy] = useState(false);
 
-  if (!isOwner) return <Panel><p className="text-sm text-muted-foreground">Only the owner can manage branches and shop settings.</p></Panel>;
+  if (!isOwner) return <Panel><p className="text-sm text-muted-foreground">Only the owner can manage branches and the shop&apos;s details.</p></Panel>;
 
   const save = async () => {
-    const grace = Number(f.grace_minutes);
-    if (!Number.isInteger(grace) || grace < 0 || grace > 1440) return toast.error("Grace time is whole minutes, 0 to 1440.");
-    const gst = Number(f.gst_percent || 0);
-    if (!(gst >= 0 && gst <= 28)) return toast.error("GST is a percentage from 0 to 28.");
-    const bad = phoneError(f.phone) ?? emailError(f.email, false) ?? addressError(f.address) ?? gstinError(f.gstin)
-      ?? textLimitError(f.receipt_note, "receipt note", 200)
-      ?? (f.sac_code.trim() && !/^\d{4,8}$/.test(f.sac_code.trim()) ? "The SAC code is 4 to 8 digits." : null)
-      ?? (!f.check_in_time || !f.check_out_time ? "Enter the check-in and check-out times." : null);
+    const bad = businessNameError(f.name, "shop name", 80) ?? phoneError(f.phone) ?? emailError(f.email, false) ?? addressError(f.address)
+      ?? cityError(f.city) ?? pinError(f.pincode) ?? gstinError(f.gstin);
     if (bad) return toast.error(bad);
     setBusy(true);
     try {
       await call("update_my_shop", {
         p: {
-          phone: normalizePhone(f.phone), email: normalizeEmail(f.email), address: f.address.trim(), gstin: f.gstin.trim().toUpperCase(),
-          settings: { grace_minutes: grace, check_in_time: f.check_in_time, check_out_time: f.check_out_time, require_licence: f.require_licence,
-            gst_percent: gst, receipt_note: f.receipt_note.trim(), sac_code: f.sac_code.trim() },
+          name: f.name.trim().replace(/\s+/g, " "), phone: normalizePhone(f.phone), email: normalizeEmail(f.email), address: f.address.trim(),
+          city: f.city.trim(), state: f.state, pincode: f.pincode.trim(), gstin: f.gstin.trim().toUpperCase(),
         },
       });
       toast.success("Saved");
-      window.location.reload(); // everyone's screens read the new rules on load
+      window.location.reload(); // the shop name and details show on every screen
     } catch (e) {
       toast.error(errorText(e));
       setBusy(false);
@@ -62,57 +71,38 @@ export default function BranchManagement() {
 
   return (
     <>
-      <PageHeader title="Branch management" subtitle="Your branches and your shop's settings." />
-      {/* branches are changed by the real owner only (migration 033); a Zypher support login sees the settings */}
+      <PageHeader title="Branch management" subtitle="Your branches and your shop's details." />
+      {/* branches are changed by the real owner only (migration 033); a Zypher support login sees the details */}
       {isSupport ? null : <BranchesPanel />}
       <div className="mb-3 mt-6 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-xl font-semibold text-foreground">Shop settings</h2>
-        <button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save settings"}</button>
+        <h2 className="font-display text-xl font-semibold text-foreground">Shop details</h2>
+        <button className={goldButtonClass} disabled={busy} onClick={save}>{busy ? "Saving..." : "Save details"}</button>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <SubscriptionPanel />
-        <Panel title="Shop details" className="lg:row-span-2">
-          <div className="grid gap-3">
-            <Field label="Shop name" hint="Ask Zypher to change it"><input className={inputClass} value={shop.name} readOnly /></Field>
+        <Panel title="Shop details">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Shop name" hint="Shown on bills and messages" className="sm:col-span-2">
+              <input className={inputClass} value={f.name} maxLength={80} onChange={(e) => setF({ ...f, name: e.target.value })} />
+            </Field>
             <Field label="Phone" hint="Shown in WhatsApp messages when a branch has no phone"><input className={inputClass} value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
             <Field label="Email"><input type="email" className={inputClass} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
-            <Field label="Address"><textarea className={inputClass} rows={2} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></Field>
+            <Field label="Address" className="sm:col-span-2"><textarea className={inputClass} rows={2} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></Field>
+            <Field label="City"><input className={inputClass} value={f.city} maxLength={60} onChange={(e) => setF({ ...f, city: e.target.value })} /></Field>
+            <Field label="State"><StateSelect value={f.state} onChange={(state) => setF({ ...f, state })} /></Field>
+            <Field label="PIN code"><input className={monoInputClass} inputMode="numeric" maxLength={6} value={f.pincode} onChange={(e) => setF({ ...f, pincode: e.target.value.replace(/\D/g, "") })} /></Field>
             <Field label="GSTIN (optional)"><input className={monoInputClass} value={f.gstin} onChange={(e) => setF({ ...f, gstin: e.target.value })} /></Field>
           </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            GST, receipts, late returns and the shop&apos;s other rules are on <Link href="/settings" className="underline">Settings</Link>.
+          </p>
         </Panel>
-        {businessModule === "clothing" ? null : <Panel title="Rules">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Grace time before late charges (minutes)" hint="For hourly and nightly rentals" className="sm:col-span-2">
-              <input className={monoInputClass} inputMode="numeric" value={f.grace_minutes} onChange={(e) => setF({ ...f, grace_minutes: e.target.value.replace(/\D/g, "") })} />
-            </Field>
-            {hasRoom ? <>
-              <Field label="Usual check-in time"><input type="time" className={inputClass} value={f.check_in_time} onChange={(e) => setF({ ...f, check_in_time: e.target.value })} /></Field>
-              <Field label="Usual check-out time"><input type="time" className={inputClass} value={f.check_out_time} onChange={(e) => setF({ ...f, check_out_time: e.target.value })} /></Field>
-            </> : null}
-            {hasVehicle ? (
-              <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                <input type="checkbox" checked={f.require_licence} onChange={(e) => setF({ ...f, require_licence: e.target.checked })} />
-                A driving licence must be on record and checked before a vehicle goes out
-              </label>
-            ) : null}
-          </div>
-        </Panel>}
-        <Panel title="Receipts">
-          <div className="grid gap-3">
-            <Field label="GST included in prices (%)" hint="With a GSTIN and a rate above 0, a rental gets a tax invoice (own number and date, CGST and SGST) once it is returned; until then, and without these, a plain receipt prints.">
-              <input className={monoInputClass} inputMode="decimal" value={f.gst_percent} onChange={(e) => setF({ ...f, gst_percent: e.target.value })} />
-            </Field>
-            <Field label="SAC code on tax invoices (optional)" hint="The service code your accountant gives you for renting out clothes. Leave empty to print none.">
-              <input className={monoInputClass} value={f.sac_code} maxLength={8} onChange={(e) => setF({ ...f, sac_code: e.target.value })} />
-            </Field>
-          </div>
-        </Panel>
+        <SubscriptionPanel />
       </div>
     </>
   );
 }
 
-const EMPTY_BRANCH = { name: "", phone: "", email: "", address: "" };
+const EMPTY_BRANCH = { name: "", phone: "", email: "", address: "", city: "", state: "", pincode: "" };
 
 // The shop's branches (also its stock locations). setup_save_branch checks the real owner and the plan's branch limit;
 // a branch with pieces out or bookings open cannot be closed (guard trigger). The console reads the same table.
@@ -125,12 +115,14 @@ function BranchesPanel() {
   const saveBranch = async () => {
     if (!edit) return;
     const f = edit.form;
-    const bad = businessNameError(f.name, "branch name", 40) ?? phoneError(f.phone) ?? emailError(f.email, false) ?? addressError(f.address);
+    const bad = businessNameError(f.name, "branch name", 40) ?? phoneError(f.phone) ?? emailError(f.email, false) ?? addressError(f.address)
+      ?? cityError(f.city) ?? pinError(f.pincode);
     if (bad) return void toast.error(bad);
     setBusy(true);
     const { error } = await createClient().rpc("setup_save_branch", {
       p_shop_id: shop.id, p_branch_id: edit.id,
-      p: { name: f.name.trim().replace(/\s+/g, " "), phone: normalizePhone(f.phone), email: normalizeEmail(f.email), address: f.address.trim() },
+      p: { name: f.name.trim().replace(/\s+/g, " "), phone: normalizePhone(f.phone), email: normalizeEmail(f.email), address: f.address.trim(),
+           city: f.city.trim(), state: f.state, pincode: f.pincode.trim() },
     });
     setBusy(false);
     if (error) return void toast.error(error.message);
@@ -151,6 +143,8 @@ function BranchesPanel() {
     await refresh();
   };
 
+  const setForm = (p: Partial<typeof EMPTY_BRANCH>) => edit && setEdit({ ...edit, form: { ...edit.form, ...p } });
+
   return (
     <Panel title="Branches"
       actions={<button type="button" className={ghostButtonClass} onClick={() => setEdit({ id: null, form: EMPTY_BRANCH })}><Plus className="h-4 w-4" aria-hidden="true" /> Add branch</button>}>
@@ -164,7 +158,11 @@ function BranchesPanel() {
               <tr key={b.id}>
                 <td className="px-4 py-2.5">
                   <span className="block font-medium text-foreground">{b.name}</span>
-                  {b.address ? <span className="block text-xs text-muted-foreground">{b.address}</span> : null}
+                  {b.address || b.city ? (
+                    <span className="block text-xs text-muted-foreground">
+                      {[b.address, b.city, b.state, b.pincode].filter(Boolean).join(", ")}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="px-4 py-2.5 text-xs text-muted-foreground">{[b.phone, b.email].filter(Boolean).join(" · ") || "Not set"}</td>
                 <td className="px-4 py-2.5">
@@ -176,7 +174,8 @@ function BranchesPanel() {
                 </td>
                 <td className="px-4 py-2.5 text-right">
                   <button type="button" aria-label={"Edit " + b.name}
-                    onClick={() => setEdit({ id: b.id, form: { name: b.name, phone: b.phone ?? "", email: b.email ?? "", address: b.address ?? "" } })}
+                    onClick={() => setEdit({ id: b.id, form: { name: b.name, phone: b.phone ?? "", email: b.email ?? "", address: b.address ?? "",
+                      city: b.city ?? "", state: b.state ?? "", pincode: b.pincode ?? "" } })}
                     className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground">
                     <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
                   </button>
@@ -189,7 +188,8 @@ function BranchesPanel() {
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         A closed branch cannot take bookings and its staff cannot sign in. A branch with pieces out or bookings open cannot be
-        closed until they are returned or cancelled. Your plan decides how many branches can be open.
+        closed until they are returned or cancelled. Your plan decides how many branches can be open. A branch&apos;s own
+        rules (late fees, receipt note) are on <Link href="/settings" className="underline">Settings</Link>.
       </p>
 
       <Modal open={edit !== null} onClose={() => setEdit(null)} title={edit?.id ? "Edit branch" : "Add branch"}
@@ -197,12 +197,21 @@ function BranchesPanel() {
           <button type="button" className={ghostButtonClass} onClick={() => setEdit(null)}>Cancel</button>
           <button type="button" className={goldButtonClass} disabled={busy} onClick={() => void saveBranch()}>{busy ? "Saving..." : "Save"}</button>
         </>}>
-        {edit ? (["name", "phone", "email", "address"] as const).map((k) => (
-          <Field key={k} label={k === "name" ? "Branch name" : k.charAt(0).toUpperCase() + k.slice(1)}>
-            <input className={inputClass} value={edit.form[k]} type={k === "email" ? "email" : "text"} autoFocus={k === "name"}
-              onChange={(e) => setEdit({ ...edit, form: { ...edit.form, [k]: e.target.value } })} />
-          </Field>
-        )) : null}
+        {edit ? <>
+          {(["name", "phone", "email", "address"] as const).map((k) => (
+            <Field key={k} label={k === "name" ? "Branch name" : k.charAt(0).toUpperCase() + k.slice(1)}>
+              <input className={inputClass} value={edit.form[k]} type={k === "email" ? "email" : "text"} autoFocus={k === "name"}
+                onChange={(e) => setForm({ [k]: e.target.value })} />
+            </Field>
+          ))}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="City"><input className={inputClass} maxLength={60} value={edit.form.city} onChange={(e) => setForm({ city: e.target.value })} /></Field>
+            <Field label="State"><StateSelect value={edit.form.state} onChange={(state) => setForm({ state })} /></Field>
+            <Field label="PIN code">
+              <input className={monoInputClass} inputMode="numeric" maxLength={6} value={edit.form.pincode} onChange={(e) => setForm({ pincode: e.target.value.replace(/\D/g, "") })} />
+            </Field>
+          </div>
+        </> : null}
       </Modal>
 
       <ConfirmDialog open={closing !== null} onConfirm={() => void toggleBranch()} onCancel={() => setClosing(null)}

@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DateInput, isoToDisplay } from "@/components/shop/DateInput";
 import Link from "next/link";
-import { ChevronDown, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
-import { RENTAL_LIST_COLUMNS } from "@/lib/shop/api";
+import { RENTAL_LIST_COLUMNS, call } from "@/lib/shop/api";
 import {
   addDays,
   dayRange,
@@ -29,41 +29,53 @@ import {
   ListSkeleton,
 } from "@/components/shop/ui";
 
-type Status = "reserved" | "active" | "completed" | "cancelled" | "all";
 type Day = "all" | "today" | "tomorrow" | "custom";
 const PAGE = 60;
 type Row = ListRental & { pieces: string[] };
 
+// One page per job at the counter: Bookings (hand over a booking), Active rentals (take a return), History.
+// Each page loads only its own lists.
+export type View = "bookings" | "active" | "history";
+
 const SECTIONS = [
   {
-    id: "schedule",
-    title: "Pickups & Returns",
-    statuses: ["reserved", "active"],
-    empty: "No pickups or due returns match the current filters.",
+    id: "pickups",
+    title: "Waiting for pickup",
+    empty: "No bookings waiting for pickup match the current filters.",
+  },
+  {
+    id: "due",
+    title: "Due back today & overdue",
+    empty: "Nothing is due back today or overdue.",
   },
   {
     id: "live",
-    title: "Live Bookings",
-    statuses: ["active"],
-    empty:
-      "No bookings out with a later return date match the current filters.",
+    title: "Out with customers",
+    empty: "No other rentals are out with customers.",
   },
   {
     id: "completed",
-    title: "Completed Bookings",
-    statuses: ["completed"],
-    empty: "No completed bookings match the current filters.",
+    title: "Returned",
+    empty: "No returned bookings match the current filters.",
   },
   {
     id: "cancelled",
-    title: "Cancelled Bookings",
-    statuses: ["cancelled"],
+    title: "Cancelled & no-shows",
     empty: "No cancellations or no-shows match the current filters.",
   },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
-type HistorySection = "completed" | "cancelled";
+const VIEW_SECTIONS: Record<View, SectionId[]> = {
+  bookings: ["pickups"],
+  active: ["due", "live"],
+  history: ["completed", "cancelled"],
+};
+const VIEW_TEXT: Record<View, { title: string; subtitle: string }> = {
+  bookings: { title: "Bookings", subtitle: "Bookings waiting for the customer to pick up. Open one and press Hand over when they collect." },
+  active: { title: "Active rentals", subtitle: "Everything out with customers. Press Return when a customer brings the pieces back." },
+  history: { title: "History", subtitle: "Returned and cancelled bookings." },
+};
 type PageRequest = { id: SectionId; from: number };
 type SectionPage = {
   rows: Row[];
@@ -75,7 +87,7 @@ type PageResult = { id: SectionId } & (
   { rows: Row[]; count: number } | { error: string }
 );
 type Filters = {
-  status: Status;
+  view: View;
   pickupDay: string;
   branch: string;
   term: string;
@@ -88,7 +100,7 @@ async function fetchBookingPages(
   filters: Filters,
   signal: AbortSignal,
 ): Promise<PageResult[]> {
-  const { status, pickupDay, branch, term, today, tz } = filters;
+  const { pickupDay, branch, term, today, tz } = filters;
   const supabase = createClient();
   const pickupRange = pickupDay ? dayRange(pickupDay, tz) : null;
   const returnCutoff = dayRange(today, tz).to;
@@ -128,15 +140,14 @@ async function fetchBookingPages(
         .from("rentals")
         .select(RENTAL_LIST_COLUMNS, { count: "exact" });
       switch (id) {
-        case "schedule":
-          if (status === "reserved") query = query.eq("status", "reserved");
-          else if (status === "active")
-            query = query.eq("status", "active").lt("end_at", returnCutoff);
-          else
-            query = query.or(
-              `status.eq.reserved,and(status.eq.active,end_at.lt.${returnCutoff})`,
-            );
-          query = query.order(status === "active" ? "end_at" : "start_at");
+        case "pickups":
+          query = query.eq("status", "reserved").order("start_at");
+          break;
+        case "due":
+          query = query
+            .eq("status", "active")
+            .lt("end_at", returnCutoff)
+            .order("end_at");
           break;
         case "live":
           query = query
@@ -205,34 +216,27 @@ async function fetchBookingPages(
 
 function BookingResults({
   filters,
-  expanded,
-  onToggle,
   renderCard,
 }: {
   filters: Filters;
-  expanded: Record<HistorySection, boolean>;
-  onToggle: (id: HistorySection) => void;
   renderCard: (row: Row) => ReactNode;
 }): React.JSX.Element {
   const [pages, setPages] = useState<Partial<Record<SectionId, SectionPage>>>(
     {},
   );
   const requestController = useRef<AbortController | null>(null);
-  const { status, pickupDay, branch, term, today, tz } = filters;
+  const { view, pickupDay, branch, term, today, tz } = filters;
 
   useEffect(() => {
     const controller = new AbortController();
     requestController.current = controller;
-    const requests = SECTIONS.filter(
-      (section) =>
-        status === "all" || section.statuses.some((value) => value === status),
-    ).map(({ id }) => ({ id, from: 0 }));
+    const requests = VIEW_SECTIONS[view].map((id) => ({ id, from: 0 }));
     const load = async (): Promise<void> => {
       let results: PageResult[];
       try {
         results = await fetchBookingPages(
           requests,
-          { status, pickupDay, branch, term, today, tz },
+          { view, pickupDay, branch, term, today, tz },
           controller.signal,
         );
       } catch (error) {
@@ -252,7 +256,7 @@ function BookingResults({
     };
     void load();
     return () => controller.abort();
-  }, [status, pickupDay, branch, term, today, tz]);
+  }, [view, pickupDay, branch, term, today, tz]);
 
   async function loadMore(id: SectionId, page: SectionPage): Promise<void> {
     const signal = requestController.current?.signal;
@@ -281,14 +285,7 @@ function BookingResults({
 
   return (
     <div className="space-y-6">
-      {SECTIONS.filter(
-        (section) =>
-          status === "all" ||
-          section.statuses.some((value) => value === status),
-      ).map(({ id, title, empty }) => {
-        const history = id === "completed" || id === "cancelled";
-        const collapsible = history && status === "all";
-        const open = !collapsible || expanded[id];
+      {SECTIONS.filter((section) => VIEW_SECTIONS[view].includes(section.id)).map(({ id, title, empty }) => {
         const page = pages[id];
         const headingId = `bookings-${id}-heading`;
         const contentId = `bookings-${id}-content`;
@@ -303,28 +300,10 @@ function BookingResults({
                 {title}
               </h2>
               {page && (!page.error || page.rows.length > 0) ? (
-                <StatusBadge>{page.count}</StatusBadge>
-              ) : null}
-              {collapsible ? (
-                <button
-                  type="button"
-                  className={cn(
-                    ghostButtonClass,
-                    "ml-auto min-h-11 px-3 py-1.5",
-                  )}
-                  aria-controls={contentId}
-                  aria-expanded={open}
-                  onClick={() => onToggle(id)}
-                >
-                  {open ? "Hide" : "Show"}
-                  <ChevronDown
-                    aria-hidden="true"
-                    className={cn("size-4", open && "rotate-180")}
-                  />
-                </button>
+                <StatusBadge tone={id === "due" && page.count > 0 ? "rust" : undefined}>{page.count}</StatusBadge>
               ) : null}
             </div>
-            <div id={contentId} hidden={!open}>
+            <div id={contentId}>
               <div className="mt-2 grid gap-3">
                 {!page ? <ListSkeleton rows={2} /> : null}
                 {page?.rows.map(renderCard)}
@@ -368,17 +347,16 @@ function BookingResults({
 }
 
 export default function Bookings(): React.JSX.Element {
+  return <RentalPage view="bookings" />;
+}
+
+export function RentalPage({ view }: { view: View }): React.JSX.Element {
   const { tz, activeBranches, branches, myBranchId, canManage } = useShop();
-  const [status, setStatus] = useState<Status>("all");
   const [day, setDay] = useState<Day>("all");
   const [customDay, setCustomDay] = useState("");
   const [branch, setBranch] = useState(myBranchId ?? "");
   const [query, setQuery] = useState("");
   const [term, setTerm] = useState("");
-  const [expanded, setExpanded] = useState({
-    completed: false,
-    cancelled: false,
-  });
   const today = todayLocal(tz);
   const tomorrow = addDays(today, 1);
 
@@ -387,9 +365,21 @@ export default function Bookings(): React.JSX.Element {
     return () => clearTimeout(t);
   }, [query]);
 
+  // bookings whose piece is still out late with someone else, and the late ones holding them up (migration 037)
+  const [clash, setClash] = useState({ next: new Set<string>(), late: new Set<string>() });
+  useEffect(() => {
+    if (view === "history") return;
+    // shortcut: a database without migration 037 shows no chips instead of an error
+    void call<{ late_rental_id: string; next_rental_id: string }[]>("late_clashes").then(
+      (rows) => setClash({ next: new Set(rows.map((c) => c.next_rental_id)), late: new Set(rows.map((c) => c.late_rental_id)) }),
+      () => undefined,
+    );
+  }, [view]);
+
   const branchName = (id: string) =>
     branches.find((b) => b.id === id)?.name ?? "";
-  const pickupDay =
+  // rentals out are found by their return, not their pickup: no pickup date filter there
+  const pickupDay = view === "active" ? "" :
     day === "today"
       ? today
       : day === "tomorrow"
@@ -398,7 +388,7 @@ export default function Bookings(): React.JSX.Element {
           ? customDay
           : "";
   const filters = {
-    status,
+    view,
     pickupDay,
     branch: myBranchId ?? branch,
     term,
@@ -449,6 +439,12 @@ export default function Bookings(): React.JSX.Element {
               ) : null}
               {returnToday ? (
                 <StatusBadge tone="accent">Return today</StatusBadge>
+              ) : null}
+              {clash.next.has(r.id) ? (
+                <StatusBadge tone="rust">Piece still out late</StatusBadge>
+              ) : null}
+              {clash.late.has(r.id) ? (
+                <StatusBadge tone="rust">Next booking waiting</StatusBadge>
               ) : null}
             </div>
             <p className="mt-0.5 truncate text-sm font-semibold">
@@ -531,8 +527,8 @@ export default function Bookings(): React.JSX.Element {
   return (
     <>
       <PageHeader
-        title="Bookings Management"
-        subtitle="Manage pickups, returns and booking history."
+        title={VIEW_TEXT[view].title}
+        subtitle={VIEW_TEXT[view].subtitle}
         actions={
           <Link href="/scan" className={goldButtonClass}>
             New rental
@@ -551,31 +547,21 @@ export default function Bookings(): React.JSX.Element {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <select
-          className={inputClass}
-          aria-label="Status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as Status)}
-        >
-          <option value="all">All statuses</option>
-          <option value="reserved">Booked (awaiting pickup)</option>
-          <option value="active">Out (picked up)</option>
-          <option value="completed">Returned</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-        <select
-          className={inputClass}
-          aria-label="Pickup date"
-          value={day}
-          onChange={(e) => setDay(e.target.value as Day)}
-        >
-          <option value="all">All pickup dates</option>
-          <option value="today">Pickups today ({fmtDate(today)})</option>
-          <option value="tomorrow">
-            Pickups tomorrow ({fmtDate(tomorrow)})
-          </option>
-          <option value="custom">Custom date</option>
-        </select>
+        {view === "active" ? <span className="hidden lg:block" /> : (
+          <select
+            className={inputClass}
+            aria-label="Pickup date"
+            value={day}
+            onChange={(e) => setDay(e.target.value as Day)}
+          >
+            <option value="all">All pickup dates</option>
+            <option value="today">Pickups today ({fmtDate(today)})</option>
+            <option value="tomorrow">
+              Pickups tomorrow ({fmtDate(tomorrow)})
+            </option>
+            <option value="custom">Custom date</option>
+          </select>
+        )}
         {!myBranchId && activeBranches.length > 1 ? (
           <select
             className={inputClass}
@@ -593,7 +579,7 @@ export default function Bookings(): React.JSX.Element {
         ) : (
           <span className="hidden lg:block" />
         )}
-        {day === "custom" ? (
+        {day === "custom" && view !== "active" ? (
           <label className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-2">
             Pickup on{" "}
             <DateInput
@@ -608,10 +594,6 @@ export default function Bookings(): React.JSX.Element {
       <BookingResults
         key={JSON.stringify(filters)}
         filters={filters}
-        expanded={expanded}
-        onToggle={(id) =>
-          setExpanded((current) => ({ ...current, [id]: !current[id] }))
-        }
         renderCard={card}
       />
     </>

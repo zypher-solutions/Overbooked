@@ -75,7 +75,7 @@ export interface BookedRental {
 export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
   const router = useRouter();
   const params = useSearchParams();
-  const { shop, tz, myBranchId, activeBranches, categories, templates, addOns, templateOf, feature, setting, word, businessModule } = useShop();
+  const { shop, tz, myBranchId, activeBranches, categories, templates, addOns, templateOf, feature, setting, branchSetting, word, businessModule } = useShop();
   // TRENDZ rules for clothes: dates first, each booked piece chosen, cleaning days, no pickup in the past, back to Bookings
   const byPiece = !!shopModules[businessModule].bookingByPiece;
   const { products } = useCatalog();
@@ -87,7 +87,9 @@ export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
   const [editing, setEditing] = useState<RentalDetail | null>(null);
 
   const initial = (): Draft => {
-    const p = defaultPeriod(templates[0]?.kind, tz, setting("check_in_time", "14:00"), setting("check_out_time", "11:00"));
+    // the usual times of the branch the booking starts in (its own, else the shop's; migration 038)
+    const b = myBranchId ?? activeBranches[0]?.id;
+    const p = defaultPeriod(templates[0]?.kind, tz, branchSetting(b, "check_in_time", "14:00"), branchSetting(b, "check_out_time", "11:00"));
     return {
       branchId: myBranchId ?? activeBranches[0]?.id ?? "", start: p.start, end: p.end, lines: [], adults: 1, children: 0,
       withDriver: false, wholeProperty: false, cleaningDays: "", addOns: {}, customer: emptyCustomer, customerId: null, discount: "",
