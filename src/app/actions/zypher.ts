@@ -6,7 +6,9 @@ import { addressError, businessNameError, emailError, normalizeEmail, normalizeP
 
 async function requireZypher() {
   const caller = await getCaller();
-  if (caller.role !== "super_admin") throw new Error("Only Zypher can do this.");
+  // not caller.role: a Zypher admin visiting a shop as support has the role 'owner' there (migration 036)
+  const { data: isZypher } = await caller.supabase.rpc("is_platform_admin");
+  if (!isZypher) throw new Error("Only Zypher can do this.");
   return caller;
 }
 

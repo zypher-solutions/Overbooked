@@ -4,7 +4,7 @@ Code that belongs to ONE kind of business lives in its own folder here, so a cha
 
 | Module | Business | Holds |
 |---|---|---|
-| `clothing` | bridal, groom and other clothing rental | its own screens in `screens/` (Bookings, Inventory Search, All Rentals, Finance, Stock Locations, Create Booking, Bulk add & edit, Earnings by product), the dashboard, product wizard, stock cards, expenses, product table, SKU rules (`sku.ts`), bulk add & edit rules (`bulk.ts`, checked by `npm run check:bulk`), Excel/CSV files (`sheet.ts`, SheetJS), cart, ledger PDF, menu (`nav.ts`) |
+| `clothing` | bridal, groom and other clothing rental | its own screens in `screens/` (Bookings, Inventory Search, All Rentals, Finance, Create Booking, Bulk add & edit, Earnings by product), the dashboard, product wizard, stock cards, expenses, product table, SKU rules (`sku.ts`), bulk add & edit rules (`bulk.ts`, checked by `npm run check:bulk`), Excel/CSV files (`sheet.ts`, SheetJS), cart, ledger PDF, menu (`nav.ts`) |
 | `vehicle` (to come) | cars and bikes | odometer, fuel, licence screens |
 | `stay` (to come) | resorts | nights, guests, meal plans |
 

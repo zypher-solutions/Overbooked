@@ -1149,6 +1149,12 @@ isOneToOne: false
 "current_shop_id":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"enter_support":
+{ Args: { "p_shop_id": string }; Returns: undefined
+                           },
+"leave_support":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
 "dashboard_summary":
 { Args: { "p_branch_id"?: string,"p_from": string,"p_to": string }; Returns: Json
                            },

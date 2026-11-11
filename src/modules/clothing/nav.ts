@@ -2,7 +2,6 @@ import {
   BarChart3,
   Barcode,
   SlidersHorizontal,
-  Boxes,
   Calendar,
   ScanLine,
   CalendarClock,
@@ -89,12 +88,6 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
       { href: "/staff", label: "Staff management", icon: Users, show: c.isOwner && !c.isSupport },
       { href: "/admin/attributes", label: "Attributes", icon: SlidersHorizontal, show: c.canManage },
       { href: "/admin/sku", label: "SKU", icon: Barcode, show: c.canManage },
-      {
-        href: "/stock-locations",
-        label: "Stock Locations",
-        icon: Boxes,
-        show: c.isSupport,
-      },
       {
         href: "/branches",
         label: "Branch management",

@@ -8,10 +8,11 @@ import { ShopShell } from "@/components/shop/ShopShell";
 import { CartProvider } from "@/modules/clothing/cart";
 
 // Every shop screen: a signed-in shop member (owner, manager, staff, or a Zypher support login for this shop).
-// Zypher admins work in the console, never here. The database checks shop, role and branch again on every read and write.
+// Zypher admins work in the console, and here only while visiting a shop as support (its owner allows it).
+// The database checks shop, role and branch again on every read and write.
 export default function ShopLayout({ children }: { children: ReactNode }) {
   const { profile, shop, isLoading } = useAuth();
-  const zypherAdmin = profile?.role === "super_admin";
+  const zypherAdmin = !isLoading && profile?.role === "super_admin" && !shop;
 
   useEffect(() => {
     if (zypherAdmin) window.location.replace("/zypher");

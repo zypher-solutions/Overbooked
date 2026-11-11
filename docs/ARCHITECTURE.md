@@ -68,7 +68,7 @@ admin panel Overbooked grew from. Cars, bikes and resorts keep the screens above
 | | Inventory Search (`/scan`) | Scan a tag (camera or USB scanner) or type a name, SKU, piece code or booking no. Find and book: stock per branch (Total / Avail / Rented), Add to Cart. Receive back: a scanned piece opens its return with that piece ticked |
 | | All Rentals | Products with stock per branch; tap for Add to Cart per size and branch, and who has it out |
 | Products | All Products, Add New Product, Categories | Add New Product is a 3-step form: basic info, attributes (Colour, Size...), variations and pieces per branch (pieces are created with codes for QR tags). Changing a product uses the same form |
-| Admin | Staff management (`/staff`, owner), Branch management (`/branches`, owner: branches plus the shop settings), Stock Locations (Zypher support only) | A page hidden from someone's menu sends them to Today if opened by its address (`ShopShell`). Stock Locations: pieces per branch (free, out, service, lost). CSV Import sits under Products |
+| Admin | Staff management (`/staff`, owner), Branch management (`/branches`, owner: branches plus the shop settings) | A page hidden from someone's menu sends them to Today if opened by its address (`ShopShell`). CSV Import sits under Products |
 
 The cart (`src/lib/shop/cart.tsx`) keeps items per person and shop on the device; a floating Checkout (n)
 opens the booking form with them. On a return, clothes are ticked piece by piece (scanned, typed or tapped);
