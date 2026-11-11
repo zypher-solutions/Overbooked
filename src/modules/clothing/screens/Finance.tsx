@@ -180,6 +180,7 @@ export default function Finance() {
             .select(
               "id, rental_id, kind, amount, method, paid_at, note, rentals!payments_shop_rental_fkey(token, branch_id, customers!rentals_shop_customer_fkey(full_name))",
             )
+            .is("voided_at", null)
             .gte("paid_at", start)
             .lt("paid_at", end)
             .order("paid_at")

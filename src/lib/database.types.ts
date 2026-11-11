@@ -267,14 +267,14 @@ isOneToOne: false
                   ]
                 },"payments": {
                   Row: {
-                    "amount": number,"created_at": string,"id": string,"kind": string,"method": string | null,"note": string | null,"paid_at": string,"recorded_by": string | null,"rental_id": string,"shop_id": string
+                    "amount": number,"created_at": string,"id": string,"kind": string,"method": string | null,"note": string | null,"paid_at": string,"recorded_by": string | null,"rental_id": string,"shop_id": string,"void_reason": string | null,"voided_at": string | null,"voided_by": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount": number,"created_at"?: string,"id"?: string,"kind": string,"method"?: string | null,"note"?: string | null,"paid_at"?: string,"recorded_by"?: string | null,"rental_id": string,"shop_id": string
+                    "amount": number,"created_at"?: string,"id"?: string,"kind": string,"method"?: string | null,"note"?: string | null,"paid_at"?: string,"recorded_by"?: string | null,"rental_id": string,"shop_id": string,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
                   }
                   Update: {
-                    "amount"?: number,"created_at"?: string,"id"?: string,"kind"?: string,"method"?: string | null,"note"?: string | null,"paid_at"?: string,"recorded_by"?: string | null,"rental_id"?: string,"shop_id"?: string
+                    "amount"?: number,"created_at"?: string,"id"?: string,"kind"?: string,"method"?: string | null,"note"?: string | null,"paid_at"?: string,"recorded_by"?: string | null,"rental_id"?: string,"shop_id"?: string,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
                   }
                   Relationships: [
                     {
@@ -1270,6 +1270,9 @@ isOneToOne: false
                            },
 "update_branch_settings":
 { Args: { "p_branch_id": string,"p_clear"?: string[],"p_set"?: Json }; Returns: undefined
+                           },
+"void_payment":
+{ Args: { "p_payment_id": string,"p_reason": string,"p_replacement"?: Json }; Returns: Json
                            },
 "set_handover_hold":
 { Args: { "p_note": string,"p_rental_id": string }; Returns: undefined

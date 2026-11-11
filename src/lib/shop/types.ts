@@ -196,6 +196,9 @@ export interface Payment {
   method: Method | null;
   paid_at: string;
   note: string | null;
+  /** set when the payment was voided (migration 039); a voided payment counts nowhere */
+  voided_at?: string | null;
+  void_reason?: string | null;
 }
 
 // quote_rental output

@@ -261,6 +261,12 @@ export default function ActivityLog() {
             onChange={(e) => set({ important: e.target.checked })} />
           Only important: deletions, cancellations, money corrections, staff and access changes
         </label>
+        {/* one tap for the owner's most common check: voids, corrections and removed charges */}
+        <button type="button" aria-pressed={filters.area === "money" && filters.important}
+          className={cn("w-fit rounded-full border px-3 py-1 text-xs", filters.area === "money" && filters.important ? "border-gold/60 bg-gold/10 font-medium" : "border-border text-muted-foreground")}
+          onClick={() => set(filters.area === "money" && filters.important ? { area: "", important: false } : { area: "money", important: true })}>
+          Money changes
+        </button>
       </div>
 
       <div className={tableWrap}>

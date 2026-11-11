@@ -138,12 +138,13 @@ export default function PrintRental() {
           <Row label="Balance due" value={rupees(m.balance)} strong />
         </div>
 
-        {r.payments.length ? (
+        {/* a voided payment never prints (migration 039) */}
+        {r.payments.some((p) => !p.voided_at) ? (
           <section className="mt-6">
             <p className="mb-1 text-[11px] uppercase text-gray-500">Payments</p>
             <table className="w-full">
               <tbody>
-                {r.payments.map((p) => (
+                {r.payments.filter((p) => !p.voided_at).map((p) => (
                   <tr key={p.id} className="border-b border-gray-100">
                     <td className="py-1">{fmtDateTime(p.paid_at, tz)}</td>
                     <td className="py-1">{PAYMENT_LABELS[p.kind]}{p.method ? ` (${METHOD_LABELS[p.method]})` : ""}</td>

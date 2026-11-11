@@ -27,6 +27,10 @@ interface Row {
   options?: [string, string][];
   min?: number;
   max?: number;
+  /** a number that may be left empty (saved as null: no limit) */
+  optional?: boolean;
+  /** a choice saved as a number */
+  asNumber?: boolean;
   /** shown only when this is true for the shop and the row being edited */
   when?: (v: (key: string) => unknown) => boolean;
 }
@@ -82,21 +86,40 @@ function rowsFor(o: { clothing: boolean; hasRoom: boolean; hasVehicle: boolean }
         hint: "A licence must be on record and checked before a vehicle goes out" });
     }
   }
+  // who may do what (migration 039); every default is how the shop worked before, all checked in the database
+  const STAFF = "Staff controls";
+  const OM: [string, string][] = [["owner", "Only the owner"], ["owner_manager", "The owner and managers"]];
+  rows.push(
+    { key: "discount_limit_staff", section: STAFF, label: "Most discount staff may give (%)", kind: "number", min: 0, max: 100, optional: true, fallback: "",
+      perBranch: false, hint: "Discount plus prices agreed below the list price, as a % of the price. Empty: no limit" },
+    { key: "discount_limit_manager", section: STAFF, label: "Most discount a manager may give (%)", kind: "number", min: 0, max: 100, optional: true, fallback: "",
+      perBranch: false, hint: "Above it the owner must give it. Empty: no limit" },
+    { key: "void_payment_role", section: STAFF, label: "Who may void a wrong payment", kind: "select", fallback: "owner", perBranch: false, options: OM,
+      hint: "A voided payment stays on the booking, struck through, with the reason" },
+    { key: "waive_late_fee_role", section: STAFF, label: "Who may lower or remove the suggested late fee", kind: "select", fallback: "everyone", perBranch: false,
+      options: [["everyone", "Everyone"], ...OM.slice().reverse()], hint: "At the return" },
+    { key: "cancel_paid_role", section: STAFF, label: "Who may cancel a booking that has payments", kind: "select", fallback: "everyone", perBranch: false,
+      options: [["everyone", "Everyone"], ["owner_manager", "The owner and managers"]], hint: "Cancelling gives the money back" },
+    { key: "early_deposit_refund_role", section: STAFF, label: "Who may give a deposit back before the return", kind: "select", fallback: "owner", perBranch: false,
+      options: OM, hint: "At or after the return anyone can" },
+    { key: "backdate_return_hours", section: STAFF, label: "Back-dated returns need a manager after", kind: "select", fallback: 2, perBranch: false, asNumber: true,
+      options: [["2", "2 hours"], ["6", "6 hours"], ["24", "24 hours"]], hint: "A return entered for an earlier time than this needs a manager or the owner" },
+  );
   return rows;
 }
 
 function show(row: Row, value: unknown): string {
   if (row.kind === "switch") return value ? "On" : "Off";
-  if (row.kind === "select") return row.options?.find(([k]) => k === value)?.[1] ?? String(value);
-  if (value === "" || value === null || value === undefined) return row.kind === "time" ? "None" : "Not set";
+  if (row.kind === "select") return row.options?.find(([k]) => k === String(value))?.[1] ?? String(value);
+  if (value === "" || value === null || value === undefined) return row.kind === "time" ? "None" : row.optional ? "No limit" : "Not set";
   if (row.kind === "money") return `₹${Number(value).toLocaleString("en-IN")}`;
-  if (row.key.endsWith("percent")) return `${value}%`;
+  if (row.key.endsWith("percent") || row.key.startsWith("discount_limit")) return `${value}%`;
   return String(value);
 }
 
 // the same limits the database checks (_settings_check, migration 038)
 function problem(row: Row, raw: string): string | null {
-  if (row.kind === "number" || row.kind === "money") {
+  if ((row.kind === "number" || row.kind === "money") && !(row.optional && raw.trim() === "")) {
     const n = Number(raw);
     if (raw.trim() === "" || !Number.isFinite(n) || n < (row.min ?? 0) || n > (row.max ?? Infinity)) return `${row.label}: ${row.min ?? 0} to ${row.max}.`;
     if (row.key === "grace_minutes" && !Number.isInteger(n)) return "Grace time is whole minutes.";
@@ -152,11 +175,12 @@ export default function SettingsPage() {
   const save = async (clear = false) => {
     if (!edit) return;
     const { row } = edit;
-    let v: string | number | boolean = edit.value;
+    let v: string | number | boolean | null = edit.value;
     if (!clear && row.kind !== "switch") {
       const bad = problem(row, String(v));
       if (bad) return toast.error(bad);
-      v = row.kind === "number" || row.kind === "money" ? Number(v) : String(v).trim();
+      v = row.optional && String(v).trim() === "" ? null
+        : row.kind === "number" || row.kind === "money" || row.asNumber ? Number(v) : String(v).trim();
     }
     setBusy(true);
     try {
