@@ -56,8 +56,8 @@ test("a bridal owner gets the TRENDZ menu", async ({ page }) => {
   await expect(page.getByRole("menuitem", { name: "Account settings" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeVisible();
   await page.keyboard.press("Escape");
-  // branches, staff and stock locations are set up by Zypher, not by the shop
-  for (const item of ["Branch Management", "Staff Management", "Stock Locations"]) {
+  // branches and staff are set up by Zypher, not by the shop
+  for (const item of ["Branch Management", "Staff Management"]) {
     await expect(nav.getByRole("link", { name: item, exact: true })).toHaveCount(0);
   }
   // All Products has no tabs (as in TRENDZ): Categories is its own menu item
@@ -430,19 +430,18 @@ test("should add multiple product variants from one rental dialog", async ({ pag
 test("Zypher never enters a shop's screens, and a support login sees only its own shop", async ({ page, context }) => {
   await signIn(page, "zypher@overbooked.test");
   // typing the address of a business screen sends Zypher back to the console
-  for (const path of ["/customers", "/finance", "/catalog", "/stock-locations"]) {
+  for (const path of ["/customers", "/finance", "/catalog"]) {
     await page.goto(path);
     await page.waitForURL((u) => u.pathname === "/zypher", { timeout: 15_000 });
   }
 
-  // the support login of Kalyani works inside Kalyani like an owner, with Stock Locations, but no console
+  // the support login of Kalyani works inside Kalyani like an owner, but no console
   await context.clearCookies();
   await signIn(page, "support@bridal.test");
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   const nav2 = page.getByLabel("Main navigation");
   await expect(nav2.getByText("Kalyani Bridal")).toBeVisible();
   await expect(nav2.getByText("Zypher support").first()).toBeVisible();
-  await expect(nav2.getByRole("link", { name: "Stock Locations", exact: true })).toBeVisible();
   await expect(nav2.getByRole("link", { name: "Branch Management", exact: true })).toHaveCount(0);
   await page.goto("/zypher");
   await expect(page).not.toHaveURL(/\/zypher$/);

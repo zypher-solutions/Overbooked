@@ -6,6 +6,7 @@
   - inside the shop they have exactly the limits of a support login (no money corrections, no consent switch, no staff changes, no activity log)
   - the owner switching support off ends every visit at once; "Leave shop" and signing out end it too; entering and leaving are in the owner's activity log
   - several admins may be in one shop; the per-shop support logins still work
+  - the Stock Locations page (support only, carried over from TRENDZ) is removed; piece counts per branch stay on the product screens
 - Admin section (migrations 30 and 31, 9 Nov 2026; tests: supabase/tests/attributes, scripts/check-bulk):
   - each shop has its own attributes (`shop_attributes`: Colour, Size, Length ...) instead of the fixed business-type list; Admin > Attributes adds, renames, reorders and archives them
   - one Admin page per attribute for its preferred values (`shop_attribute_values`), suggested on the product form and in bulk add; a new value saved on a product joins the list
