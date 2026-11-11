@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { errorText } from "./format";
-import type { Charge, Check, Customer, Payment, Rental, RentalAddOn, RentalLine, Reservation } from "./types";
+import type { Charge, Check, Customer, Payment, Rental, RentalAddOn, RentalDocument, RentalLine, Reservation } from "./types";
 
 // Calls a database function; throws an Error with the database's own message (written for people).
 export async function call<T = unknown>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -24,22 +24,26 @@ export interface RentalDetail extends Rental {
   rental_charges: Charge[];
   rental_checks: Check[];
   payments: Payment[];
+  rental_documents: RentalDocument[];
 }
 
 export async function loadRental(id: string): Promise<RentalDetail | null> {
   const supabase = createClient();
-  const [r, p] = await Promise.all([
+  const [r, p, d] = await Promise.all([
     supabase.from("rentals").select(
       "*, customers!rentals_shop_customer_fkey(*), rental_lines(*), rental_add_ons(*), rental_charges(*), rental_checks(*), " +
       "unit_reservations(*, units!unit_reservations_shop_unit_fkey(id, code, odometer, status, status_reason, variation_id))",
     ).eq("id", id).maybeSingle(),
     // staff cannot read money records; they get an empty list
     supabase.from("payments").select("*").eq("rental_id", id).order("paid_at"),
+    supabase.from("rental_documents").select("*").eq("rental_id", id).order("created_at"),
   ]);
   if (r.error) throw new Error(errorText(r.error));
   if (!r.data) return null;
   const rental = r.data as unknown as RentalDetail;
   rental.payments = (p.data as Payment[]) ?? [];
+  // shortcut: a database without migration 040 has no documents table; the booking still loads
+  rental.rental_documents = (d.data as RentalDocument[]) ?? [];
   rental.rental_charges.sort((a, b) => a.created_at.localeCompare(b.created_at));
   rental.rental_lines.sort((a, b) => a.description.localeCompare(b.description));
   return rental;

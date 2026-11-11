@@ -1,6 +1,22 @@
 # Changelog
 
 ## 0.3.0 (unreleased): v2 rental engine
+- Invoices, receipts and credit notes (migration 40, 12 Nov 2026; APPLIED to the shared cloud project and checked there in
+  rolled-back transactions; pgTAP not yet run; tests: supabase/tests/invoices_receipts, invoice; plan: docs/LAUNCH_PACK_1_PLAN.md part D):
+  - the tax invoice is issued from a button on the booking ("Tax invoice" panel); printing never issues one any more. Setting
+    "When the tax invoice is issued": after the return (existing shops, as before) or at booking (new clothing shops). The SAC
+    code is asked for at issue
+  - once invoiced, a booking's amount is lowered only by a credit note (owner, with a reason, own number ZR-C/2627/0001);
+    cancelling an invoiced booking makes its credit note; a returned booking that ends up above what was billed (late fee,
+    damage, extension) gets a supplementary bill (ZR-S/2627/0001); all listed on the booking with Print, and in the activity log
+  - every payment has a receipt number (ZR-R/2627/0001; older payments numbered in date order) and a printable receipt
+  - clothing shops print the bill laid out like the reference paper bill: customer, bill-number and bank boxes, delivery and
+    return dates per line, the totals box (Total Amount, Taxable Rent, Disc, Total Taxable, CGST, SGST, Bill Amount, Advance,
+    Payable) with paise, the deposit outside the tax box, GSTIN and the booking number as "ref", the terms with the late-fee line
+    written from the booking's late rules; other business types keep the shared layout
+  - Settings > Receipts & tax: terms on the bill (600 characters), "advance is kept when a booking is cancelled" (fills the
+    cancellation fee), bank name, account holder, last 4 digits of the account only, IFSC
+  - tests: invoice.test.sql now sets a SAC code and after-the-return billing (both needed since 40)
 - Staff controls and voiding payments (migration 39, 11 Nov 2026; APPLIED to the shared cloud project and checked there in rolled-back
   transactions; pgTAP not yet run; tests: supabase/tests/staff_controls; plan: docs/LAUNCH_PACK_1_PLAN.md part C):
   - Settings > Staff controls (whole shop; every default is the old behaviour, every rule checked in the database): most discount

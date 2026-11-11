@@ -191,7 +191,12 @@ export function CancelDialog({ rental, open, onClose, onDone }: DialogProps) {
   const [reason, setReason] = useState("");
   const [noShow, setNoShow] = useState(false);
   const { busy, run } = useBusy();
-  useEffect(() => { if (open) { setFee(""); setMethod("cash"); setReason(""); setNoShow(false); } }, [open]);
+  const { setting } = useShop();
+  // "advance is kept when a booking is cancelled" (Settings, migration 040) fills the fee with what was paid; staff can change it
+  const keepAdvance = setting("cancel_keeps_advance", false);
+  useEffect(() => {
+    if (open) { setFee(keepAdvance && m.paid > 0 ? String(m.paid) : ""); setMethod("cash"); setReason(""); setNoShow(false); }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // what goes back: what was paid less the fee kept, and the whole deposit
   const advanceRefund = Math.max(0, Math.round((m.paid - num(fee)) * 100) / 100);
