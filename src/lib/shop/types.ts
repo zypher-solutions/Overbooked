@@ -29,7 +29,12 @@ export interface Template {
   sort: number;
 }
 
-export interface Branch { id: string; name: string; slug: string; is_active: boolean; phone: string | null; address: string | null; email: string | null }
+export interface Branch {
+  id: string; name: string; slug: string; is_active: boolean; phone: string | null; address: string | null; email: string | null;
+  city?: string | null; state?: string | null; pincode?: string | null;
+  /** this branch's own settings; a key it does not have follows the shop (migration 038) */
+  settings?: Record<string, unknown>;
+}
 export interface Category { id: string; name: string; template_key: string; sku_prefix: string | null }
 /** a shop's own attribute (Colour, Size, Length ...) and its preferred values (migration 030) */
 export interface ShopAttribute {
@@ -72,6 +77,8 @@ export interface Product {
   image_url: string | null;
   purchase_price: number;
   replacement_value: number;
+  /** own late fee per piece per day; null = the shop's rule (migration 037) */
+  late_fee_per_day?: number | null;
   /** selling price of the piece, and the deposit a booking starts with for one piece (migration 029) */
   mrp?: number;
   security_deposit?: number;
@@ -135,6 +142,8 @@ export interface Rental {
   deposit_refunded: number;
   deposit_applied: number;
   id_verified_at: string | null;
+  /** a note that stops the hand over until removed (migration 037) */
+  handover_hold_note?: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
   notes: string | null;

@@ -27,7 +27,7 @@ interface Attr { key: string; label: string; values: string[] }
 interface VarRow { id?: string; key: string; attributes: Record<string, string>; name: string; sku: string; savedSku?: string; rate: string; enabled: boolean; stock: Record<string, string> }
 interface Basic {
   category_id: string; name: string; sku: string; rate: string; replacement_value: string; description: string; image_url: string; is_active: boolean;
-  mrp: string; purchase_price: string; security_deposit: string;
+  mrp: string; purchase_price: string; security_deposit: string; late_fee: string;
   /** a new product's SKU typed by hand instead of numbered from the category */
   ownSku: boolean;
 }
@@ -76,6 +76,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     rate: "", replacement_value: product ? String(product.replacement_value ?? "") : "", description: product?.description ?? "",
     image_url: product?.image_url ?? "", is_active: product?.is_active ?? true,
     mrp: money(product?.mrp), purchase_price: money(product?.purchase_price), security_deposit: money(product?.security_deposit), ownSku: false,
+    late_fee: product?.late_fee_per_day != null ? String(product.late_fee_per_day) : "",
   }));
   const template = templateOf(basic.category_id);
   const [attrs, setAttrsRaw] = useState<Attr[]>([]);
@@ -126,7 +127,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
         if (saved) {
           const d = JSON.parse(saved) as { basic: Basic; attrs: Attr[]; rows: VarRow[] };
           // a draft saved before the money fields existed has no values for them
-          setBasic((b) => ({ ...b, ...d.basic, mrp: d.basic.mrp ?? "", purchase_price: d.basic.purchase_price ?? "", security_deposit: d.basic.security_deposit ?? "", ownSku: !!d.basic.ownSku })); setRows(d.rows);
+          setBasic((b) => ({ ...b, ...d.basic, mrp: d.basic.mrp ?? "", purchase_price: d.basic.purchase_price ?? "", security_deposit: d.basic.security_deposit ?? "", late_fee: d.basic.late_fee ?? "", ownSku: !!d.basic.ownSku })); setRows(d.rows);
           setAttrsRaw(d.attrs.map((a) => ({ ...a, values: tidyAll(a.values, suggestionsFor(attributes, a), a) })));
           toast.message("Your unfinished product was restored.");
           return;
@@ -230,6 +231,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     mrp: moneyError(basic.mrp, { label: "MRP", max: 10_000_000 }),
     purchase: moneyError(basic.purchase_price, { label: "purchase price", max: 10_000_000 }),
     deposit: moneyError(basic.security_deposit, { label: "security deposit", max: 1_000_000 }),
+    late: moneyError(basic.late_fee, { label: "late fee per day", max: 10_000_000 }),
     description: textLimitError(basic.description, "description", 500),
     sku: product || !basic.ownSku ? null
       : !typedSku ? "Type the SKU, or switch back to numbering it for you."
@@ -299,6 +301,9 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
       // the pieces were made by the database in the same step, numbered after the ones each variation already has
       const made = sent.reduce((n, r) => n + (r.enabled ? activeBranches.reduce((m, b) =>
         m + Math.max(0, Math.floor(num(stockOf(r, b.id))) - (r.id ? counts[`${r.id}:${b.id}`] ?? 0 : 0)), 0) : 0), 0);
+      // the product's own late fee is kept apart from its prices (migration 037), so other saves never clear it
+      const lateFee = basic.late_fee.trim() === "" ? null : num(basic.late_fee);
+      if (lateFee !== (product?.late_fee_per_day ?? null)) await call("set_product_late_fee", { p_product_id: id, p_amount: lateFee });
       try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
       toast.success(made ? `Saved, with ${made} new piece${made === 1 ? "" : "s"}` : "Saved");
       void id;
@@ -328,7 +333,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
     restored.current = false;
     setBasic({ category_id: wearCats.length === 1 ? wearCats[0].id : "", name: "", sku: "", rate: "", replacement_value: "", description: "", image_url: "", is_active: true,
-      mrp: "", purchase_price: "", security_deposit: "", ownSku: false });
+      mrp: "", purchase_price: "", security_deposit: "", late_fee: "", ownSku: false });
     setAttrsRaw(shopAttrs.map((f) => ({ key: f.key, label: f.label, values: [] })));
     setRows([]);
     setStep("basic");
@@ -398,6 +403,9 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
               </Field>
               <Field label="Security deposit (₹)" hint="Filled in on the bill for each piece; can be changed there" error={showBasic("deposit", basic.security_deposit)}>
                 <input className={monoInputClass} inputMode="decimal" placeholder="0" value={basic.security_deposit} onChange={(e) => setBasic({ ...basic, security_deposit: e.target.value })} />
+              </Field>
+              <Field label="Own late fee per day (₹, optional)" hint="Per piece per day late. Empty: the shop's late-return rule" error={showBasic("late", basic.late_fee)}>
+                <input className={monoInputClass} inputMode="decimal" placeholder="Shop's rule" value={basic.late_fee} onChange={(e) => setBasic({ ...basic, late_fee: e.target.value })} />
               </Field>
               <Field label="MRP (₹)" hint="Its selling price, for your records" error={showBasic("mrp", basic.mrp)}>
                 <input className={monoInputClass} inputMode="decimal" placeholder="0" value={basic.mrp} onChange={(e) => setBasic({ ...basic, mrp: e.target.value })} />

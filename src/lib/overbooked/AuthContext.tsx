@@ -39,6 +39,9 @@ export interface Shop {
   email: string | null;
   address: string | null;
   gstin: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
   timezone: string;
   business_types: string[];
   /** policies and feature switches: grace_minutes, check_in_time, check_out_time, require_licence, features */
@@ -97,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // the shop and the role are asked together, not one after the other
       const roleCall = profileData.is_active === false ? Promise.resolve({ data: null }) : supabase.rpc("get_my_role");
       const { data: shopData } = shopId
-        ? await supabase.from("shops").select("id, name, slug, token_prefix, business_types, phone, email, address, gstin, logo_url, timezone, plan, status, paid_until, monthly_fee, settings, created_at").eq("id", shopId).maybeSingle()
+        ? await supabase.from("shops").select("id, name, slug, token_prefix, business_types, phone, email, address, city, state, pincode, gstin, logo_url, timezone, plan, status, paid_until, monthly_fee, settings, created_at").eq("id", shopId).maybeSingle()
         : { data: null };
       if (!mounted) return;
       // a suspended shop locks out its people; Zypher staff can still open it

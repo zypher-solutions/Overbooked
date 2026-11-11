@@ -7,7 +7,7 @@ import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
-import { RENTAL_LIST_COLUMNS } from "@/lib/shop/api";
+import { RENTAL_LIST_COLUMNS, call } from "@/lib/shop/api";
 import {
   addDays,
   dayRange,
@@ -365,6 +365,17 @@ export function RentalPage({ view }: { view: View }): React.JSX.Element {
     return () => clearTimeout(t);
   }, [query]);
 
+  // bookings whose piece is still out late with someone else, and the late ones holding them up (migration 037)
+  const [clash, setClash] = useState({ next: new Set<string>(), late: new Set<string>() });
+  useEffect(() => {
+    if (view === "history") return;
+    // shortcut: a database without migration 037 shows no chips instead of an error
+    void call<{ late_rental_id: string; next_rental_id: string }[]>("late_clashes").then(
+      (rows) => setClash({ next: new Set(rows.map((c) => c.next_rental_id)), late: new Set(rows.map((c) => c.late_rental_id)) }),
+      () => undefined,
+    );
+  }, [view]);
+
   const branchName = (id: string) =>
     branches.find((b) => b.id === id)?.name ?? "";
   // rentals out are found by their return, not their pickup: no pickup date filter there
@@ -428,6 +439,12 @@ export function RentalPage({ view }: { view: View }): React.JSX.Element {
               ) : null}
               {returnToday ? (
                 <StatusBadge tone="accent">Return today</StatusBadge>
+              ) : null}
+              {clash.next.has(r.id) ? (
+                <StatusBadge tone="rust">Piece still out late</StatusBadge>
+              ) : null}
+              {clash.late.has(r.id) ? (
+                <StatusBadge tone="rust">Next booking waiting</StatusBadge>
               ) : null}
             </div>
             <p className="mt-0.5 truncate text-sm font-semibold">

@@ -94,6 +94,22 @@ type DialogName =
   | "edit"
   | null;
 
+type LateClash = {
+  unit_id: string; unit_code: string; late_rental_id: string; late_token: string; due_at: string;
+  next_rental_id: string; next_token: string; next_start: string; next_hold_note: string | null;
+};
+
+// put a booking's hand over on hold, or remove the hold (empty note)
+async function setHold(rentalId: string, note: string, done: () => Promise<void> | void) {
+  try {
+    await call("set_handover_hold", { p_rental_id: rentalId, p_note: note });
+    toast.success(note ? "Hand over on hold" : "Hold removed");
+    await done();
+  } catch (e) {
+    toast.error(errorText(e));
+  }
+}
+
 export default function RentalPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
@@ -106,7 +122,7 @@ function RentalView() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const params = useSearchParams();
-  const { tz, branches, role, isOwner, canManage, word, feature } = useShop();
+  const { tz, branches, role, isOwner, canManage, word, feature, branchSetting } = useShop();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [editAppt, setEditAppt] = useState<Appointment | null>(null);
   const [r, setR] = useState<RentalDetail | null | undefined>(undefined);
@@ -126,11 +142,18 @@ function RentalView() {
   });
   const [fix, setFix] = useState<Fix | null>(null);
   const [photos, setPhotos] = useState<Record<string, string>>({});
+  // pieces kept late by one booking and needed by the next (migration 037)
+  const [clashes, setClashes] = useState<LateClash[]>([]);
+  const [holdNote, setHoldNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const rental = await loadRental(id);
       setR(rental);
+      if (rental && (rental.status === "reserved" || rental.status === "active")) {
+        // shortcut: a database without migration 037 shows no warning instead of an error
+        setClashes(await call<LateClash[]>("late_clashes").catch(() => []));
+      }
       // the photos and the appointments load together, after the booking is already on screen
       if (rental) {
         const [urls, appts] = await Promise.all([
@@ -328,6 +351,44 @@ function RentalView() {
         </div>
       </header>
 
+      {r.handover_hold_note ? (
+        <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rust/50 bg-rust/10 p-3 text-sm">
+          <span><strong>Hand over on hold:</strong> {r.handover_hold_note}</span>
+          <button className={ghostButtonClass} onClick={() => setHold(r.id, "", load)}>Remove hold</button>
+        </div>
+      ) : null}
+      {clashes.filter((c) => c.next_rental_id === r.id).map((c) => (
+        <div key={c.unit_id} role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gold/50 bg-gold/10 p-3 text-sm">
+          <span>
+            <span className="font-mono">{c.unit_code}</span> is still out with{" "}
+            <Link className="underline" href={`/rentals/${c.late_rental_id}`}>{c.late_token}</Link>, due back {fmtDateTime(c.due_at, tz)}.
+          </span>
+          <span className="flex flex-wrap gap-2">
+            {(branchSetting<string>(r.branch_id, "late_clash_action", "swap") === "hold" ? ["hold", "swap"] : ["swap", "hold"]).map((a, i) =>
+              a === "swap" ? (
+                <button key={a} className={i === 0 ? goldButtonClass : ghostButtonClass} onClick={() => setDialog("swap")}>Swap piece</button>
+              ) : r.handover_hold_note ? null : (
+                <button key={a} className={i === 0 ? goldButtonClass : ghostButtonClass}
+                  onClick={() => setHoldNote(`${c.unit_code} still out with ${c.late_token}`)}>Hold hand over</button>
+              ))}
+          </span>
+        </div>
+      ))}
+      {clashes.filter((c) => c.late_rental_id === r.id).map((c) => (
+        <div key={c.unit_id} role="alert" className="mb-4 rounded-lg border border-rust/50 bg-rust/10 p-3 text-sm">
+          <span className="font-mono">{c.unit_code}</span> is late and is booked next by{" "}
+          <Link className="underline" href={`/rentals/${c.next_rental_id}`}>{c.next_token}</Link> from {fmtDateTime(c.next_start, tz)}.
+        </div>
+      ))}
+      <Modal open={holdNote !== null} onClose={() => setHoldNote(null)} title="Hold the hand over"
+        description="The booking cannot be handed over until the hold is removed. The note shows on the booking."
+        footer={<button className={goldButtonClass} onClick={() => holdNote?.trim()
+          ? setHold(r.id, holdNote, async () => { setHoldNote(null); await load(); })
+          : toast.error("Write why the hand over is on hold.")}>Hold</button>}>
+        <Field label="Note">
+          <textarea className={inputClass} rows={2} maxLength={200} value={holdNote ?? ""} onChange={(e) => setHoldNote(e.target.value)} />
+        </Field>
+      </Modal>
       {inAlteration.length ? (
         <div
           role="status"

@@ -64,8 +64,8 @@ A shop whose business types are all clothes uses it; other shops use the shared 
 1. **Partial returns**: wanted (some pieces back now, the rest later), but TRENDZ has none. Needs a written design
    first (`docs/PARTIAL_RETURNS_DESIGN.md` is a proposal): rental status while pieces are out, deposit, late fees, money
    records. Not started.
-2. **Late returns**: a piece still out is unavailable for any future date until it comes back. Confirm.
-3. **Late fee**: the agreed price or the catalogue day rate?
+2. Decided (11 Nov 2026, migration 037): a late piece warns its next booking, which can swap the piece or hold its hand over with a note.
+3. Decided (11 Nov 2026, migration 037): the owner chooses in Branch management > Late returns (% of the catalogue or agreed day price, or a fixed amount; cut-off time, 24-hour blocks, cap; a product may have its own late fee).
 4. **Tax invoice**: issued after the return? The SAC code? Confirm with an accountant.
 5. Decided: deleting a booking stays "cancel with a reason" (audit log), not a real delete. Finance is its own page
    (not yet confirmed). The four TRENDZ differences (cleaning days per booking, exact piece at checkout, customer and
