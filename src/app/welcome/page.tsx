@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { goldButtonClass } from "@/components/overbooked/primitives";
+import { goldButtonClass, inputClass } from "@/components/overbooked/primitives";
 import { PasswordField, passwordIsStrong } from "@/components/overbooked/PasswordField";
 
 // A token works once. Signing in makes AuthProvider re-mount this page, so the result is kept per token
@@ -21,6 +21,9 @@ function Welcome() {
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
   const [saving, setSaving] = useState(false);
+  // someone who already turned on two-step sign-in must give a code before Supabase lets them change the password
+  const [mfaFactor, setMfaFactor] = useState<string | null>(null);
+  const [code, setCode] = useState("");
 
   useEffect(() => {
     const tokenHash = params.get("token_hash");
@@ -33,7 +36,16 @@ function Welcome() {
       verifications.set(tokenHash, supabase.auth.verifyOtp({ token_hash: tokenHash, type }).then(({ error }) => !error));
     }
     let live = true;
-    verifications.get(tokenHash)!.then((ok) => { if (live) setState(ok ? "ready" : "invalid"); });
+    verifications.get(tokenHash)!.then(async (ok) => {
+      if (ok) {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+          const { data: factors } = await supabase.auth.mfa.listFactors();
+          if (live) setMfaFactor(factors?.totp?.[0]?.id ?? null);
+        }
+      }
+      if (live) setState(ok ? "ready" : "invalid");
+    });
     return () => { live = false; };
   }, [params, supabase]);
 
@@ -41,7 +53,14 @@ function Welcome() {
     e.preventDefault();
     if (!passwordIsStrong(password)) return toast.error("Follow every password rule in the list.");
     if (password !== password2) return toast.error("Passwords do not match.");
+    if (mfaFactor && !/^\d{6}$/.test(code)) return toast.error("Enter the 6 digits from your authenticator app.");
     setSaving(true);
+    if (mfaFactor) {
+      const { error: codeErr } = await supabase.auth.mfa.challengeAndVerify({ factorId: mfaFactor, code });
+      if (codeErr) { setSaving(false); setCode(""); return toast.error("That code did not work. Try the next code."); }
+      await supabase.auth.refreshSession();
+      setMfaFactor(null);
+    }
     const { error } = await supabase.auth.updateUser({ password });
     setSaving(false);
     if (error) return toast.error(error.message || "Could not save the password.");
@@ -77,6 +96,10 @@ function Welcome() {
               <PasswordField id="pw" label="Password" value={password} onChange={setPassword} autoComplete="new-password" rules autoFocus />
               <PasswordField id="pw2" label="Confirm password" value={password2} onChange={setPassword2} autoComplete="new-password" />
               {password2 && password !== password2 ? <p className="text-xs text-rust">The two passwords are not the same yet.</p> : null}
+              {mfaFactor ? (
+                <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="one-time-code"
+                  aria-label="6-digit code from your authenticator app" placeholder="6-digit code from your authenticator app" className={inputClass + " h-12 text-center font-mono"} />
+              ) : null}
               <button type="submit" disabled={saving} className={goldButtonClass + " w-full h-12 text-base"}>
                 {saving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Save and continue"}
               </button>
