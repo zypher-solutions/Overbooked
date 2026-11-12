@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { Pencil, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useShop } from "@/lib/shop/ShopContext";
@@ -244,6 +245,11 @@ export default function SettingsPage() {
             <input className={cn(inputClass, "pl-9")} placeholder="Search settings" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search settings" />
           </div>
         </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          The bill prints the logo, shop name, address, phones and GSTIN from{" "}
+          <Link href="/branches" className="underline">Branch management</Link> (a branch&apos;s own address and phone come first),
+          and the bank details, GST and terms from Receipts &amp; tax below.
+        </p>
         {branch ? (
           <p className="mb-3 text-xs text-muted-foreground">
             Showing {branch.name}. A setting marked &quot;Shop default&quot; follows All branches; change it here to give {branch.name} its own value.

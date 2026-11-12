@@ -30,6 +30,13 @@ const TABS: [Tab, string][] = [["todo", "To do"], ["away", "Away"], ["back", "Re
 const TYPE_LABEL: Record<JobType, string> = { cleaning: "Cleaning", alteration: "Alteration", repair: "Repair", other: "Other" };
 const COLUMNS = "*, units!service_jobs_shop_unit_fkey(code), rentals!service_jobs_shop_rental_fkey(token)";
 type Clash = { rental_id: string; token: string; start_at: string };
+// one piece in the New job picker: staff find it by product name or code and tap the exact one
+interface Piece {
+  id: string; code: string; status: string; branch_id: string;
+  products: { name: string; image_url: string | null } | null; product_variations: { name: string } | null;
+}
+const PIECE = "id, code, status, branch_id, products!units_shop_product_fkey(name, image_url), product_variations!units_shop_variation_fkey(name)";
+type Form = { unit: Piece | null; q: string; type: JobType; reason: string; due: string };
 
 export default function ServiceJobsPage() {
   return <Suspense fallback={<ListSkeleton />}><ServiceJobs /></Suspense>;
@@ -43,7 +50,8 @@ function ServiceJobs() {
   const [type, setType] = useState<JobType | "">("");
   const [q, setQ] = useState("");
   const [jobs, setJobs] = useState<Job[] | null>(null);
-  const [form, setForm] = useState<{ code: string; unitId: string | null; type: JobType; reason: string; due: string } | null>(null);
+  const [form, setForm] = useState<Form | null>(null);
+  const [pieces, setPieces] = useState<Piece[] | null>(null);
   const [act, setAct] = useState<{ job: Job; action: "send" | "extend" | "done"; vendor: string; due: string; cost: string; unrepairable: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -65,9 +73,31 @@ function ServiceJobs() {
     if (!unitParam || !jobs) return;
     const openJob = jobs.find((j) => j.unit_id === unitParam && ["todo", "away", "back"].includes(j.status));
     if (openJob) { setTab(openJob.status as Tab); setQ(openJob.units?.code ?? ""); return; }
-    void createClient().from("units").select("code").eq("id", unitParam).maybeSingle().then(({ data }) =>
-      setForm({ code: data?.code ?? "", unitId: unitParam, type: "cleaning", reason: "", due: addDays(today, 2) }));
+    void createClient().from("units").select(PIECE).eq("id", unitParam).maybeSingle().then(({ data }) =>
+      setForm({ unit: (data as unknown as Piece) ?? null, q: "", type: "cleaning", reason: "", due: addDays(today, 2) }));
   }, [unitParam, jobs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the picker's search: pieces whose code or product name matches, retired ones left out
+  const pickQ = form && !form.unit ? form.q.trim().replace(/[%_,()]/g, "") : "";
+  useEffect(() => {
+    setPieces(null);
+    if (!pickQ) return;
+    let stale = false; // a slower answer for an older search must not replace the newer one
+    const t = setTimeout(async () => {
+      const supabase = createClient();
+      const like = `%${pickQ}%`;
+      const { data: products } = await supabase.from("products").select("id").ilike("name", like).limit(30);
+      const ids = (products ?? []).map((p) => p.id);
+      const { data, error } = await supabase.from("units").select(PIECE).neq("status", "retired")
+        .or(ids.length ? `code.ilike.${like},product_id.in.(${ids.join(",")})` : `code.ilike.${like}`).order("code").limit(60);
+      if (stale) return;
+      if (error) return void toast.error(errorText(error));
+      setPieces((data as unknown as Piece[]) ?? []);
+    }, 250);
+    return () => { stale = true; clearTimeout(t); };
+  }, [pickQ]);
+  const openJobOf = (unitId: string) => (jobs ?? []).find((j) => j.unit_id === unitId && ["todo", "away", "back"].includes(j.status));
+  const newJob = () => setForm({ unit: null, q: "", type: "cleaning", reason: "", due: addDays(today, 2) });
 
   const term = q.trim().toLowerCase();
   const shown = useMemo(() => (jobs ?? []).filter((j) => (tab === "history" ? ["done", "cancelled"].includes(j.status) : j.status === tab)
@@ -81,15 +111,10 @@ function ServiceJobs() {
 
   const createJob = async () => {
     if (!form) return;
+    if (!form.unit) return void toast.error("Choose the piece.");
     setBusy(true);
     try {
-      let unitId = form.unitId;
-      if (!unitId) {
-        const { data } = await createClient().from("units").select("id").ilike("code", form.code.trim()).maybeSingle();
-        if (!data) throw new Error(`No piece with code ${form.code.trim()}.`);
-        unitId = data.id;
-      }
-      const res = await call<{ clashes: Clash[] }>("create_service_job", { p_unit_id: unitId, p_type: form.type, p_reason: form.reason, p_due_on: form.due });
+      const res = await call<{ clashes: Clash[] }>("create_service_job", { p_unit_id: form.unit.id, p_type: form.type, p_reason: form.reason, p_due_on: form.due });
       toast.success("Job added");
       warnClashes(res.clashes);
       setForm(null);
@@ -129,7 +154,7 @@ function ServiceJobs() {
   return (
     <>
       <PageHeader title="Cleaning & repairs" subtitle="Pieces at the cleaner or the tailor, and pieces waiting to go."
-        actions={<button className={goldButtonClass} onClick={() => setForm({ code: "", unitId: null, type: "cleaning", reason: "", due: addDays(today, 2) })}>
+        actions={<button className={goldButtonClass} onClick={newJob}>
           <Plus className="h-4 w-4" /> New job</button>} />
       <div className="mb-3 flex flex-wrap gap-1.5" role="tablist">
         {TABS.map(([k, label]) => (
@@ -194,9 +219,40 @@ function ServiceJobs() {
         description="A repair, alteration or other job keeps the piece out of new bookings until its due date."
         footer={<button className={goldButtonClass} disabled={busy} onClick={() => void createJob()}>{busy ? "Saving..." : "Add job"}</button>}>
         {form ? <>
-          <Field label="Piece code">
-            <input className={monoInputClass} value={form.code} readOnly={!!form.unitId} onChange={(e) => setForm({ ...form, code: e.target.value })} />
-          </Field>
+          {form.unit ? (
+            <Field label="Piece">
+              <div className="flex items-center gap-3 rounded-xl border border-gold/60 bg-gold/5 p-2">
+                <PieceRow p={form.unit} branch={activeBranches.length > 1 ? branchName(form.unit.branch_id) : undefined} />
+                <button type="button" className={ghostButtonClass} onClick={() => setForm({ ...form, unit: null })}>Change</button>
+              </div>
+            </Field>
+          ) : (
+            <Field label="Piece" hint="Type the product name or the code on the tag, then tap the exact piece">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input className={cn(inputClass, "pl-9")} autoFocus placeholder="e.g. Sherwani or B3" aria-label="Find the piece"
+                  value={form.q} onChange={(e) => setForm({ ...form, q: e.target.value })} />
+              </div>
+              {pickQ ? (
+                <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto" aria-label="Matching pieces">
+                  {pieces === null ? <li className="px-2 py-3 text-sm text-muted-foreground">Searching...</li>
+                    : !pieces.length ? <li className="px-2 py-3 text-sm text-muted-foreground">No piece matches &quot;{form.q.trim()}&quot;.</li>
+                    : pieces.map((p) => {
+                      const busyJob = openJobOf(p.id);
+                      return (
+                        <li key={p.id}>
+                          <button type="button" disabled={!!busyJob} onClick={() => setForm({ ...form, unit: p })}
+                            className="flex w-full items-center gap-3 rounded-xl border border-border px-2 py-2 text-left hover:border-gold/60 hover:bg-gold/5 disabled:cursor-not-allowed disabled:opacity-50">
+                            <PieceRow p={p} branch={activeBranches.length > 1 ? branchName(p.branch_id) : undefined}
+                              note={busyJob ? `Already in ${TYPE_LABEL[busyJob.type].toLowerCase()}` : p.status === "maintenance" ? "In maintenance" : undefined} />
+                          </button>
+                        </li>
+                      );
+                    })}
+                </ul>
+              ) : null}
+            </Field>
+          )}
           <Field label="Job">
             <select className={inputClass} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as JobType })}>
               {(Object.keys(TYPE_LABEL) as JobType[]).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
@@ -227,5 +283,22 @@ function ServiceJobs() {
         </> : <p className="text-sm text-muted-foreground">The piece becomes available again. A manager or the owner can enter the cost.</p>) : null}
       </Modal>
     </>
+  );
+}
+
+// photo, product, variation and code, so two pieces of the same product can be told apart
+function PieceRow({ p, branch, note }: { p: Piece; branch?: string; note?: string }) {
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-3">
+      {p.products?.image_url
+        ? <img src={p.products.image_url} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
+        : <div className="h-11 w-11 shrink-0 rounded-lg bg-muted" />}
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium">{p.products?.name ?? "Piece"}{p.product_variations?.name ? ` · ${p.product_variations.name}` : ""}</p>
+        <p className="text-xs text-muted-foreground">
+          <span className="font-mono font-semibold text-gold">{p.code}</span>{branch ? ` · ${branch}` : ""}{note ? ` · ${note}` : ""}
+        </p>
+      </div>
+    </div>
   );
 }

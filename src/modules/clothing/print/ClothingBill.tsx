@@ -2,15 +2,19 @@
 
 import type { Shop } from "@/lib/overbooked/AuthContext";
 import { money, type RentalDetail } from "@/lib/shop/api";
-import { CHARGE_LABELS, fmtDate } from "@/lib/shop/format";
+import { CHARGE_LABELS, DEFAULT_TZ } from "@/lib/shop/format";
 import type { Branch } from "@/lib/shop/types";
 
 // The clothing shop's bill, laid out like the paper bill clothing shops use (docs/LAUNCH_PACK_1_PLAN.md, D6):
-// shop header; customer, bill number and bank boxes; items with delivery and return dates; the totals box
-// (Total Amount, Taxable Rent, Disc, Total Taxable, CGST, SGST, Bill Amount, Advance, Payable); GSTIN and the booking
-// number at the bottom left; the terms. Every figure has paise, so the box always adds up.
+// shop logo, name, address and mobiles; name / date / bill no.; address and bank box; items with delivery and return dates,
+// rent, discount and total rent; GSTIN and the booking ref beside the totals box (Total Amount, Taxable Rent, Disc, Total
+// Taxable, CGST, SGST, Bill Amount, Advance, Payable); the terms. One table, so every column lines up top to bottom.
+// Every figure has paise, so the box always adds up. The shop's own name and details only: no Overbooked branding.
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const inr = (n: number) => "₹" + r2(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// dd/mm/yyyy like the paper bill; a bare date (yyyy-mm-dd) is not shifted by the time zone
+const dmy = (iso: string | null | undefined, tz = DEFAULT_TZ) => !iso ? "" : new Date(iso.length === 10 ? iso + "T12:00:00Z" : iso)
+  .toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: iso.length === 10 ? "UTC" : tz });
 
 // the late-fee line of the terms, from the rules copied onto this booking (migration 037), so paper and return screen agree
 function lateLine(t: Record<string, unknown> | null | undefined): string | null {
@@ -21,6 +25,9 @@ function lateLine(t: Record<string, unknown> | null | undefined): string | null 
   const what = pct === 200 ? "Double fare" : pct === 100 ? "One more day's fare" : `${pct}% of the day's fare`;
   return `Late return: ${what} ${count}${t.cutoff ? ` (returned after ${t.cutoff} counts the return day)` : ""}.`;
 }
+
+const B = "border border-black";
+const LABEL = "font-serif font-bold whitespace-nowrap";
 
 export function ClothingBill({ shop, branch, r, tz }: { shop: Shop; branch: Branch | null; r: RentalDetail; tz: string }) {
   const s = (shop.settings ?? {}) as Record<string, unknown>;
@@ -34,11 +41,11 @@ export function ClothingBill({ shop, branch, r, tz }: { shop: Shop; branch: Bran
   // what the invoice billed: charges added after it are on the supplementary bill, not here
   const later = r.rental_documents.filter((d) => d.kind === "supplementary").map((d) => d.created_at ?? "").sort()[0];
   const charges = r.rental_charges.filter((c) => !isInvoice || !later || c.created_at < later);
-  const start = fmtDate(r.actual_start_at ?? r.start_at, tz);
-  const end = fmtDate(r.actual_end_at ?? r.end_at, tz);
+  const start = dmy(r.actual_start_at ?? r.start_at, tz);
+  const end = dmy(r.actual_end_at ?? r.end_at, tz);
   const rows = [
-    ...r.rental_lines.map((l) => ({ id: l.id, text: `${l.description}${l.qty > 1 ? ` × ${l.qty}` : ""}`, amount: Number(l.amount) })),
-    ...r.rental_add_ons.map((a) => ({ id: a.id, text: `${a.name}${Number(a.quantity) > 1 ? ` × ${Number(a.quantity)}` : ""}`, amount: Number(a.amount) })),
+    ...r.rental_lines.map((l) => ({ id: l.id, text: `${l.description} (Qty: ${l.qty})`, amount: Number(l.amount) })),
+    ...r.rental_add_ons.map((a) => ({ id: a.id, text: `${a.name} (Qty: ${Number(a.quantity)})`, amount: Number(a.amount) })),
     ...charges.map((c) => ({ id: c.id, text: `${CHARGE_LABELS[c.type]}${c.note ? `: ${c.note}` : ""}`, amount: Number(c.amount) })),
   ];
 
@@ -52,128 +59,148 @@ export function ClothingBill({ shop, branch, r, tz }: { shop: Shop; branch: Bran
   const cgst = r2(tax / 2);
   const sgst = r2(tax - cgst);
 
+  // the booking's discount spread over the lines by amount, the last line takes the rounding, so the column sums to the box
+  let left = disc;
+  const lines = rows.map((x, i) => {
+    const d = i === rows.length - 1 ? r2(left) : gross ? r2((disc * x.amount) / gross) : 0;
+    left = r2(left - d);
+    return { ...x, rent: ex(x.amount), disc: ex(d), total: r2(x.amount - d) };
+  });
+
   const phones = [branch?.phone, shop.phone].filter((p, i, a) => p && a.indexOf(p) === i);
-  const place = [branch?.address || shop.address, [branch?.city || shop.city, branch?.state || shop.state, branch?.pincode || shop.pincode].filter(Boolean).join(", ")]
-    .filter(Boolean);
+  const place = [branch?.address || shop.address, branch?.city || shop.city, branch?.state || shop.state]
+    .filter(Boolean).join(", ") + ((branch?.pincode || shop.pincode) ? `-${branch?.pincode || shop.pincode}` : "");
   const terms = [
     ...String(s.bill_terms ?? "").split("\n").map((t) => t.trim()).filter(Boolean),
     lateLine(r.late_terms as Record<string, unknown> | null),
     s.cancel_keeps_advance ? "If a booking is cancelled, the advance is not refunded." : null,
   ].filter(Boolean) as string[];
-  const title = isInvoice ? "Tax invoice" : closed ? "Cancellation receipt" : "Bill";
+  // a plain bill has no title, like the paper one; a tax invoice must say so
+  const title = isInvoice ? "Tax Invoice" : closed ? "Cancellation Receipt" : null;
+
+  // the totals between Total Amount and Advance; the GSTIN / ref cell on the left spans them
+  const middle: [string, string, boolean?][] = [
+    ...(isInvoice ? [["Taxable Rent", inr(taxableRent)] as [string, string]] : []),
+    ["Disc. (-)", inr(isInvoice ? discTaxable : disc)],
+    ...(isInvoice ? [
+      ["Total Taxable Amt.", inr(totalTaxable)],
+      [`CGST(${gst / 2}%)`, inr(cgst), true],
+      [`SGST(${gst / 2}%)`, inr(sgst), true],
+    ] as [string, string, boolean][] : []),
+    ...(closed ? [["Cancellation fee", inr(bill)] as [string, string]] : []),
+    ["Bill Amount", inr(bill)],
+  ];
+  const cells = Math.max(0, 10 - lines.length);
 
   return (
-    <div className="mx-auto max-w-[780px] p-6 text-[12.5px]">
-      <style>{`@media print { thead { display: table-header-group; } .bill-box { break-inside: avoid; } }`}</style>
-      <header className="border border-black p-3 text-center">
-        {shop.logo_url ? <img src={shop.logo_url} alt="" className="mx-auto mb-1 h-12 w-auto object-contain" /> : null}
-        <h1 className="text-xl font-bold uppercase">{shop.name}</h1>
-        {place.map((p) => <p key={p}>{p}</p>)}
-        {phones.length ? <p>Ph: {phones.join(", ")}</p> : null}
-        <p className="mt-1 text-[13px] font-bold uppercase tracking-wide">{title}</p>
-      </header>
+    <div className="mx-auto max-w-[800px] p-4 font-sans text-[12px] leading-snug text-black">
+      <style>{`@media print { .bill-shade { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }`}</style>
+      <div className="border border-black">
+        <header className="flex items-start gap-4 px-2 py-2">
+          {shop.logo_url ? <img src={shop.logo_url} alt="" className="h-20 w-24 shrink-0 object-contain" /> : null}
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[22px] font-bold leading-tight">{shop.name}</h1>
+            {place ? <p className="text-[14px]">{place}</p> : null}
+            {phones.length ? <p className="mt-1 text-[14px]"><b>Mo.:</b> {phones.join(" | ")}</p> : null}
+          </div>
+          {title ? <p className="shrink-0 font-bold uppercase tracking-wide">{title}</p> : null}
+        </header>
 
-      <section className="grid grid-cols-[1.3fr_1fr] border-x border-b border-black">
-        <div className="border-r border-black p-2">
-          <p className="text-[11px] uppercase text-gray-600">Customer</p>
-          <p className="font-semibold">{r.customers.full_name}</p>
-          {r.customers.address ? <p>{r.customers.address}</p> : null}
-          <p>Mobile: {r.customers.phone}</p>
-        </div>
-        <div className="p-2">
-          <p>Bill no.: <span className="font-mono font-semibold">{r.invoice_no ?? r.token}</span></p>
-          <p>Bill date: {fmtDate(r.invoice_date ?? r.created_at, tz)}</p>
-          {s.bank_name ? (
-            <div className="mt-1 border-t border-gray-300 pt-1 text-[11.5px]">
-              <p>Bank: {String(s.bank_name)}</p>
-              {s.bank_holder ? <p>A/C name: {String(s.bank_holder)}</p> : null}
-              {s.bank_last4 ? <p>A/C: XXXX{String(s.bank_last4)}</p> : null}
-              {s.bank_ifsc ? <p>IFSC: {String(s.bank_ifsc)}</p> : null}
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      <table className="w-full border-collapse border-x border-b border-black">
-        <thead>
-          <tr className="border-b border-black text-left text-[11px] uppercase">
-            <th className="w-10 border-r border-black p-1.5">No.</th>
-            <th className="border-r border-black p-1.5">Description</th>
-            <th className="w-24 border-r border-black p-1.5">Delivery</th>
-            <th className="w-24 border-r border-black p-1.5">Return</th>
-            <th className="w-28 p-1.5 text-right">{isInvoice ? "Rent (taxable)" : "Rent"}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((x, i) => (
-            <tr key={x.id} className="align-top">
-              <td className="border-r border-black p-1.5">{i + 1}</td>
-              <td className="border-r border-black p-1.5">{x.text}</td>
-              <td className="border-r border-black p-1.5">{start}</td>
-              <td className="border-r border-black p-1.5">{end}</td>
-              <td className="p-1.5 text-right tabular-nums">{inr(isInvoice ? ex(x.amount) : x.amount)}</td>
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[5%]" /><col className="w-[30%]" /><col className="w-[13%]" /><col className="w-[13%]" />
+            <col className="w-[12%]" /><col className="w-[12%]" /><col className="w-[15%]" />
+          </colgroup>
+          <tbody>
+            <tr>
+              <td colSpan={4} className={`${B} border-l-0 px-1 py-1`}><b>Name:</b> {r.customers.full_name}</td>
+              <td className={`${B} ${LABEL} px-1 py-1 text-center`}>{dmy(r.invoice_date ?? r.created_at, tz)}</td>
+              <td colSpan={2} className={`${B} border-r-0 px-1 py-1 text-right`}><span className={LABEL}>Bill No.:</span> {r.invoice_no ?? r.token}</td>
             </tr>
-          ))}
-          {/* keeps the body tall, like the paper bill */}
-          <tr style={{ height: `${Math.max(40, 220 - rows.length * 28)}px` }}>
-            <td className="border-r border-black" /><td className="border-r border-black" /><td className="border-r border-black" /><td className="border-r border-black" /><td />
-          </tr>
-        </tbody>
-      </table>
+            <tr>
+              <td colSpan={4} className={`${B} border-l-0 h-[46px] px-1 py-1 align-top`}><b>Address:</b> {r.customers.address ?? ""}</td>
+              <td colSpan={3} rowSpan={2} className={`${B} border-r-0 px-1 py-1 align-top text-[11px] font-semibold`}>
+                <p>Bank Name: <span className="font-normal">{String(s.bank_name ?? "")}</span></p>
+                <p className="mt-1.5">IFSC: <span className="font-normal">{String(s.bank_ifsc ?? "")}</span></p>
+                <p className="mt-1.5">A/C No.: <span className="font-normal">{s.bank_last4 ? `XXXX${String(s.bank_last4)}` : ""}</span></p>
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={4} className={`${B} border-l-0 px-1 py-1 font-serif`}><b>Mobile:</b> {r.customers.phone}</td>
+            </tr>
 
-      <section className="bill-box grid grid-cols-[1fr_17rem] border-x border-b border-black">
-        <div className="flex flex-col justify-between border-r border-black p-2">
-          <div>
-            {Number(r.deposit_agreed) > 0 || Number(r.deposit_received) > 0 ? (
-              <p>Security deposit (refundable): {inr(Number(r.deposit_received) || Number(r.deposit_agreed))}
-                {Number(r.deposit_received) ? " received" : " to bring"}. Not part of the bill.</p>
-            ) : null}
-            {isInvoice && r.rental_documents.length ? (
-              <div className="mt-2 text-[11.5px]">
-                <p className="font-semibold">After this invoice</p>
-                {r.rental_documents.map((d) => (
-                  <p key={d.id}>{d.kind === "credit_note" ? "Credit note" : "Supplementary bill"} {d.number}: {d.kind === "credit_note" ? "−" : ""}{inr(Number(d.amount))}</p>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <div className="mt-3 text-[11px]">
-            {shop.gstin ? <p>GSTIN: {shop.gstin}</p> : null}
-            {isInvoice && s.sac_code ? <p>SAC: {String(s.sac_code)}</p> : null}
-            <p className="text-gray-600">ref: {r.token}</p>
-          </div>
-        </div>
-        <dl className="text-[12.5px]">
-          <Line label="Total Amount" value={inr(gross)} />
-          {isInvoice ? <Line label="Taxable Rent" value={inr(taxableRent)} /> : null}
-          <Line label="Disc (−)" value={disc ? inr(isInvoice ? discTaxable : disc) : "—"} />
-          {isInvoice ? <>
-            <Line label="Total Taxable Amt" value={inr(totalTaxable)} />
-            <Line label={`CGST ${gst / 2}%`} value={inr(cgst)} />
-            <Line label={`SGST ${gst / 2}%`} value={inr(sgst)} />
-          </> : null}
-          {closed ? <Line label="Cancellation fee" value={inr(bill)} /> : null}
-          <Line label="Bill Amount" value={inr(bill)} strong />
-          <Line label="Advance (−)" value={inr(m.paid)} />
-          <Line label={isInvoice && m.total !== bill ? "Payable (with later bills)" : "Payable Amt"} value={inr(Math.max(0, m.balance))} strong />
-        </dl>
-      </section>
+            <tr className="bill-shade bg-gray-300 text-left">
+              <th className={`${B} border-l-0 ${LABEL} px-1 py-0.5`}>No.</th>
+              <th className={`${B} ${LABEL} px-1 py-0.5`}>Description</th>
+              <th className={`${B} ${LABEL} px-1 py-0.5`}>Delivery</th>
+              <th className={`${B} ${LABEL} px-1 py-0.5`}>Return</th>
+              <th className={`${B} ${LABEL} px-1 py-0.5 text-right`}>Rent</th>
+              <th className={`${B} ${LABEL} px-1 py-0.5 text-right`}>Discount</th>
+              <th className={`${B} border-r-0 ${LABEL} px-1 py-0.5 text-right`}>Total Rent</th>
+            </tr>
+            {lines.map((x, i) => (
+              <tr key={x.id} className="align-top">
+                <td className="border-r border-black px-1 py-1 text-center font-serif">{i + 1}</td>
+                <td className="border-r border-black px-1 py-1">{x.text}</td>
+                <td className="whitespace-nowrap border-r border-black px-1 py-1">{start}</td>
+                <td className="whitespace-nowrap border-r border-black px-1 py-1">{end}</td>
+                <td className="border-r border-black px-1 py-1 text-right tabular-nums">{inr(x.rent)}</td>
+                <td className="border-r border-black px-1 py-1 text-right tabular-nums">{inr(x.disc)}</td>
+                <td className="px-1 py-1 text-right tabular-nums">{inr(x.total)}</td>
+              </tr>
+            ))}
+            {/* keeps the body tall with its column lines, like the paper bill */}
+            <tr style={{ height: `${cells * 42 + 40}px` }}>
+              {[0, 1, 2, 3, 4, 5].map((k) => <td key={k} className="border-r border-black" />)}<td />
+            </tr>
 
-      {terms.length ? (
-        <ol className="border-x border-b border-black p-2 pl-6 text-[11.5px] [list-style:disc]">
-          {terms.map((t) => <li key={t}>{t}</li>)}
-        </ol>
-      ) : null}
-      {isInvoice ? <p className="mt-1 text-[10.5px] text-gray-600">Prices include GST.</p> : null}
-      <p className="mt-6 text-center text-[10px] text-gray-400">Generated by Overbooked</p>
-    </div>
-  );
-}
-
-function Line({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className={`flex justify-between border-b border-black px-2 py-1 last:border-b-0 ${strong ? "font-bold" : ""}`}>
-      <dt>{label}</dt><dd className="tabular-nums">{value}</dd>
+            <tr>
+              <td colSpan={4} className={`${B} border-l-0 px-1 py-1 font-serif`}>{shop.gstin ? <>GSTIN: {shop.gstin}</> : null}</td>
+              <td colSpan={2} className={`${B} ${LABEL} px-1 py-1 text-right`}>Total Amount</td>
+              <td className={`${B} border-r-0 px-1 py-1 text-right tabular-nums`}>{inr(gross)}</td>
+            </tr>
+            {middle.map(([label, value, small], i) => (
+              <tr key={label}>
+                {i === 0 ? (
+                  <td colSpan={4} rowSpan={middle.length} className={`${B} border-l-0 px-1 py-1 align-top text-[11px]`}>
+                    <p>ref: {r.token}</p>
+                    {isInvoice && s.sac_code ? <p>SAC: {String(s.sac_code)}</p> : null}
+                    {Number(r.deposit_agreed) > 0 || Number(r.deposit_received) > 0 ? (
+                      <p className="mt-1">Security deposit (refundable): {inr(Number(r.deposit_received) || Number(r.deposit_agreed))}
+                        {Number(r.deposit_received) ? " received" : " to bring"}. Not part of the bill.</p>
+                    ) : null}
+                    {isInvoice && r.rental_documents.length ? (
+                      <div className="mt-1">
+                        <p className="font-semibold">After this invoice</p>
+                        {r.rental_documents.map((d) => (
+                          <p key={d.id}>{d.kind === "credit_note" ? "Credit note" : "Supplementary bill"} {d.number}: {d.kind === "credit_note" ? "−" : ""}{inr(Number(d.amount))}</p>
+                        ))}
+                      </div>
+                    ) : null}
+                    {isInvoice ? <p className="mt-1">Prices include GST.</p> : null}
+                  </td>
+                ) : null}
+                <td colSpan={2} className={`${B} ${LABEL} px-1 ${small ? "py-0.5 text-[10.5px]" : "py-1"} text-right`}>{label}</td>
+                <td className={`${B} border-r-0 px-1 ${small ? "py-0.5 font-serif text-[10.5px]" : "py-1"} text-right tabular-nums`}>{value}</td>
+              </tr>
+            ))}
+            {([["Advance (-)", inr(m.paid)], [isInvoice && m.total !== bill ? "Payable (with later bills)" : "Payable Amt.", inr(Math.max(0, m.balance))]] as const)
+              .map(([label, value]) => (
+                <tr key={label}>
+                  <td colSpan={2} className={`${B} border-l-0 h-[26px]`} />
+                  <td colSpan={2} className={B} />
+                  <td colSpan={2} className={`${B} ${LABEL} px-1 py-1 text-right`}>{label}</td>
+                  <td className={`${B} border-r-0 px-1 py-1 text-right tabular-nums`}>{value}</td>
+                </tr>
+              ))}
+            <tr>
+              <td colSpan={7} className="h-[130px] border-t border-black px-1 py-1 align-top text-[12px]">
+                {terms.map((t) => <p key={t}>• {t}</p>)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
