@@ -37,7 +37,7 @@ export interface ShopModule {
 export const shopModules: Record<ModuleKey, ShopModule> = {
   clothing: {
     nav: clothingNav, Home: TrendzDashboard, tagline: "Rental Studio",
-    screens: ["/checkout", "/finance", "/bookings", "/active-rentals", "/history", "/all-rentals", "/scan","/catalog/bulk", "/catalog/earnings", "/admin/attributes", "/admin/sku"],
+    screens: ["/checkout", "/finance", "/bookings", "/active-rentals", "/history", "/all-rentals", "/scan", "/cleaning","/catalog/bulk", "/catalog/earnings", "/admin/attributes", "/admin/sku"],
     ProductForm: ProductWizard, productsTitle: "All Products", importSkus,
     BookingForm, bookingByPiece: true, PrintBill: ClothingBill,
     replace: (path, canManage) => (path === "/rentals" ? "/bookings" : path === "/all-rentals" ? "/catalog" : path === "/dashboard" ? (canManage ? "/finance" : "/")

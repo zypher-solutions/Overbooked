@@ -35,7 +35,7 @@ interface Entry {
   changes: Record<string, { from?: string; to?: string; count?: number }> | null;
   snapshot: Record<string, unknown> | null;
 }
-type Area = "bookings" | "carts" | "money" | "customers" | "products" | "appointments" | "staff" | "branches" | "settings" | "account";
+type Area = "bookings" | "carts" | "money" | "customers" | "products" | "appointments" | "staff" | "branches" | "settings" | "account" | "service";
 type Tone = "accent" | "gold" | "emerald" | "rust" | "muted" | "indigo";
 type Period = "today" | "7" | "30" | "90" | "custom";
 
@@ -48,6 +48,7 @@ const AREAS: Record<Area, { label: string; tone: Tone }> = {
   appointments: { label: "Appointments", tone: "indigo" },
   staff: { label: "Staff", tone: "rust" },
   branches: { label: "Branches", tone: "muted" },
+  service: { label: "Cleaning & repairs", tone: "gold" },
   settings: { label: "Settings", tone: "muted" },
   account: { label: "Sign-in", tone: "muted" },
 };

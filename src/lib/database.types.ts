@@ -323,6 +323,18 @@ isOneToOne: false
                     "amount"?: number,"created_at"?: string,"doc_date"?: string,"id"?: string,"issued_by"?: string | null,"kind"?: string,"number"?: string,"reason"?: string | null,"rental_id"?: string,"shop_id"?: string
                   }
                   Relationships: []
+                },"service_jobs": {
+                  Row: {
+                    "back_on": string | null,"branch_id": string,"cost": number | null,"created_at": string,"created_by": string | null,"done_on": string | null,"due_on": string,"expense_id": string | null,"id": string,"outcome": string | null,"reason": string | null,"rental_id": string | null,"sent_on": string | null,"shop_id": string,"status": string,"type": string,"unit_id": string,"updated_at": string,"vendor": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "back_on"?: string | null,"branch_id"?: string,"cost"?: number | null,"created_at"?: string,"created_by"?: string | null,"done_on"?: string | null,"due_on"?: string,"expense_id"?: string | null,"id"?: string,"outcome"?: string | null,"reason"?: string | null,"rental_id"?: string | null,"sent_on"?: string | null,"shop_id"?: string,"status"?: string,"type"?: string,"unit_id"?: string,"updated_at"?: string,"vendor"?: string | null
+                  }
+                  Update: {
+                    "back_on"?: string | null,"branch_id"?: string,"cost"?: number | null,"created_at"?: string,"created_by"?: string | null,"done_on"?: string | null,"due_on"?: string,"expense_id"?: string | null,"id"?: string,"outcome"?: string | null,"reason"?: string | null,"rental_id"?: string | null,"sent_on"?: string | null,"shop_id"?: string,"status"?: string,"type"?: string,"unit_id"?: string,"updated_at"?: string,"vendor"?: string | null
+                  }
+                  Relationships: []
                 },"price_changes": {
                   Row: {
                     "amount": number,"created_at": string,"created_by": string | null,"id": string,"kind": string,"line_id": string | null,"previous": number,"rental_id": string,"shop_id": string
@@ -1288,6 +1300,12 @@ isOneToOne: false
                            },
 "issue_credit_note":
 { Args: { "p_amount": number,"p_reason": string,"p_rental_id": string }; Returns: Json
+                           },
+"create_service_job":
+{ Args: { "p_due_on": string,"p_reason": string,"p_rental_id"?: string,"p_type": string,"p_unit_id": string,"p_vendor"?: string }; Returns: Json
+                           },
+"update_service_job":
+{ Args: { "p"?: Json,"p_action": string,"p_job_id": string }; Returns: Json
                            },
 "set_handover_hold":
 { Args: { "p_note": string,"p_rental_id": string }; Returns: undefined
