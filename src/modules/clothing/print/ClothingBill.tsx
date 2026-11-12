@@ -31,6 +31,11 @@ const LABEL = "font-serif font-bold whitespace-nowrap";
 
 export function ClothingBill({ shop, branch, r, tz }: { shop: Shop; branch: Branch | null; r: RentalDetail; tz: string }) {
   const s = (shop.settings ?? {}) as Record<string, unknown>;
+  // the booking's branch may print its own GSTIN and bank (migration 042); blank = the shop's
+  const own = (branch?.settings ?? {}) as Record<string, unknown>;
+  const bankOwn = !!own.bank_name;
+  const bank = (k: string) => String((bankOwn ? own[k] : s[k]) ?? "");
+  const gstin = branch?.gstin || shop.gstin;
   const m = money(r);
   const gst = Number(s.gst_percent ?? 0);
   const isInvoice = !!r.invoice_no;
@@ -120,9 +125,9 @@ export function ClothingBill({ shop, branch, r, tz }: { shop: Shop; branch: Bran
             <tr>
               <td colSpan={4} className={`${B} border-l-0 h-[46px] px-1 py-1 align-top`}><b>Address:</b> {r.customers.address ?? ""}</td>
               <td colSpan={3} rowSpan={2} className={`${B} border-r-0 px-1 py-1 align-top text-[11px] font-semibold`}>
-                <p>Bank Name: <span className="font-normal">{String(s.bank_name ?? "")}</span></p>
-                <p className="mt-1.5">IFSC: <span className="font-normal">{String(s.bank_ifsc ?? "")}</span></p>
-                <p className="mt-1.5">A/C No.: <span className="font-normal">{s.bank_last4 ? `XXXX${String(s.bank_last4)}` : ""}</span></p>
+                <p>Bank Name: <span className="font-normal">{bank("bank_name")}</span></p>
+                <p className="mt-1.5">IFSC: <span className="font-normal">{bank("bank_ifsc")}</span></p>
+                <p className="mt-1.5">A/C No.: <span className="font-normal">{bank("bank_last4") ? `XXXX${bank("bank_last4")}` : ""}</span></p>
               </td>
             </tr>
             <tr>
@@ -155,7 +160,7 @@ export function ClothingBill({ shop, branch, r, tz }: { shop: Shop; branch: Bran
             </tr>
 
             <tr>
-              <td colSpan={4} className={`${B} border-l-0 px-1 py-1 font-serif`}>{shop.gstin ? <>GSTIN: {shop.gstin}</> : null}</td>
+              <td colSpan={4} className={`${B} border-l-0 px-1 py-1 font-serif`}>{gstin ? <>GSTIN: {gstin}</> : null}</td>
               <td colSpan={2} className={`${B} ${LABEL} px-1 py-1 text-right`}>Total Amount</td>
               <td className={`${B} border-r-0 px-1 py-1 text-right tabular-nums`}>{inr(gross)}</td>
             </tr>

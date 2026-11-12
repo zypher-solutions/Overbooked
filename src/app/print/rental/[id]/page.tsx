@@ -82,7 +82,7 @@ export default function PrintRental() {
             <h1 className="text-xl font-bold">{shop.name}</h1>
             <p>{branch?.address || shop.address}</p>
             <p>{[branch?.phone || shop.phone, shop.email].filter(Boolean).join(" · ")}</p>
-            {shop.gstin ? <p>GSTIN: {shop.gstin}</p> : null}
+            {branch?.gstin || shop.gstin ? <p>GSTIN: {branch?.gstin || shop.gstin}</p> : null}
           </div>
           <div className="text-right">
             <p className="text-lg font-bold uppercase tracking-wide">{isInvoice ? "Tax invoice" : closed ? "Cancellation receipt" : "Receipt"}</p>

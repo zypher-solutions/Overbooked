@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(36);
+SELECT plan(40);
 
 \set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
@@ -117,6 +117,16 @@ SELECT lives_ok($$ INSERT INTO rental_checks (shop_id, rental_id, unit_id, phase
   SELECT shop_id, rental_id, unit_id, 'pickup', 1200, 'aaaaaaaa-0000-0000-0000-000000000011' FROM unit_reservations
   WHERE rental_id = (SELECT id FROM rentals WHERE token = 'KAL-2026-0001') LIMIT 1 $$, 'a check with no condition never blocks the work');
 SELECT pg_temp.act_as(:bridal_owner);
+
+-- ===== a branch's own GSTIN and bank (migration 042) are logged under the branch =====
+SELECT lives_ok($$ SELECT public.setup_save_branch(:kalyani, 'b0000000-0000-0000-0000-000000000001', '{"gstin": "32abcde1234f1z5"}') $$,
+  'the owner gives a branch its own GSTIN');
+SELECT lives_ok($$ SELECT public.update_branch_settings('b0000000-0000-0000-0000-000000000001', '{"bank_name": "QA Bank", "bank_ifsc": "QABK0001234"}') $$,
+  'and its own bank');
+SELECT ok((SELECT changes ? 'GSTIN' AND changes ? 'Bank name' FROM v_new WHERE record_id = 'b0000000-0000-0000-0000-000000000001' AND area = 'branches'
+           ORDER BY id DESC LIMIT 1), 'the branch''s GSTIN and bank changes are logged');
+SELECT throws_like($$ SELECT public.setup_save_branch(:kalyani, 'b0000000-0000-0000-0000-000000000001', '{"gstin": "BAD"}') $$,
+  'A GST number has 15 characters%', 'a wrong GSTIN is refused');
 
 -- ===== who reads it =====
 SELECT ok((SELECT count(*) FROM activity_log) > 0, 'the owner reads their shop''s log');

@@ -129,14 +129,14 @@ isOneToOne: false
                   ]
                 },"branches": {
                   Row: {
-                    "address": string | null,"city": string | null,"pincode": string | null,"settings": Json,"state": string | null,"created_at": string,"email": string | null,"id": string,"is_active": boolean,"name": string,"phone": string | null,"shop_id": string,"slug": string
+                    "address": string | null,"gstin": string | null,"city": string | null,"pincode": string | null,"settings": Json,"state": string | null,"created_at": string,"email": string | null,"id": string,"is_active": boolean,"name": string,"phone": string | null,"shop_id": string,"slug": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"city"?: string | null,"pincode"?: string | null,"settings"?: Json,"state"?: string | null,"created_at"?: string,"email"?: string | null,"id"?: string,"is_active"?: boolean,"name": string,"phone"?: string | null,"shop_id": string,"slug": string
+                    "address"?: string | null,"gstin"?: string | null,"city"?: string | null,"pincode"?: string | null,"settings"?: Json,"state"?: string | null,"created_at"?: string,"email"?: string | null,"id"?: string,"is_active"?: boolean,"name": string,"phone"?: string | null,"shop_id": string,"slug": string
                   }
                   Update: {
-                    "address"?: string | null,"city"?: string | null,"pincode"?: string | null,"settings"?: Json,"state"?: string | null,"created_at"?: string,"email"?: string | null,"id"?: string,"is_active"?: boolean,"name"?: string,"phone"?: string | null,"shop_id"?: string,"slug"?: string
+                    "address"?: string | null,"gstin"?: string | null,"city"?: string | null,"pincode"?: string | null,"settings"?: Json,"state"?: string | null,"created_at"?: string,"email"?: string | null,"id"?: string,"is_active"?: boolean,"name"?: string,"phone"?: string | null,"shop_id"?: string,"slug"?: string
                   }
                   Relationships: [
                     {

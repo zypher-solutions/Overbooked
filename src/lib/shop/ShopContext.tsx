@@ -57,7 +57,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const supabase = createClient();
     const [b, c, t, a, at] = await Promise.all([
-      supabase.from("branches").select("id, name, slug, is_active, phone, address, email, city, state, pincode, settings").order("created_at"),
+      supabase.from("branches").select("id, name, slug, is_active, phone, address, email, city, state, pincode, gstin, settings").order("created_at"),
       supabase.from("categories").select("id, name, template_key, sku_prefix").order("name"),
       supabase.from("business_templates").select("*").order("sort"),
       // "*": works before and after migration 029 adds category_ids and quantity

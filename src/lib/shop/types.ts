@@ -32,6 +32,8 @@ export interface Template {
 export interface Branch {
   id: string; name: string; slug: string; is_active: boolean; phone: string | null; address: string | null; email: string | null;
   city?: string | null; state?: string | null; pincode?: string | null;
+  /** printed on this branch's bills instead of the shop's (migration 042) */
+  gstin?: string | null;
   /** this branch's own settings; a key it does not have follows the shop (migration 038) */
   settings?: Record<string, unknown>;
 }

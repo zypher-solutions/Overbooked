@@ -61,12 +61,12 @@ function rowsFor(o: { clothing: boolean; hasRoom: boolean; hasVehicle: boolean }
       hint: "One per line. The late-fee line is added from the late-return rules, so the bill and the return screen agree" },
     { key: "cancel_keeps_advance", section: "Receipts & tax", label: "Advance is kept when a booking is cancelled", kind: "switch", fallback: false, perBranch: false,
       hint: "Fills in the cancellation fee with what was paid, and prints the rule on the bill" },
-    { key: "bank_name", section: "Receipts & tax", label: "Bank name (optional)", kind: "line", maxLen: 60, fallback: "", perBranch: false,
+    { key: "bank_name", section: "Receipts & tax", label: "Bank name (optional)", kind: "line", maxLen: 60, fallback: "", perBranch: true,
       hint: "Printed on the bill so customers can pay by transfer" },
-    { key: "bank_holder", section: "Receipts & tax", label: "Account holder (optional)", kind: "line", maxLen: 80, fallback: "", perBranch: false, hint: "" },
-    { key: "bank_last4", section: "Receipts & tax", label: "Last 4 digits of the account (optional)", kind: "text", maxLen: 4, fallback: "", perBranch: false,
+    { key: "bank_holder", section: "Receipts & tax", label: "Account holder (optional)", kind: "line", maxLen: 80, fallback: "", perBranch: true, hint: "" },
+    { key: "bank_last4", section: "Receipts & tax", label: "Last 4 digits of the account (optional)", kind: "text", maxLen: 4, fallback: "", perBranch: true,
       pattern: [/^([0-9]{4})?$/, "Enter only the last 4 digits."], hint: "Only the last 4 digits are kept; prints as XXXX1234. Never enter the full number" },
-    { key: "bank_ifsc", section: "Receipts & tax", label: "IFSC (optional)", kind: "line", maxLen: 11, upper: true, fallback: "", perBranch: false,
+    { key: "bank_ifsc", section: "Receipts & tax", label: "IFSC (optional)", kind: "line", maxLen: 11, upper: true, fallback: "", perBranch: true,
       pattern: [/^([A-Z]{4}0[A-Z0-9]{6})?$/, "The IFSC is 11 characters, like SBIN0001234."], hint: "" },
   ];
   if (o.clothing) {
@@ -247,8 +247,8 @@ export default function SettingsPage() {
         </div>
         <p className="mb-3 text-xs text-muted-foreground">
           The bill prints the logo, shop name, address, phones and GSTIN from{" "}
-          <Link href="/branches" className="underline">Branch management</Link> (a branch&apos;s own address and phone come first),
-          and the bank details, GST and terms from Receipts &amp; tax below.
+          <Link href="/branches" className="underline">Branch management</Link> (a branch&apos;s own address, phone and GSTIN come first),
+          and the bank details, GST and terms from Receipts &amp; tax below (pick a branch above to give it its own bank).
         </p>
         {branch ? (
           <p className="mb-3 text-xs text-muted-foreground">
