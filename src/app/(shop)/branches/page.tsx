@@ -5,6 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
+import imageCompression from "browser-image-compression";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
@@ -43,9 +44,30 @@ export default function BranchManagement() {
   const { shop, isOwner, isSupport } = useShop();
   const [f, setF] = useState({
     name: shop.name, phone: shop.phone ?? "", email: shop.email ?? "", address: shop.address ?? "",
-    city: shop.city ?? "", state: shop.state ?? "", pincode: shop.pincode ?? "", gstin: shop.gstin ?? "",
+    city: shop.city ?? "", state: shop.state ?? "", pincode: shop.pincode ?? "", gstin: shop.gstin ?? "", logo_url: shop.logo_url ?? "",
   });
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  // the logo printed on the bill: into the shop's folder of product_images (public links, owner/manager write only)
+  const uploadLogo = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const small = await imageCompression(file, { maxSizeMB: 0.3, maxWidthOrHeight: 600, useWebWorker: true });
+      const ext = small.type === "image/png" ? "png" : small.type === "image/webp" ? "webp" : "jpg";
+      const path = `${shop.id}/logo-${crypto.randomUUID()}.${ext}`;
+      const supabase = createClient();
+      const { error } = await supabase.storage.from("product_images").upload(path, small, { contentType: small.type || "image/jpeg" });
+      if (error) throw error;
+      setF((x) => ({ ...x, logo_url: supabase.storage.from("product_images").getPublicUrl(path).data.publicUrl }));
+      toast.success("Logo added. Save details to keep it.");
+    } catch (e) {
+      toast.error(errorText(e));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (!isOwner) return <Panel><p className="text-sm text-muted-foreground">Only the owner can manage branches and the shop&apos;s details.</p></Panel>;
 
@@ -59,6 +81,7 @@ export default function BranchManagement() {
         p: {
           name: f.name.trim().replace(/\s+/g, " "), phone: normalizePhone(f.phone), email: normalizeEmail(f.email), address: f.address.trim(),
           city: f.city.trim(), state: f.state, pincode: f.pincode.trim(), gstin: f.gstin.trim().toUpperCase(),
+          logo_url: f.logo_url,
         },
       });
       toast.success("Saved");
@@ -81,16 +104,27 @@ export default function BranchManagement() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Shop details">
           <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Logo" hint="Printed at the top left of the bill. PNG or JPG" className="sm:col-span-2">
+              <div className="flex items-center gap-3">
+                {f.logo_url ? <img src={f.logo_url} alt="Shop logo" className="h-16 w-20 rounded border border-border bg-white object-contain" /> : null}
+                <label className={ghostButtonClass + " cursor-pointer"}>
+                  {uploading ? "Uploading..." : f.logo_url ? "Change logo" : "Upload logo"}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={uploading}
+                    onChange={(e) => { void uploadLogo(e.target.files?.[0]); e.target.value = ""; }} />
+                </label>
+                {f.logo_url ? <button type="button" className={ghostButtonClass} onClick={() => setF({ ...f, logo_url: "" })}>Remove</button> : null}
+              </div>
+            </Field>
             <Field label="Shop name" hint="Shown on bills and messages" className="sm:col-span-2">
               <input className={inputClass} value={f.name} maxLength={80} onChange={(e) => setF({ ...f, name: e.target.value })} />
             </Field>
-            <Field label="Phone" hint="Shown in WhatsApp messages when a branch has no phone"><input className={inputClass} value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
+            <Field label="Phone" hint="Printed on the bill after the branch's phone, and used in WhatsApp messages"><input className={inputClass} value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
             <Field label="Email"><input type="email" className={inputClass} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
             <Field label="Address" className="sm:col-span-2"><textarea className={inputClass} rows={2} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></Field>
             <Field label="City"><input className={inputClass} value={f.city} maxLength={60} onChange={(e) => setF({ ...f, city: e.target.value })} /></Field>
             <Field label="State"><StateSelect value={f.state} onChange={(state) => setF({ ...f, state })} /></Field>
             <Field label="PIN code"><input className={monoInputClass} inputMode="numeric" maxLength={6} value={f.pincode} onChange={(e) => setF({ ...f, pincode: e.target.value.replace(/\D/g, "") })} /></Field>
-            <Field label="GSTIN (optional)"><input className={monoInputClass} value={f.gstin} onChange={(e) => setF({ ...f, gstin: e.target.value })} /></Field>
+            <Field label="GSTIN (optional)" hint="Printed at the bottom left of the bill"><input className={monoInputClass} value={f.gstin} onChange={(e) => setF({ ...f, gstin: e.target.value })} /></Field>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
             GST, receipts, late returns and the shop&apos;s other rules are on <Link href="/settings" className="underline">Settings</Link>.
