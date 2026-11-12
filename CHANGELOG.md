@@ -1,6 +1,20 @@
 # Changelog
 
 ## 0.3.0 (unreleased): v2 rental engine
+- Cleaning & repairs (migration 41, 12 Nov 2026; APPLIED to the shared cloud project and checked there in rolled-back
+  transactions; pgTAP not yet run; tests: supabase/tests/service_jobs; plan: docs/LAUNCH_PACK_1_PLAN.md part E):
+  - new Inventory > Cleaning & repairs page (clothing shops): To do, Away, Ready, History; search and type filter; New job;
+    Send out (vendor, due date), Mark back, Done (managers and the owner add a cost, which becomes a Finance expense, or mark
+    "cannot be repaired", which retires the piece), Change due date, Cancel; overdue in red
+  - a repair, alteration or hand-made job keeps the piece out of new bookings only until its due date (free counts, the piece
+    picker, picking by hand and swaps all follow it); a piece away for service cannot be handed over; with no open jobs
+    availability is unchanged
+  - a return adds a cleaning job for every piece (Settings > Cleaning & repairs, on by default; it sits in the booking's cleaning
+    days) and a repair job for a damaged piece; the Alteration dialog adds an alteration job due by the pickup; finishing a job
+    makes a piece that was "in service" available again
+  - Inventory search links a scanned piece to its job; the dashboard shows pieces at the cleaner or tailor and overdue ones;
+    the activity log has a Cleaning & repairs area
+  - not done: a count badge on the menu item, photos on jobs; pieces already "in service" were not turned into jobs
 - Invoices, receipts and credit notes (migration 40, 12 Nov 2026; APPLIED to the shared cloud project and checked there in
   rolled-back transactions; pgTAP not yet run; tests: supabase/tests/invoices_receipts, invoice; plan: docs/LAUNCH_PACK_1_PLAN.md part D):
   - the tax invoice is issued from a button on the booking ("Tax invoice" panel); printing never issues one any more. Setting

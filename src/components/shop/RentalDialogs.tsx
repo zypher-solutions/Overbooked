@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { useShop } from "@/lib/shop/ShopContext";
 import { call, money, type RentalDetail } from "@/lib/shop/api";
 import {
-  CHARGE_LABELS, METHOD_LABELS, PAYMENT_LABELS, errorText, fmtDateTime, isoToZoned, num, rupees, zonedToIso,
+  CHARGE_LABELS, METHOD_LABELS, PAYMENT_LABELS, errorText, fmtDateTime, isoToZoned, num, rupees, todayLocal, zonedToIso,
 } from "@/lib/shop/format";
 import { MESSAGE_LABELS, buildMessage, waLink, type MessageKind } from "@/lib/shop/whatsapp";
 import type { ChargeType, Method, PaymentKind } from "@/lib/shop/types";
@@ -453,6 +453,7 @@ export { METHOD_LABELS };
 // Alteration (optional feature): a piece goes to the tailor, with an optional charge.
 // While "in alteration" it cannot be handed over; mark it done on the booking when it is back.
 export function AlterationDialog({ rental, open, onClose, onDone }: DialogProps) {
+  const { tz } = useShop();
   const pieces = rental.unit_reservations.filter((u) => (u.state === "held" || u.state === "out")
     && rental.rental_lines.find((l) => l.id === u.line_id)?.kind === "wearable");
   const [unitId, setUnitId] = useState("");
@@ -470,6 +471,15 @@ export function AlterationDialog({ rental, open, onClose, onDone }: DialogProps)
     }
     if (toTailor && unitId) {
       await call("set_unit_status", { p_unit_id: unitId, p_status: "alteration", p_reason: what.trim() });
+      // and a job on Cleaning & repairs, due by the pickup (migration 041); finishing it makes the piece ready again
+      const pickup = isoToZoned(rental.start_at, tz).slice(0, 10);
+      const today = todayLocal(tz);
+      try {
+        await call("create_service_job", { p_unit_id: unitId, p_type: "alteration", p_reason: what.trim(),
+          p_due_on: pickup > today ? pickup : today, p_rental_id: rental.id });
+      } catch (e) {
+        toast.warning(errorText(e));
+      }
     }
     toast.success("Alteration recorded");
     onDone();

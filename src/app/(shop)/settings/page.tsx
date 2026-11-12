@@ -92,6 +92,9 @@ function rowsFor(o: { clothing: boolean; hasRoom: boolean; hasVehicle: boolean }
         when: (v) => on(v) && v("late_cap") === "rent_percent", hint: "" },
       { key: "late_clash_action", section: LATE, label: "When a late piece is needed for its next booking", kind: "select", fallback: "swap", perBranch: true,
         options: [["swap", "Offer to swap in another piece first"], ["hold", "Offer to hold the next hand over first"]], hint: "Staff still choose each time" },
+      // migration 041
+      { key: "auto_cleaning", section: "Cleaning & repairs", label: "Send every returned piece to cleaning", kind: "switch", fallback: true, perBranch: false,
+        hint: "A return adds a cleaning job for each piece on Cleaning & repairs; a damaged piece always gets a repair job" },
     );
   } else {
     rows.push({ key: "grace_minutes", section: "Rules", label: "Grace time before late charges (minutes)", kind: "number", min: 0, max: 1440, fallback: 60,

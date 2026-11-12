@@ -101,6 +101,17 @@ export function TrendzDashboard() {
   const { profile } = useAuth();
   const [pickups, setPickups] = useState<ListRental[] | null>(null);
   const [out, setOut] = useState<Row[] | null>(null);
+  // pieces at the cleaner or tailor (migration 041)
+  const [service, setService] = useState<{ away: number; todo: number; overdue: number } | null>(null);
+  useEffect(() => {
+    void createClient().from("service_jobs").select("status, due_on").in("status", ["todo", "away"]).then(({ data }) => {
+      // shortcut: a database without migration 041 shows no card
+      if (!data) return;
+      const day = todayLocal(tz);
+      setService({ away: data.filter((j) => j.status === "away").length, todo: data.filter((j) => j.status === "todo").length,
+        overdue: data.filter((j) => j.due_on < day).length });
+    });
+  }, [tz]);
   const [done, setDone] = useState<Row[] | null>(null);
   const [doneCount, setDoneCount] = useState(0);
   const [unitsOut, setUnitsOut] = useState(0);
@@ -380,6 +391,13 @@ export function TrendzDashboard() {
           ? <SummaryCard label="To collect" value={rupees(toCollect)} hint={`on ${out?.length ?? 0} rentals out`} tone={toCollect > 0 ? "rust" : "emerald"} />
           : <SummaryCard label="Items out" value={unitsOut} hint={`${out?.length ?? 0} rentals`} />}
       </div>
+      {service && service.away + service.todo > 0 ? (
+        <Link href="/cleaning" className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-surface px-4 py-3 text-sm hover:bg-accent/40">
+          <span>At the cleaner / tailor: <strong>{service.away}</strong> · waiting to go: <strong>{service.todo}</strong>
+            {service.overdue ? <> · <strong className="text-rust">{service.overdue} overdue</strong></> : null}</span>
+          <span className="text-gold">Cleaning &amp; repairs →</span>
+        </Link>
+      ) : null}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
         <section className="glass p-4 sm:p-6" aria-label="Today's work">

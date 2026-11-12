@@ -6,6 +6,7 @@ import {
   SlidersHorizontal,
   Calendar,
   ScanLine,
+  Sparkles,
   CalendarClock,
   CalendarDays,
   LayoutGrid,
@@ -47,6 +48,7 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
     title: "Inventory",
     items: [
       { href: "/scan", label: "Inventory search", icon: ScanLine, show: true },
+      { href: "/cleaning", label: "Cleaning & repairs", icon: Sparkles, show: true },
       { href: "/catalog", label: "Products", icon: LayoutGrid, show: true },
       {
         href: "/catalog/new",

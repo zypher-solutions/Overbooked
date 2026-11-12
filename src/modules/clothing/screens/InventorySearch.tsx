@@ -188,6 +188,10 @@ export default function InventorySearch() {
             {unit.reservation?.state === "held" ? (
               <Link href={`/rentals/${unit.reservation.rental_id}`} className={ghostButtonClass}>Booked on {unit.reservation.token}</Link>
             ) : null}
+            {/* the piece's open job, or a new one (migration 041) */}
+            {unit.reservation?.state !== "out" ? (
+              <Link href={`/cleaning?unit=${unit.id}`} className={ghostButtonClass}>Cleaning &amp; repairs</Link>
+            ) : null}
             {unit.status === "available" && unit.reservation?.state !== "out" && canBook(unit.branch_id) ? (
               <button className={goldButtonClass} onClick={() => {
                 if (cart.add(unit.branch_id, unit.variation_id, unit.id)) {
