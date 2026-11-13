@@ -391,14 +391,6 @@ export function TrendzDashboard() {
           ? <SummaryCard label="To collect" value={rupees(toCollect)} hint={`on ${out?.length ?? 0} rentals out`} tone={toCollect > 0 ? "rust" : "emerald"} />
           : <SummaryCard label="Items out" value={unitsOut} hint={`${out?.length ?? 0} rentals`} />}
       </div>
-      {service && service.away + service.todo > 0 ? (
-        <Link href="/cleaning" className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-surface px-4 py-3 text-sm hover:bg-accent/40">
-          <span>At the cleaner / tailor: <strong>{service.away}</strong> · waiting to go: <strong>{service.todo}</strong>
-            {service.overdue ? <> · <strong className="text-rust">{service.overdue} overdue</strong></> : null}</span>
-          <span className="text-gold">Cleaning &amp; repairs →</span>
-        </Link>
-      ) : null}
-
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
         <section className="glass p-4 sm:p-6" aria-label="Today's work">
           <div role="group" aria-label="Choose work list" className="mb-5 grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1">
@@ -454,6 +446,27 @@ export function TrendzDashboard() {
           <MiniCalendar today={today} marks={dueDays} />
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground"><span className="h-1.5 w-1.5 rounded-full bg-gold" /> a return is due · <Link href="/calendar" className="font-medium text-gold hover:underline">Open calendar</Link></p>
         </div>
+        {/* pieces away for cleaning or repair sit with the other "what is coming" cards, not across the page */}
+        {service && service.away + service.todo > 0 ? (
+          <Link href="/cleaning" className="glass block p-4 transition-colors hover:border-gold/35 sm:p-5">
+            <span className="flex items-center justify-between gap-2">
+              <span className="font-display text-base font-semibold">Cleaning &amp; repairs</span>
+              <span className="text-xs font-medium text-gold">Open →</span>
+            </span>
+            <span className="mt-3 grid grid-cols-3 gap-2 text-center">
+              {[
+                { label: "Waiting to go", n: service.todo, rust: false },
+                { label: "Away", n: service.away, rust: false },
+                { label: "Overdue", n: service.overdue, rust: service.overdue > 0 },
+              ].map((s) => (
+                <span key={s.label} className={cn("rounded-xl bg-surface-2 px-2 py-2.5", s.rust && "bg-rust/10")}>
+                  <span className={cn("block font-display text-2xl font-bold", s.rust ? "text-rust" : "text-foreground")}>{s.n}</span>
+                  <span className="block text-[11px] text-muted-foreground">{s.label}</span>
+                </span>
+              ))}
+            </span>
+          </Link>
+        ) : null}
         <div className="glass p-4 sm:p-5">
           <h2 className="font-display text-base font-semibold">Next returns</h2>
           {upcoming.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">Nothing is due back soon.</p> : (

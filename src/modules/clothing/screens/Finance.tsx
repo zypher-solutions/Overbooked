@@ -17,6 +17,7 @@ import {
   type RentalDetail,
 } from "@/lib/shop/api";
 import { ExpensesPanel } from "@/modules/clothing/components/ExpensesPanel";
+import { FinanceTabs } from "@/modules/clothing/components/FinanceBits";
 import {
   METHOD_LABELS,
   PAYMENT_LABELS,
@@ -535,6 +536,7 @@ export default function Finance() {
           </p>
         </div>
       </div>
+      <FinanceTabs />
       <label className="relative mb-5 block">
         <span className="sr-only">Search rentals</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

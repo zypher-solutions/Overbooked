@@ -133,7 +133,7 @@ export function ShopShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="min-w-0 px-4 pb-24 pt-[calc(4.5rem+env(safe-area-inset-top))] sm:px-6 lg:ml-64 lg:px-8 lg:pb-12 lg:pt-8">
+      <main className="min-w-0 px-4 pb-24 pt-[calc(4.5rem+env(safe-area-inset-top))] sm:px-6 lg:ml-64 lg:px-8 lg:pb-28 lg:pt-8">
         <div className="mx-auto max-w-[1480px]">
           <OfflineBanner />
           {profile?.role === "super_admin" ? (
@@ -148,12 +148,20 @@ export function ShopShell({ children }: { children: ReactNode }) {
         </div>
       </main>
 
-      {cart.ready && !loading && pathname !== "/book" && pathname !== "/checkout" && (businessModule === "clothing" || cart.count > 0) ? (
+      {/* shown once something is in a cart (or several carts are open); Checkout needs an item in the active cart */}
+      {cart.ready && !loading && pathname !== "/book" && pathname !== "/checkout"
+        && (cart.count > 0 || (businessModule === "clothing" && (cart.carts.length > 1 || cart.carts.some((c) => c.lines.length > 0)))) ? (
         <div className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-5 z-30 flex max-w-[calc(100vw-2.5rem)] items-center gap-1.5 rounded-xl border border-border bg-surface p-1.5 shadow-lg">
           {businessModule === "clothing" ? <CartSwitcher /> : null}
-          <Link href={businessModule === "clothing" ? "/checkout" : "/book"} className={cn(goldButtonClass, "min-h-11 shrink-0")}>
-            <ShoppingBag className="h-4 w-4" aria-hidden="true" /> Checkout{cart.count > 0 ? ` (${cart.count})` : ""}
-          </Link>
+          {cart.count > 0 ? (
+            <Link href={businessModule === "clothing" ? "/checkout" : "/book"} className={cn(goldButtonClass, "min-h-11 shrink-0")}>
+              <ShoppingBag className="h-4 w-4" aria-hidden="true" /> Checkout ({cart.count})
+            </Link>
+          ) : (
+            <button type="button" disabled title="Add a product to this cart first" className={cn(goldButtonClass, "min-h-11 shrink-0")}>
+              <ShoppingBag className="h-4 w-4" aria-hidden="true" /> Cart is empty
+            </button>
+          )}
         </div>
       ) : null}
       <ConfirmDialog
@@ -197,11 +205,14 @@ function NavGroups({ groups, pathname, tab, onPick }: { groups: NavGroup[]; path
             <button type="button" onClick={() => setClosed((c) => ({ ...c, [g.title!]: !c[g.title!] }))} aria-expanded={!closed[g.title]}
               className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-semibold tracking-wide text-muted-foreground transition-colors duration-150 hover:text-foreground">
               {g.title}
-              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !closed[g.title] && "rotate-180")} />
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200 ease-out motion-reduce:transition-none", !closed[g.title] && "rotate-180")} />
             </button>
           ) : null}
-          {g.title && closed[g.title] ? null : (
-            <ul className="space-y-0.5">
+          {/* the group slides open and shut (grid rows 0fr <-> 1fr); a shut group is inert, so its links are not tabbed to */}
+          <div inert={g.title ? !!closed[g.title] : undefined}
+            className={cn("grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+              g.title && closed[g.title] ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100")}>
+            <ul className="min-h-0 space-y-0.5 overflow-hidden">
               {g.items.map((n) => {
                 const on = best.href === n.href;
                 return (
@@ -216,7 +227,7 @@ function NavGroups({ groups, pathname, tab, onPick }: { groups: NavGroup[]; path
                 );
               })}
             </ul>
-          )}
+          </div>
         </div>
       ))}
     </div>

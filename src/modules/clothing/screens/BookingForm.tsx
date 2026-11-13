@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { call, money } from "@/lib/shop/api";
 import {
@@ -35,6 +35,7 @@ import { CartSwitcher } from "@/modules/clothing/components/CartSwitcher";
 import { CheckoutCart } from "@/modules/clothing/components/CheckoutCart";
 import {
   CheckoutPayment,
+  CheckoutNotes,
   CheckoutSummary,
 } from "@/modules/clothing/components/CheckoutPayment";
 
@@ -45,7 +46,7 @@ function rentalIssue(f: BookingFormState): string | null {
   if (!f.periodOk)
     return "The return date must be on or after the pickup date.";
   if (!f.branchId) return "Choose a branch.";
-  if (f.cleaningBad) return "The maintenance buffer cannot be negative.";
+  if (f.cleaningBad) return "Cleaning days cannot be negative.";
   if (!f.lines.length) return "Add at least one item to the cart.";
   if (f.stockError) return `Could not check stock. ${f.stockError}`;
   if (f.shortItems.length)
@@ -94,11 +95,10 @@ function RentalSetup({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+    <div className="space-y-3">
+      <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
         <Field
           label="Pickup date (required)"
-          hint="Use today for a walk-in."
           error={startInPast ? "Pickup cannot be in the past." : undefined}
         >
           <DateInput
@@ -111,7 +111,6 @@ function RentalSetup({
         </Field>
         <Field
           label="Return date (required)"
-          hint="Used to check availability."
           error={
             d.start && d.end && !startInPast && !periodOk
               ? "Must be on or after the pickup date."
@@ -130,7 +129,7 @@ function RentalSetup({
             }
           />
         </Field>
-        <Field label="Branch" hint="Where the items will be picked up.">
+        <Field label="Pickup branch">
           {activeBranches.length > 1 && !myBranchId && !editing ? (
             <select
               className={inputClass}
@@ -152,8 +151,7 @@ function RentalSetup({
           )}
         </Field>
         <Field
-          label="Maintenance buffer (days)"
-          hint="Optional cleaning time after return."
+          label="Cleaning days after return"
           error={cleaningBad ? "Cannot be negative." : undefined}
         >
           <input
@@ -168,25 +166,20 @@ function RentalSetup({
         </Field>
       </div>
       {periodOk ? (
-        <dl className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-muted/40 p-4 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-muted-foreground">Rental duration</dt>
-            <dd className="font-semibold">
-              {quote ? plural(quote.days, "day") : "…"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Cleaning buffer</dt>
-            <dd className="font-semibold">{plural(cleaning ?? 0, "day")}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Available again</dt>
-            <dd className="font-semibold text-gold">
-              {isoToDisplay(addDays(returns, (cleaning ?? 0) + 1))}
-            </dd>
-          </div>
-        </dl>
-      ) : null}
+        <p className="text-sm text-muted-foreground">
+          <span className="font-semibold text-foreground">
+            {quote ? plural(quote.days, "day") : "…"}
+          </span>{" "}
+          rental · {plural(cleaning ?? 0, "cleaning day")} · pieces free again{" "}
+          <span className="font-semibold text-gold">
+            {isoToDisplay(addDays(returns, (cleaning ?? 0) + 1))}
+          </span>
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Use today for a walk-in. The dates decide which pieces are free.
+        </p>
+      )}
     </div>
   );
 }
@@ -234,6 +227,48 @@ export function BookingForm({ f }: { f: BookingFormState }): React.JSX.Element {
     if (!issue) void f.submit();
   }
 
+  // a cart with nothing in it and no customer: nothing to check out, so say so instead of showing an empty bill
+  const hasContent = f.lines.length > 0 || !!activeCustomer;
+  const otherCarts = f.cart.carts.length > 1;
+
+  if (!editing && !hasContent && !busy)
+    return (
+      <>
+        <PageHeader
+          title="Checkout"
+          actions={<CartSwitcher activeLabel={activeCustomer} />}
+        />
+        <Panel>
+          <div className="mx-auto max-w-md py-8 text-center">
+            <ShoppingBag
+              className="mx-auto size-8 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <h2 className="mt-3 text-lg font-semibold">
+              {`Cart ${f.cart.id} is empty`}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Add a product first. Scan a tag or search in Inventory search, or
+              pick from Products.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <Link href="/scan" className={goldButtonClass}>
+                Inventory search
+              </Link>
+              <Link href="/catalog" className={ghostButtonClass}>
+                Products
+              </Link>
+              {otherCarts ? (
+                <button type="button" className={ghostButtonClass} onClick={f.reset}>
+                  Close this cart
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </Panel>
+      </>
+    );
+
   return (
     <>
       {!busy ? (
@@ -247,114 +282,111 @@ export function BookingForm({ f }: { f: BookingFormState }): React.JSX.Element {
       ) : null}
       <PageHeader
         title={editing ? `Change booking ${editing.token}` : "Checkout"}
-        subtitle={
-          editing
-            ? undefined
-            : "Review the rental, customer details, and payment before confirming."
-        }
         actions={
-          <div className="flex flex-wrap gap-2">
-            {!editing && !busy ? (
-              <CartSwitcher activeLabel={activeCustomer} />
-            ) : null}
-            <a
-              href="#checkout-summary-title"
-              className={cn(ghostButtonClass, "min-h-11 lg:hidden")}
-            >
-              <ArrowDown className="size-4" aria-hidden="true" /> Order summary
-            </a>
-          </div>
+          !editing && !busy ? (
+            <CartSwitcher activeLabel={activeCustomer} />
+          ) : undefined
         }
       />
 
       <form noValidate onSubmit={confirm}>
-        <fieldset
-          disabled={busy}
-          className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,0.72fr)] xl:gap-6"
-        >
+        <fieldset disabled={busy} className="min-w-0 space-y-4">
           <legend className="sr-only">Rental checkout</legend>
-          <div className="min-w-0 space-y-5 [&_input:not([type])]:min-h-11 [&_select]:min-h-11">
-            <Panel title="Rental details">
-              <RentalSetup f={f} branchName={branchName} />
-              <CheckoutCart f={f} />
-            </Panel>
 
-            <Panel title="Customer">
-              {editing ? (
-                <div className="text-sm">
-                  <p className="font-semibold">{editing.customers.full_name}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {editing.customers.phone}
-                  </p>
-                </div>
-              ) : loadingCustomer ? (
-                <Skeleton className="h-16 w-full" />
-              ) : (
-                <CustomerPicker
-                  showOptionalDetails
-                  selected={customer}
-                  onSelect={(selected) => {
-                    setCustomer(selected);
-                    set({ customerId: selected?.id ?? null });
-                  }}
-                  draft={d.customer}
-                  onDraft={(draft) => set({ customer: draft })}
-                  needsLicence={false}
-                />
-              )}
-            </Panel>
+          <Panel title="Booking details">
+            <RentalSetup f={f} branchName={branchName} />
+          </Panel>
 
-            <Panel title="Payment">
-              <CheckoutPayment f={f} />
-            </Panel>
-          </div>
+          <Panel title="Customer">
+            {editing ? (
+              <div className="text-sm">
+                <p className="font-semibold">{editing.customers.full_name}</p>
+                <p className="mt-1 text-muted-foreground">
+                  {editing.customers.phone}
+                </p>
+              </div>
+            ) : loadingCustomer ? (
+              <Skeleton className="h-16 w-full" />
+            ) : (
+              <CustomerPicker
+                showOptionalDetails
+                selected={customer}
+                onSelect={(selected) => {
+                  setCustomer(selected);
+                  set({ customerId: selected?.id ?? null });
+                }}
+                draft={d.customer}
+                onDraft={(draft) => set({ customer: draft })}
+                needsLicence={false}
+              />
+            )}
+          </Panel>
 
-          <aside
-            aria-labelledby="checkout-summary-title"
-            className="min-w-0 rounded-xl border border-border bg-surface p-4 sm:p-5 lg:sticky lg:top-6"
-          >
-            <CheckoutSummary f={f} />
-            {pending ? (
-              <p role="status" className="mt-4 text-sm text-muted-foreground">
-                {f.checkingStock
-                  ? "Checking availability…"
-                  : "Updating rental pricing…"}
-              </p>
-            ) : null}
-            {attempted && issue && !pending ? (
-              <p
-                role="alert"
-                className="mt-4 rounded-md border border-rust/30 bg-rust/5 p-2.5 text-sm text-rust"
-              >
-                {issue}
-              </p>
-            ) : null}
-            <button
-              type="submit"
-              disabled={busy || pending || loadingCustomer}
-              className={cn(goldButtonClass, "mt-4 min-h-11 w-full")}
-            >
-              {busy
-                ? "Saving booking…"
-                : editing
-                  ? "Save change"
-                  : "Confirm booking"}
-            </button>
-            {!editing && !busy ? (
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <Panel
+            title="Items"
+            actions={
+              !editing ? (
                 <Link href="/catalog" className={ghostButtonClass}>
                   <Plus className="size-4" aria-hidden="true" /> Add items
                 </Link>
-                <button
-                  type="button"
-                  className={dangerButtonClass}
-                  onClick={() => f.setConfirmDiscard(true)}
-                >
-                  Discard cart
-                </button>
+              ) : undefined
+            }
+          >
+            <CheckoutCart f={f} />
+          </Panel>
+
+          <Panel>
+            <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.35fr)_minmax(17rem,1fr)]">
+              <div className="order-3 min-w-0 lg:order-1">
+                <CheckoutNotes f={f} />
               </div>
-            ) : null}
-          </aside>
+              <div className="order-1 min-w-0 lg:order-2">
+                <h2 className="text-base font-semibold">Payment</h2>
+                <CheckoutPayment f={f} />
+              </div>
+              <aside
+                aria-labelledby="checkout-summary-title"
+                className="order-2 min-w-0 rounded-xl border border-border bg-muted/30 p-4 lg:order-3"
+              >
+                <CheckoutSummary f={f} />
+                {pending ? (
+                  <p role="status" className="mt-3 text-sm text-muted-foreground">
+                    {f.checkingStock
+                      ? "Checking availability…"
+                      : "Updating the price…"}
+                  </p>
+                ) : null}
+                {attempted && issue && !pending ? (
+                  <p
+                    role="alert"
+                    className="mt-3 rounded-md border border-rust/30 bg-rust/5 p-2.5 text-sm text-rust"
+                  >
+                    {issue}
+                  </p>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={busy || pending || loadingCustomer}
+                  className={cn(goldButtonClass, "mt-4 min-h-11 w-full")}
+                >
+                  {busy
+                    ? "Saving booking…"
+                    : editing
+                      ? "Save change"
+                      : "Confirm booking"}
+                </button>
+                {!editing && !busy ? (
+                  <button
+                    type="button"
+                    className={cn(dangerButtonClass, "mt-2 w-full")}
+                    onClick={() => f.setConfirmDiscard(true)}
+                  >
+                    Discard this cart
+                  </button>
+                ) : null}
+              </aside>
+            </div>
+          </Panel>
         </fieldset>
       </form>
 

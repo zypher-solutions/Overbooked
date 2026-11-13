@@ -41,7 +41,7 @@ const SECTIONS = [
   {
     id: "pickups",
     title: "Waiting for pickup",
-    empty: "No bookings waiting for pickup match the current filters.",
+    empty: "No bookings are waiting for pickup.",
   },
   {
     id: "due",
@@ -56,12 +56,12 @@ const SECTIONS = [
   {
     id: "completed",
     title: "Returned",
-    empty: "No returned bookings match the current filters.",
+    empty: "No bookings have been returned yet.",
   },
   {
     id: "cancelled",
     title: "Cancelled & no-shows",
-    empty: "No cancellations or no-shows match the current filters.",
+    empty: "No cancellations or no-shows.",
   },
 ] as const;
 
@@ -312,7 +312,9 @@ function BookingResults({
                 page.rows.length === 0 &&
                 !page.loading ? (
                   <p className="rounded-xl border border-border px-4 py-3 text-sm text-muted-foreground">
-                    {empty}
+                    {filters.term.trim() || filters.pickupDay || filters.branch
+                      ? `Nothing in ${title.toLowerCase()} matches the search or filters.`
+                      : empty}
                   </p>
                 ) : null}
                 {page?.error ? (

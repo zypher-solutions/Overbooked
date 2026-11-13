@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useState } from "react";
-import { ImageOff, Minus, Plus, Trash2 } from "lucide-react";
+import { ImageOff, Minus, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BASIS_LABELS, lineMath, num, plural, rupees } from "@/lib/shop/format";
 import { variationLabel } from "@/lib/shop/useCatalog";
@@ -12,7 +12,13 @@ import {
 } from "@/components/shop/ui";
 import type { BookingForm } from "@/components/shop/useBookingForm";
 
-const cartButton =
+// Checkout items as one bill-like table: a row per product with its piece, quantity, rate and amount, then the
+// accessories under it. On a phone each row stacks into a card; the column names show inside the cells instead.
+const COLUMNS =
+  "md:grid md:grid-cols-[2rem_minmax(0,2fr)_minmax(13rem,1.5fr)_6.5rem_minmax(6rem,1fr)_8rem_2.25rem] md:items-start md:gap-3";
+const cellLabel =
+  "mb-1 block text-[11px] font-semibold tracking-wide text-muted-foreground md:sr-only";
+const iconButton =
   "inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground";
 
 function CartProductPhoto({
@@ -23,7 +29,7 @@ function CartProductPhoto({
   name: string;
 }): React.JSX.Element {
   const [failed, setFailed] = useState(false);
-  const frame = "size-14 shrink-0 rounded-lg border border-border bg-muted";
+  const frame = "size-12 shrink-0 rounded-lg border border-border bg-muted";
 
   return src && !failed ? (
     <img
@@ -40,6 +46,61 @@ function CartProductPhoto({
     >
       <ImageOff aria-hidden="true" className="size-5" />
     </span>
+  );
+}
+
+// the line amount: the catalogue price until someone types the price agreed with the customer
+function AmountCell({
+  label,
+  price,
+  agreed,
+  onAgree,
+}: {
+  label: string;
+  price: number | undefined;
+  agreed: string;
+  onAgree: (value: string) => void;
+}): React.JSX.Element {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown =
+    draft ?? (agreed.trim() !== "" ? agreed : price !== undefined ? String(price) : "");
+  return (
+    <div>
+      <input
+        className={cn(monoInputClass, "min-h-10 text-right")}
+        inputMode="decimal"
+        maxLength={10}
+        aria-label={`Amount for ${label}`}
+        placeholder={price === undefined ? "…" : undefined}
+        value={shown}
+        onFocus={(event) => {
+          setDraft(shown);
+          event.target.select();
+        }}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          if (draft === null) return;
+          const typed = draft.trim();
+          // typing the catalogue price back (or clearing the box) returns to the catalogue price
+          onAgree(
+            typed === "" || (price !== undefined && typed === String(price))
+              ? ""
+              : typed,
+          );
+          setDraft(null);
+        }}
+      />
+      {agreed.trim() !== "" && draft === null ? (
+        <button
+          type="button"
+          className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          onClick={() => onAgree("")}
+        >
+          <RotateCcw aria-hidden="true" className="size-3" />
+          Catalogue price
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -64,48 +125,30 @@ export function CheckoutCart({ f }: { f: BookingForm }): React.JSX.Element {
   } = f;
   const count = lines.reduce((sum, line) => sum + line.qty, 0);
   const extras = visibleAddOns;
+  const agreedError = f.moneyErrors.agreedPrice;
 
   return (
-    <section
-      aria-labelledby="checkout-cart-title"
-      className="mt-5 min-w-0 border-t border-border pt-4"
-    >
+    <div className="min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="checkout-cart-title" className="text-base font-semibold">
-          Cart items ({count})
-        </h2>
+        <p className="text-sm text-muted-foreground">
+          {count > 0
+            ? `${plural(count, "item")} · choose the piece going out for each one.`
+            : ""}
+        </p>
         {periodOk &&
         f.branchId &&
         count > 0 &&
         !checkingStock &&
         !stockError &&
         !shortItems.length ? (
-          <StatusBadge tone="emerald">In stock</StatusBadge>
+          <StatusBadge tone="emerald">All in stock</StatusBadge>
+        ) : checkingStock ? (
+          <p role="status" className="text-sm text-gold">
+            Checking availability…
+          </p>
         ) : null}
       </div>
-      {count > 0 ? (
-        <p className="mt-1 text-sm text-muted-foreground">
-          Check quantities and assign the pieces going out.
-        </p>
-      ) : null}
-      {count === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">
-          Add items from{" "}
-          <Link href="/scan" className="font-semibold text-gold underline">
-            Inventory Search
-          </Link>{" "}
-          or{" "}
-          <Link href="/catalog" className="font-semibold text-gold underline">
-            All Products
-          </Link>
-          .
-        </p>
-      ) : null}
-      {checkingStock ? (
-        <p role="status" className="mt-3 text-sm text-gold">
-          Checking piece availability…
-        </p>
-      ) : null}
+
       {periodOk && !checkingStock && !stockError && shortItems.length > 0 ? (
         <div className="mt-3 rounded-lg border border-rust/35 bg-rust/5 p-3 text-sm">
           <p className="font-semibold">Not available for these dates</p>
@@ -129,8 +172,48 @@ export function CheckoutCart({ f }: { f: BookingForm }): React.JSX.Element {
         </div>
       ) : null}
 
-      <ul className="mt-3 space-y-2.5">
-        {lines.map((line) => {
+      <div
+        role="table"
+        aria-label="Cart items"
+        className="mt-3 overflow-hidden rounded-xl border border-border"
+      >
+        <div
+          role="row"
+          className={cn(
+            COLUMNS,
+            "hidden bg-muted/70 px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground",
+          )}
+        >
+          <span role="columnheader">#</span>
+          <span role="columnheader">Item</span>
+          <span role="columnheader">Piece</span>
+          <span role="columnheader" className="text-center">
+            Qty
+          </span>
+          <span role="columnheader">Rate</span>
+          <span role="columnheader" className="text-right">
+            Amount (₹)
+          </span>
+          <span role="columnheader">
+            <span className="sr-only">Remove</span>
+          </span>
+        </div>
+
+        {lines.length === 0 ? (
+          <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+            No items yet. Add them from{" "}
+            <Link href="/scan" className="font-semibold text-gold underline">
+              Inventory search
+            </Link>{" "}
+            or{" "}
+            <Link href="/catalog" className="font-semibold text-gold underline">
+              Products
+            </Link>
+            .
+          </p>
+        ) : null}
+
+        {lines.map((line, row) => {
           const info = variations.get(line.variation_id);
           const savedLine = editing?.rental_lines.find(
             (item) => item.variation_id === line.variation_id,
@@ -139,190 +222,224 @@ export function CheckoutCart({ f }: { f: BookingForm }): React.JSX.Element {
           const availablePieces = pieces?.[line.variation_id];
           const name =
             info?.product.name ?? savedLine?.description ?? "Loading item…";
+          const label = info ? variationLabel(info.product, info.variation) : name;
           const photo = info?.product.image_url || savedLine?.image_url;
           const variant = info?.variation.name;
           const sku = info?.variation.sku ?? savedLine?.sku;
+          const needsPieces = periodOk && pieceLines.includes(line);
+          const catalogue =
+            pricing && !pricing.is_override ? Number(pricing.amount) : undefined;
           return (
-            <li
+            <div
               key={line.variation_id}
-              className="rounded-lg border border-border bg-surface p-3"
+              role="row"
+              className={cn(
+                COLUMNS,
+                "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 border-t border-border px-3 py-3 first:border-t-0 md:first:border-t",
+              )}
             >
-              <div className="flex items-start gap-2.5">
+              <span
+                role="cell"
+                className="hidden pt-3 text-sm tabular-nums text-muted-foreground md:block"
+              >
+                {row + 1}
+              </span>
+              <div role="cell" className="flex min-w-0 items-start gap-2.5">
                 <CartProductPhoto key={photo} src={photo} name={name} />
-                <div className="min-w-0 flex-1">
-                  <p className="break-words text-sm leading-snug font-semibold">
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-semibold leading-snug">
                     {name}
                   </p>
                   {variant && variant !== name ? (
-                    <p className="mt-0.5 break-words text-xs text-muted-foreground">
+                    <p className="break-words text-xs text-muted-foreground">
                       {variant}
                     </p>
                   ) : null}
                   {sku ? (
-                    <p className="mt-0.5 break-words text-xs text-muted-foreground">
+                    <p className="break-words font-mono text-xs text-muted-foreground">
                       {sku}
                     </p>
                   ) : null}
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-t border-border pt-2.5">
-                {pricing ? (
-                  <div>
-                    <p className="text-sm font-semibold tabular-nums">
-                      {rupees(pricing.amount)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {pricing.is_override ? "Agreed price" : lineMath(pricing)}
-                    </p>
-                  </div>
-                ) : null}
-                <div className="ml-auto flex items-center gap-1">
-                  <div className="flex items-center rounded-lg border border-border bg-muted/40">
-                    <button
-                      type="button"
-                      aria-label="One less"
-                      className={cartButton}
-                      onClick={() =>
-                        updateLine(line.variation_id, {
-                          qty: line.qty - 1,
-                          unit_ids: line.unit_ids.slice(0, line.qty - 1),
-                        })
-                      }
-                    >
-                      <Minus aria-hidden="true" className="size-4" />
-                    </button>
-                    <span className="w-7 text-center text-sm font-semibold tabular-nums">
-                      {line.qty}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="One more"
-                      className={cartButton}
-                      onClick={() =>
-                        updateLine(line.variation_id, { qty: line.qty + 1 })
-                      }
-                    >
-                      <Plus aria-hidden="true" className="size-4" />
-                    </button>
-                  </div>
+              {/* on a phone, remove sits beside the item name */}
+              <button
+                type="button"
+                aria-label={`Remove ${label} from the cart`}
+                className={cn(iconButton, "hover:bg-rust/10 hover:text-rust md:hidden")}
+                onClick={() =>
+                  updateLine(line.variation_id, { qty: 0, unit_ids: [] })
+                }
+              >
+                <Trash2 aria-hidden="true" className="size-4" />
+              </button>
+
+              <div role="cell" className="col-span-2 min-w-0 space-y-1.5 md:col-span-1">
+                <span className={cellLabel}>Piece</span>
+                {!needsPieces ? (
+                  <p className="pt-2 text-sm text-muted-foreground">
+                    {periodOk ? "Not needed" : "Set the dates first"}
+                  </p>
+                ) : stockError ? (
+                  <p className="pt-2 text-sm text-muted-foreground">
+                    Could not check pieces.
+                  </p>
+                ) : !availablePieces ? (
+                  <Skeleton className="h-10 w-full" />
+                ) : availablePieces.length ? (
+                  Array.from({ length: line.qty }, (_, index) => {
+                    const selected = line.unit_ids[index] ?? "";
+                    return (
+                      <select
+                        key={index}
+                        className={cn(
+                          inputClass,
+                          "min-h-10",
+                          !selected && "border-gold/60",
+                        )}
+                        value={selected}
+                        aria-label={`Piece ${index + 1} of ${label}`}
+                        onChange={(event) => {
+                          const ids = Array.from(
+                            { length: line.qty },
+                            (_, i) => line.unit_ids[i] ?? "",
+                          );
+                          ids[index] = event.target.value;
+                          updateLine(line.variation_id, {
+                            unit_ids: ids.filter(Boolean),
+                          });
+                        }}
+                      >
+                        <option value="" disabled>
+                          {line.qty > 1 ? `Choose piece ${index + 1}` : "Choose a piece"}
+                        </option>
+                        {availablePieces.map((piece) => (
+                          <option
+                            key={piece.unit_id}
+                            value={piece.unit_id}
+                            disabled={
+                              selected !== piece.unit_id &&
+                              line.unit_ids.includes(piece.unit_id)
+                            }
+                          >
+                            {piece.code}
+                          </option>
+                        ))}
+                      </select>
+                    );
+                  })
+                ) : (
+                  <p className="pt-2 text-sm text-rust">
+                    None free for these dates.
+                  </p>
+                )}
+              </div>
+
+              <div role="cell">
+                <span className={cellLabel}>Qty</span>
+                <div className="flex w-fit items-center rounded-lg border border-border bg-muted/40 md:mx-auto">
                   <button
                     type="button"
-                    aria-label="Remove from cart"
-                    className={cn(
-                      cartButton,
-                      "hover:bg-rust/10 hover:text-rust",
-                    )}
+                    aria-label={`One less ${label}`}
+                    className={iconButton}
                     onClick={() =>
-                      updateLine(line.variation_id, { qty: 0, unit_ids: [] })
+                      updateLine(line.variation_id, {
+                        qty: line.qty - 1,
+                        unit_ids: line.unit_ids.slice(0, line.qty - 1),
+                      })
                     }
                   >
-                    <Trash2 aria-hidden="true" className="size-4" />
+                    <Minus aria-hidden="true" className="size-4" />
+                  </button>
+                  <span className="w-6 text-center text-sm font-semibold tabular-nums">
+                    {line.qty}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`One more ${label}`}
+                    className={iconButton}
+                    onClick={() =>
+                      updateLine(line.variation_id, { qty: line.qty + 1 })
+                    }
+                  >
+                    <Plus aria-hidden="true" className="size-4" />
                   </button>
                 </div>
               </div>
-              {periodOk && pieceLines.includes(line) ? (
-                <div className="mt-3 space-y-2 border-t border-border pt-2.5">
-                  <p className="text-sm font-semibold">
-                    Physical pieces{" "}
-                    <span className="font-normal text-muted-foreground">
-                      · Required
-                    </span>
-                  </p>
-                  {stockError ? (
-                    <p className="text-sm text-muted-foreground">
-                      Piece availability could not be checked.
-                    </p>
-                  ) : !availablePieces ? (
-                    <Skeleton className="h-10 w-full" />
-                  ) : availablePieces.length ? (
-                    <>
-                      <p className="text-sm text-muted-foreground">
-                        {plural(availablePieces.length, "piece")} available
-                      </p>
-                      {Array.from({ length: line.qty }, (_, index) => {
-                        const selected = line.unit_ids[index] ?? "";
-                        return (
-                          <label
-                            key={index}
-                            className="block space-y-1 text-sm"
-                          >
-                            {line.qty > 1 ? (
-                              <span>Piece {index + 1}</span>
-                            ) : null}
-                            <select
-                              className={cn(inputClass, "min-h-11")}
-                              value={selected}
-                              aria-label={`Piece ${index + 1} of ${info ? variationLabel(info.product, info.variation) : "item"}`}
-                              onChange={(event) => {
-                                const ids = Array.from(
-                                  { length: line.qty },
-                                  (_, i) => line.unit_ids[i] ?? "",
-                                );
-                                ids[index] = event.target.value;
-                                updateLine(line.variation_id, {
-                                  unit_ids: ids.filter(Boolean),
-                                });
-                              }}
-                            >
-                              <option value="" disabled>
-                                Choose a piece
-                              </option>
-                              {availablePieces.map((piece) => (
-                                <option
-                                  key={piece.unit_id}
-                                  value={piece.unit_id}
-                                  disabled={
-                                    selected !== piece.unit_id &&
-                                    line.unit_ids.includes(piece.unit_id)
-                                  }
-                                >
-                                  {piece.code}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        );
-                      })}
-                    </>
-                  ) : (
-                    <p className="text-sm text-rust">
-                      No physical pieces available for these dates.
-                    </p>
-                  )}
-                </div>
-              ) : null}
-            </li>
+
+              <div role="cell" className="min-w-0 text-right md:text-left">
+                <span className={cellLabel}>Rate</span>
+                <p className="text-sm text-muted-foreground md:pt-2.5">
+                  {pricing
+                    ? pricing.is_override
+                      ? "Agreed price"
+                      : lineMath(pricing)
+                    : periodOk
+                      ? "…"
+                      : "—"}
+                </p>
+              </div>
+
+              <div role="cell" className="col-span-2 md:col-span-1">
+                <span className={cellLabel}>Amount (₹)</span>
+                <AmountCell
+                  label={label}
+                  price={catalogue}
+                  agreed={line.amount_override}
+                  onAgree={(value) =>
+                    updateLine(line.variation_id, { amount_override: value })
+                  }
+                />
+              </div>
+
+              <div role="cell" className="hidden md:block">
+                <button
+                  type="button"
+                  aria-label={`Remove ${label} from the cart`}
+                  className={cn(iconButton, "hover:bg-rust/10 hover:text-rust")}
+                  onClick={() =>
+                    updateLine(line.variation_id, { qty: 0, unit_ids: [] })
+                  }
+                >
+                  <Trash2 aria-hidden="true" className="size-4" />
+                </button>
+              </div>
+            </div>
           );
         })}
-      </ul>
 
-      {quote?.lines
-        .filter((line) => !line.reserve)
-        .map((line, index) => (
-          <p key={index} className="mt-2 flex justify-between gap-3 text-sm">
-            <span>{line.description}</span>
-            <span className="tabular-nums">{rupees(line.amount)}</span>
-          </p>
-        ))}
+        {quote?.lines
+          .filter((line) => !line.reserve)
+          .map((line, index) => (
+            <div
+              key={`charge-${index}`}
+              role="row"
+              className="flex justify-between gap-3 border-t border-border px-3 py-2.5 text-sm"
+            >
+              <span role="cell">{line.description}</span>
+              <span role="cell" className="tabular-nums">
+                {rupees(line.amount)}
+              </span>
+            </div>
+          ))}
 
-      {extras.length ? (
-        <div className="mt-4 space-y-2 border-t border-border pt-3">
-          <h3 className="text-sm font-semibold">Accessories</h3>
-          <p className="text-xs text-muted-foreground">
-            Tick the ones the customer is taking.
-          </p>
-          <ul className="space-y-2">
+        {extras.length ? (
+          <div role="rowgroup" className="border-t border-border bg-muted/30">
+            <p className="px-3 pt-2.5 text-xs font-semibold tracking-wide text-muted-foreground">
+              Accessories · tick the ones the customer is taking
+            </p>
             {extras.map((extra) => {
               const quantity = d.addOns[extra.id];
               const price = quote?.add_ons.find(
                 (item) => item.add_on_id === extra.id,
               );
               return (
-                <li
+                <div
                   key={extra.id}
-                  className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                  role="row"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm"
                 >
-                  <label className="flex min-w-0 items-start gap-2">
+                  <label role="cell" className="flex min-w-0 flex-1 items-start gap-2">
                     <input
                       type="checkbox"
                       className="mt-1 accent-gold"
@@ -336,7 +453,7 @@ export function CheckoutCart({ f }: { f: BookingForm }): React.JSX.Element {
                     />
                     <span className="min-w-0 break-words">
                       {extra.name}
-                      <span className="block text-muted-foreground">
+                      <span className="ml-1.5 text-muted-foreground">
                         {Number(extra.amount) > 0
                           ? `${rupees(extra.amount)} ${BASIS_LABELS[extra.basis]}`
                           : "Free"}
@@ -353,7 +470,7 @@ export function CheckoutCart({ f }: { f: BookingForm }): React.JSX.Element {
                       type="number"
                       min={1}
                       aria-label={`How many ${extra.name}`}
-                      className={cn(monoInputClass, "min-h-10 w-16")}
+                      className={cn(monoInputClass, "min-h-9 w-16")}
                       value={quantity}
                       onChange={(event) =>
                         set({
@@ -368,17 +485,20 @@ export function CheckoutCart({ f }: { f: BookingForm }): React.JSX.Element {
                       }
                     />
                   ) : null}
-                  {price ? (
-                    <span className="ml-auto tabular-nums">
-                      {rupees(price.amount)}
-                    </span>
-                  ) : null}
-                </li>
+                  <span role="cell" className="w-24 text-right tabular-nums">
+                    {price ? rupees(price.amount) : ""}
+                  </span>
+                </div>
               );
             })}
-          </ul>
-        </div>
+          </div>
+        ) : null}
+      </div>
+      {agreedError ? (
+        <p role="alert" className="mt-2 text-sm text-rust">
+          {agreedError}
+        </p>
       ) : null}
-    </section>
+    </div>
   );
 }

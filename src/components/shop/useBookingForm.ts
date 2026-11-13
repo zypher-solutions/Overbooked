@@ -449,6 +449,8 @@ export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
     advanceMethod: num(d.advance) > 0 && !d.advanceMethod ? "Choose how the advance was paid." : null,
     depositMethod: num(d.deposit) > 0 && !d.depositMethod ? "Choose how the deposit was paid." : null,
     notes: textLimitError(d.notes, "notes", 500),
+    // a price agreed with the customer for one line, typed over the catalogue price
+    agreedPrice: lines.map((l) => moneyError(l.amount_override, { label: "agreed price", max: 10_000_000 })).find(Boolean) ?? null,
     editPay: editing ? moneyError(editPay.amount, { label: "payment", positive: true, max: quote ? Math.max(0, total - money(editing).paid) : undefined, maxText: `the balance after this change (${rupees(Math.max(0, total - money(editing).paid))})` }) : null,
     editPayMethod: editing && num(editPay.amount) > 0 && !editPay.method ? "Choose how the payment was made." : null,
   };

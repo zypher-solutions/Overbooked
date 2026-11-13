@@ -89,11 +89,18 @@ function withItem(
   };
 }
 
+// the lowest number no open cart uses, so numbers start again at 1 once every cart is booked or discarded
+function freeCartId(carts: Cart[]): number {
+  let id = 1;
+  while (carts.some((cart) => cart.id === id)) id += 1;
+  return id;
+}
+
 function appendCart(
   collection: CartCollection,
   initial: Cart = emptyCart,
 ): CartCollection {
-  const id = collection.nextId;
+  const id = freeCartId(collection.carts);
   return {
     activeId: id,
     nextId: id + 1,
@@ -246,15 +253,21 @@ export function CartProvider({
     };
   }
 
-  function remove(id: number): void {
-    if (latest.current.key !== key) return;
+  // a cart number is used again later, so its checkout details must not outlive the cart
+  function clearDraft(id: number): void {
     try {
       sessionStorage.removeItem(draftKey(id));
+      sessionStorage.removeItem(`${draftKey(id)}_logged_customer`);
       if (id === emptyCart.id)
         sessionStorage.removeItem(`ob_booking_${shopId}`);
     } catch {
       // Storage may be unavailable.
     }
+  }
+
+  function remove(id: number): void {
+    if (latest.current.key !== key) return;
+    clearDraft(id);
     commit((value) => {
       if (!multiple) return emptyCollection;
       const remaining = value.carts.filter((cart) => cart.id !== id);
@@ -315,7 +328,10 @@ export function CartProvider({
           ? { ...current, activeId: id }
           : current,
       ),
-    create: () => commit((current) => appendCart(current)),
+    create: () => {
+      commit((current) => appendCart(current));
+      clearDraft(latest.current.collection.activeId);
+    },
     remove,
   };
 
@@ -326,6 +342,7 @@ export function CartProvider({
     if (multiple) commit((current) => appendCart(current, itemCart));
     else updateCart(cartId, () => ({ ...itemCart, id: cartId }));
     const newCartId = multiple ? latest.current.collection.activeId : cartId;
+    if (multiple) clearDraft(newCartId);
     logCartEvent({ kind: "item_added", cart: newCartId, variationId, unitId, branchId });
     setPending(null);
   }

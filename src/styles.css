@@ -101,14 +101,14 @@
   --secondary: #eaf1ee;
   --secondary-foreground: #101715;
   --muted: #e8efec;
-  --muted-foreground: #5c6b67;
+  --muted-foreground: #4b5956; /* 7.3:1 on white, 6.3:1 on --muted (WCAG AA/AAA text) */
   --accent: #e3ede9;
   --accent-foreground: #101715;
   --destructive: oklch(0.57 0.135 42);
   --destructive-foreground: #ffffff;
 
   --border: rgb(16 23 21 / 11%);
-  --input: rgb(16 23 21 / 8%);
+  --input: #87938f; /* 3.2:1 on white: form control borders need 3:1 (WCAG 1.4.11) */
   --ring: rgb(21 193 150 / 60%);
 
   --sidebar: #ffffff;
