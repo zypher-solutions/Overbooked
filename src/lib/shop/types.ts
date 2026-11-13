@@ -48,6 +48,8 @@ export interface AddOn {
   id: string; name: string; basis: AddOnBasis; amount: number; template_keys: string[]; is_active: boolean;
   /** categories it is suggested for at booking; empty = all (migration 029; missing before it is applied) */
   category_ids?: string[];
+  /** products it is suggested for at booking, as well as its categories (migration 044) */
+  product_ids?: string[];
   /** how many the shop owns; null = not counted */
   quantity?: number | null;
 }
@@ -181,7 +183,7 @@ export interface Reservation {
   state: "held" | "out" | "returned" | "released";
   units?: Pick<Unit, "id" | "code" | "odometer" | "status" | "status_reason" | "variation_id">;
 }
-export interface RentalAddOn { id: string; add_on_id: string; name: string; basis: AddOnBasis; quantity: number; unit_amount: number; amount: number }
+export interface RentalAddOn { id: string; add_on_id: string; name: string; basis: AddOnBasis; quantity: number; unit_amount: number; amount: number; pieces?: number; is_override?: boolean }
 export interface Charge { id: string; type: ChargeType; amount: number; note: string | null; created_at: string }
 export interface Check {
   id: string;
@@ -238,7 +240,7 @@ export interface QuoteLine {
 }
 export interface Quote {
   lines: QuoteLine[];
-  add_ons: { add_on_id: string; name: string; basis: AddOnBasis; quantity: number; unit_amount: number; amount: number }[];
+  add_ons: { add_on_id: string; name: string; basis: AddOnBasis; quantity: number; unit_amount: number; amount: number; pieces?: number; is_override?: boolean }[];
   items_total: number;
   add_ons_total: number;
   total_before_discount: number;

@@ -30,7 +30,8 @@ interface Draft {
   withDriver: boolean;
   wholeProperty: boolean;
   cleaningDays: string; // bridal and groom: days the pieces are kept back for cleaning after the return
-  addOns: Record<string, number>; // add_on_id -> quantity
+  addOns: Record<string, number>; // add_on_id -> quantity (pieces)
+  addOnPrices?: Record<string, string>; // add_on_id -> price agreed for this booking (blank = the accessory price)
   customer: NewCustomer;
   customerId: string | null;
   discount: string;
@@ -92,7 +93,7 @@ export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
     const p = defaultPeriod(templates[0]?.kind, tz, branchSetting(b, "check_in_time", "14:00"), branchSetting(b, "check_out_time", "11:00"));
     return {
       branchId: myBranchId ?? activeBranches[0]?.id ?? "", start: p.start, end: p.end, lines: [], adults: 1, children: 0,
-      withDriver: false, wholeProperty: false, cleaningDays: "", addOns: {}, customer: emptyCustomer, customerId: null, discount: "",
+      withDriver: false, wholeProperty: false, cleaningDays: "", addOns: {}, addOnPrices: {}, customer: emptyCustomer, customerId: null, discount: "",
       depositAgreed: "", advance: "", advanceMethod: "", deposit: "", depositMethod: "", notes: "",
     };
   };
@@ -174,8 +175,9 @@ export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
         adults: r.adults, children: r.children, withDriver: r.with_driver, wholeProperty: r.whole_property,
         cleaningDays: r.cleaning_days ? String(r.cleaning_days) : "",
         // the form asks "how many" for once-off and per-day extras; the booking stores the worked-out quantity
-        addOns: Object.fromEntries(r.rental_add_ons.map((a) => [a.add_on_id,
-          a.basis === "per_rental" ? Number(a.quantity) : a.basis === "per_day" ? Math.max(1, Math.round(Number(a.quantity) / days)) : 1])),
+        addOns: Object.fromEntries(r.rental_add_ons.map((a) => [a.add_on_id, a.pieces ?? (
+          a.basis === "per_rental" ? Number(a.quantity) : a.basis === "per_day" ? Math.max(1, Math.round(Number(a.quantity) / days)) : 1)])),
+        addOnPrices: Object.fromEntries(r.rental_add_ons.filter((a) => a.is_override).map((a) => [a.add_on_id, String(a.amount)])),
         customerId: r.customer_id, discount: Number(r.discount) ? String(r.discount) : "",
         depositAgreed: Number(r.deposit_agreed) ? String(r.deposit_agreed) : "", notes: r.notes ?? "",
       });
@@ -383,7 +385,7 @@ export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
   };
 
   // ---- live quote ----
-  const { adults, children, withDriver, wholeProperty, addOns: draftAddOns } = d;
+  const { adults, children, withDriver, wholeProperty, addOns: draftAddOns, addOnPrices } = d;
   const quoteInput = useMemo(() => ({
     branch_id: branchId, start_at: startIso, end_at: endIso, adults, children,
     with_driver: withDriver && hasVehicle, whole_property: wholeProperty,
@@ -392,9 +394,11 @@ export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
       ...(l.amount_override.trim() !== "" ? { amount_override: num(l.amount_override) } : {}),
       ...(l.unit_ids.length === l.qty ? { unit_ids: l.unit_ids } : {}),
     })),
-    add_ons: Object.entries(draftAddOns).map(([add_on_id, quantity]) => ({ add_on_id, quantity })),
+    add_ons: Object.entries(draftAddOns).map(([add_on_id, quantity]) => ({
+      add_on_id, quantity, ...(addOnPrices?.[add_on_id]?.trim() ? { amount_override: num(addOnPrices[add_on_id]) } : {}),
+    })),
     ...(cleaning !== undefined ? { cleaning_days: cleaning } : {}),
-  }), [branchId, startIso, endIso, adults, children, withDriver, hasVehicle, wholeProperty, lines, draftAddOns, cleaning]);
+  }), [branchId, startIso, endIso, adults, children, withDriver, hasVehicle, wholeProperty, lines, draftAddOns, addOnPrices, cleaning]);
   const canQuote = periodOk && !!branchId && (lines.length > 0 || wholeProperty);
   const [quoteResult, setQuoteResult] = useState<{ input: typeof quoteInput; version: number; quote?: Quote; error?: string } | null>(null);
   const currentQuote = canQuote && quoteResult?.input === quoteInput && quoteResult.version === checkVersion ? quoteResult : null;
@@ -450,7 +454,8 @@ export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
     depositMethod: num(d.deposit) > 0 && !d.depositMethod ? "Choose how the deposit was paid." : null,
     notes: textLimitError(d.notes, "notes", 500),
     // a price agreed with the customer for one line, typed over the catalogue price
-    agreedPrice: lines.map((l) => moneyError(l.amount_override, { label: "agreed price", max: 10_000_000 })).find(Boolean) ?? null,
+    agreedPrice: [...lines.map((l) => l.amount_override), ...Object.keys(draftAddOns).map((id) => addOnPrices?.[id] ?? "")]
+      .map((v) => moneyError(v, { label: "agreed price", max: 10_000_000 })).find(Boolean) ?? null,
     editPay: editing ? moneyError(editPay.amount, { label: "payment", positive: true, max: quote ? Math.max(0, total - money(editing).paid) : undefined, maxText: `the balance after this change (${rupees(Math.max(0, total - money(editing).paid))})` }) : null,
     editPayMethod: editing && num(editPay.amount) > 0 && !editPay.method ? "Choose how the payment was made." : null,
   };
@@ -563,15 +568,33 @@ export function useBookingForm(onBooked?: (booking: BookedRental) => void) {
     setConfirmDiscard(false);
   };
 
-  // an accessory linked to categories is offered only when the cart holds one of them (left unticked: the customer may not want it)
+  // accessories: every active one for the cart's business types can be added; one linked to products or categories is
+  // suggested when the cart holds one of them (linked to nothing = suggested with everything)
   const cartCategories = new Set(lines.map((l) => variations.get(l.variation_id)?.product.category_id));
-  const visibleAddOns = addOns.filter((a) => a.is_active
-    && (a.template_keys.length === 0 || a.template_keys.some((k) => cartTemplates.some((t) => t.key === k)))
-    && (!a.category_ids?.length || a.category_ids.some((c) => cartCategories.has(c)) || d.addOns[a.id] !== undefined));
+  const cartProducts = new Set(lines.map((l) => variations.get(l.variation_id)?.product.id));
+  const pickableAddOns = addOns.filter((a) => a.is_active
+    && (a.template_keys.length === 0 || a.template_keys.some((k) => cartTemplates.some((t) => t.key === k))));
+  const suggestedAddOns = pickableAddOns.filter((a) => (!a.category_ids?.length && !a.product_ids?.length)
+    || a.category_ids?.some((c) => cartCategories.has(c)) || a.product_ids?.some((p) => cartProducts.has(p)));
+  const visibleAddOns = pickableAddOns.filter((a) => suggestedAddOns.includes(a) || d.addOns[a.id] !== undefined);
+  // how many of each counted accessory are free for the dates (the booking being changed left out; migration 044)
+  const [addOnFree, setAddOnFree] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!periodOk || !addOns.some((a) => a.quantity != null)) { setAddOnFree({}); return; }
+    let live = true;
+    const t = setTimeout(() => {
+      void createClient().rpc("add_on_free" as never, { p_start: startIso, p_end: endIso, p_rental_id: editId ?? null } as never)
+        .then(({ data, error }) => {
+          if (!live || error) return;
+          setAddOnFree(Object.fromEntries(((data ?? []) as { add_on_id: string; free: number }[]).map((r) => [r.add_on_id, Number(r.free)])));
+        });
+    }, 300);
+    return () => { live = false; clearTimeout(t); };
+  }, [periodOk, startIso, endIso, editId, addOns, checkVersion]);
   const quoteLineFor = (variationId: string) => quote?.lines.find((l) => l.variation_id === variationId && l.reserve);
 
   return {
-    router, shop, tz, myBranchId, activeBranches, categories, addOns, templateOf, feature, word, businessModule, products, editId, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, kinds, hasRoom, hasVehicle, roomShop, avail, pieceLines, pieces, shortItems, checkingStock, quote, quoteError, addLine, updateLine, busy, editPay, setEditPay, total, shown, submit, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, quoteLineFor, loadingCustomer,
+    router, shop, tz, myBranchId, activeBranches, categories, addOns, templateOf, feature, word, businessModule, products, editId, editing, d, customer, setCustomer, set, cart, lines, branchId, setBranch, variations, startIso, endIso, startInPast, periodOk, cleaningBad, cleaning, kinds, hasRoom, hasVehicle, roomShop, avail, pieceLines, pieces, shortItems, checkingStock, quote, quoteError, addLine, updateLine, busy, editPay, setEditPay, total, shown, submit, confirmDiscard, setConfirmDiscard, reset, visibleAddOns, pickableAddOns, suggestedAddOns, addOnFree, quoteLineFor, loadingCustomer,
     stockError, quotePending, pieceProblem, moneyErrors: money_, suggestedDeposit, showErrors: () => setTried(true),
   };
 }

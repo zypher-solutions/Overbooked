@@ -51,6 +51,11 @@ function rentalIssue(f: BookingFormState): string | null {
   if (f.stockError) return `Could not check stock. ${f.stockError}`;
   if (f.shortItems.length)
     return "Some cart items are unavailable. Change the dates or adjust the cart.";
+  const shortAccessory = f.pickableAddOns.find(
+    (a) => f.d.addOns[a.id] !== undefined && f.addOnFree[a.id] !== undefined && f.d.addOns[a.id] > f.addOnFree[a.id],
+  );
+  if (shortAccessory)
+    return `Only ${f.addOnFree[shortAccessory.id]} ${shortAccessory.name} free for these dates. Lower the number or change the dates.`;
   if (f.checkingStock || f.quotePending)
     return "Wait for availability and rental pricing to finish checking.";
   return (
