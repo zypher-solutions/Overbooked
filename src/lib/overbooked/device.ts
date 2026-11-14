@@ -15,11 +15,12 @@ export function deviceKey(): string {
   }
 }
 
-// "Windows Chrome, desktop" from the user agent; brand checks go most specific first (Edge says Chrome too)
-export function deviceName(ua = navigator.userAgent): string {
+// "Windows Chrome, desktop" from the user agent; brand checks go most specific first (Edge says Chrome too).
+// Brave sends Chrome's exact user agent on purpose; only Brave adds navigator.brave.
+export function deviceName(ua = navigator.userAgent, brave = "brave" in navigator): string {
   const os = /Android/.test(ua) ? "Android" : /iPhone|iPad|iPod/.test(ua) ? "iOS" : /Windows/.test(ua) ? "Windows"
     : /Mac OS X/.test(ua) ? "Mac" : /CrOS/.test(ua) ? "ChromeOS" : /Linux/.test(ua) ? "Linux" : "Unknown";
-  const browser = /Edg\//.test(ua) ? "Edge" : /OPR\/|Opera/.test(ua) ? "Opera" : /SamsungBrowser/.test(ua) ? "Samsung Internet"
+  const browser = brave ? "Brave" : /Edg\//.test(ua) ? "Edge" : /OPR\/|Opera/.test(ua) ? "Opera" : /SamsungBrowser/.test(ua) ? "Samsung Internet"
     : /Firefox|FxiOS/.test(ua) ? "Firefox" : /Chrome|CriOS/.test(ua) ? "Chrome" : /Safari/.test(ua) ? "Safari" : "browser";
   const kind = /iPad|Tablet/.test(ua) ? "tablet" : /Mobi|Android|iPhone/.test(ua) ? "phone" : "desktop";
   return `${os} ${browser}, ${kind}`;
