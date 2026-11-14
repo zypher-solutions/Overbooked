@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { money } from "@/lib/shop/api";
 import {
   inclusiveTaxBreakdown,
   METHOD_LABELS,
   num,
+  plural,
   rupees,
 } from "@/lib/shop/format";
 import type { Method } from "@/lib/shop/types";
@@ -36,9 +38,9 @@ function MoneyRow({
   const hasAmount = num(amount) > 0;
   const problem = error ?? method?.error;
   return (
-    <div className="py-2.5">
-      <div className="grid grid-cols-[minmax(0,1fr)_7rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_9.5rem]">
-        <span className="text-sm font-medium">{label}</span>
+    <div className="py-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_7rem] items-center gap-2 @md:grid-cols-[minmax(0,1fr)_7rem_9.5rem]">
+        <span className="text-sm font-medium" title={hint}>{label}</span>
         <input
           className={cn(monoInputClass, "min-h-10 text-right", error && "border-rust/60")}
           inputMode="decimal"
@@ -55,8 +57,10 @@ function MoneyRow({
             disabled={!hasAmount}
             className={cn(
               inputClass,
-              "col-span-2 min-h-10 sm:col-span-1",
+              "col-span-2 min-h-10 @md:col-span-1",
               method.error && "border-rust/60",
+              // in a narrow column the method only takes a line once there is an amount to pay
+              !hasAmount && "hidden @md:block",
             )}
             value={hasAmount ? method.value : ""}
             onChange={(event) =>
@@ -71,13 +75,14 @@ function MoneyRow({
             ))}
           </select>
         ) : (
-          <span className="hidden sm:block" />
+          <span className="hidden @md:block" />
         )}
       </div>
       {problem ? (
         <p className="mt-1 text-xs text-rust">{problem}</p>
       ) : hint ? (
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+        // on a wide screen the hint is a tooltip on the label, to keep the rail short
+        <p className="mt-1 text-xs text-muted-foreground xl:sr-only">{hint}</p>
       ) : null}
     </div>
   );
@@ -87,7 +92,7 @@ export function CheckoutPayment({ f }: { f: BookingForm }): React.JSX.Element {
   const { d, editing, set, shown, editPay, setEditPay } = f;
 
   return (
-    <div className="divide-y divide-border">
+    <div className="@container divide-y divide-border">
       <MoneyRow
         label="Discount"
         hint="Optional, taken off the rent."
@@ -173,21 +178,35 @@ export function CheckoutPayment({ f }: { f: BookingForm }): React.JSX.Element {
 
 export function CheckoutNotes({ f }: { f: BookingForm }): React.JSX.Element {
   const { d, set, shown } = f;
+  const error = shown("notes", d.notes);
+  // folded away until needed; starts open when there is already a note, and opens on a problem with it
+  const [open, setOpen] = useState(() => d.notes.trim() !== "");
   return (
-    <Field
-      label="Notes"
-      hint="Optional. Staff see it on the booking."
-      error={shown("notes", d.notes)}
+    <details
+      className="rounded-lg border border-border px-3 py-2 text-sm"
+      open={open || !!error}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <textarea
-        rows={4}
-        maxLength={500}
-        placeholder="Alterations, fitting dates, anything agreed with the customer"
-        className={inputClass}
-        value={d.notes}
-        onChange={(event) => set({ notes: event.target.value })}
-      />
-    </Field>
+      <summary className="cursor-pointer font-medium text-muted-foreground">
+        Notes{d.notes.trim() ? " · added" : " (optional)"}
+      </summary>
+      <div className="mt-2">
+        <Field
+          label="Notes"
+          hint="Staff see it on the booking."
+          error={error}
+        >
+          <textarea
+            rows={3}
+            maxLength={500}
+            placeholder="Alterations, fitting dates, anything agreed with the customer"
+            className={inputClass}
+            value={d.notes}
+            onChange={(event) => set({ notes: event.target.value })}
+          />
+        </Field>
+      </div>
+    </details>
   );
 }
 
@@ -241,10 +260,9 @@ export function CheckoutSummary({ f }: { f: BookingForm }): React.JSX.Element {
   return (
     <>
       <h2 id="checkout-summary-title" className="scroll-mt-20 text-base font-semibold">
-        Bill
+        Bill · {plural(qty, "item")}
       </h2>
       <dl className="mt-3 space-y-2 text-sm">
-        <BillRow label="Total items">{qty}</BillRow>
         <BillRow label="Rent">
           {quote ? rupees(quote.total_before_discount - quote.add_ons_total) : dash}
         </BillRow>

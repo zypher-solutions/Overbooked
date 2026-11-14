@@ -13,6 +13,7 @@ import {
   todayLocal,
 } from "@/lib/shop/format";
 import { CustomerPicker } from "@/components/shop/CustomerPicker";
+import { NewCustomerDialog } from "@/components/shop/NewCustomerDialog";
 import { customerProblem } from "@/components/shop/CustomerForm";
 import { DateInput, isoToDisplay } from "@/components/shop/DateInput";
 import {
@@ -64,6 +65,31 @@ function rentalIssue(f: BookingFormState): string | null {
       ? null
       : (f.quoteError ??
         "Rental pricing is unavailable. Check the dates and cart."))
+  );
+}
+
+// one band of the checkout card: a small heading, then its fields; a line separates the bands
+function Band({
+  title,
+  actions,
+  className,
+  children,
+}: {
+  title: string;
+  actions?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <section className={cn("min-w-0 px-5 py-3", className)}>
+      <div className="mb-2 flex min-h-9 shrink-0 flex-wrap items-center justify-between gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {title}
+        </h2>
+        {actions}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -170,7 +196,14 @@ function RentalSetup({
           />
         </Field>
       </div>
-      {periodOk ? (
+      {periodOk && f.branchId && !f.checkingStock && !f.stockError && f.shortItems.length ? (
+        <p role="status" className="text-sm font-semibold text-rust">
+          {f.shortItems.length === 1
+            ? "1 item is not free for these dates."
+            : `${f.shortItems.length} items are not free for these dates.`}{" "}
+          <span className="font-normal">Change the dates or the cart below.</span>
+        </p>
+      ) : periodOk ? (
         <p className="text-sm text-muted-foreground">
           <span className="font-semibold text-foreground">
             {quote ? plural(quote.days, "day") : "…"}
@@ -202,6 +235,8 @@ export function BookingForm({ f }: { f: BookingFormState }): React.JSX.Element {
     setCustomer,
   } = f;
   const [attempted, setAttempted] = useState(false);
+  // the new-customer popup: null when closed, else what was typed in the search box
+  const [creating, setCreating] = useState<string | null>(null);
   const branchName =
     activeBranches.find((branch) => branch.id === branchId)?.name ?? "";
   const customerIssue =
@@ -211,13 +246,22 @@ export function BookingForm({ f }: { f: BookingFormState }): React.JSX.Element {
         ? customer.is_blocked
           ? "Choose a customer who can make a booking."
           : null
-        : customerProblem(d.customer);
+        : customerProblem(d.customer)
+          ? "Choose a customer, or create a new one."
+          : null;
   const paymentIssue =
     Object.values(f.moneyErrors).find(Boolean) ??
     (editing && f.quote && f.total < money(editing).paid
       ? "The new total is less than what was already paid. Record a refund on the booking first."
       : null);
   const issue = rentalIssue(f) ?? customerIssue ?? paymentIssue;
+  // said before anyone presses Confirm: what is still missing (dates, stock, pieces, the customer)
+  const stillToDo = editing ? null : (rentalIssue(f) ?? customerIssue);
+  const submitLabel = busy
+    ? "Saving booking…"
+    : editing
+      ? "Save change"
+      : "Confirm booking";
   const pending =
     (f.checkingStock || f.quotePending) &&
     !f.shortItems.length &&
@@ -276,17 +320,20 @@ export function BookingForm({ f }: { f: BookingFormState }): React.JSX.Element {
 
   return (
     <>
-      {!busy ? (
-        <Link
-          href={editing ? `/rentals/${editing.id}` : "/scan"}
-          className={cn(ghostButtonClass, "mb-3 -ml-2.5")}
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          {editing ? "Back to booking" : "Inventory search"}
-        </Link>
-      ) : null}
       <PageHeader
+        compact
         title={editing ? `Change booking ${editing.token}` : "Checkout"}
+        before={
+          !busy ? (
+            <Link
+              href={editing ? `/rentals/${editing.id}` : "/scan"}
+              className={cn(ghostButtonClass, "min-h-9")}
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              {editing ? "Back to booking" : "Inventory search"}
+            </Link>
+          ) : undefined
+        }
         actions={
           !editing && !busy ? (
             <CartSwitcher activeLabel={activeCustomer} />
@@ -295,105 +342,149 @@ export function BookingForm({ f }: { f: BookingFormState }): React.JSX.Element {
       />
 
       <form noValidate onSubmit={confirm}>
-        <fieldset disabled={busy} className="min-w-0 space-y-4">
+        {/* One card in bands, like a paper bill: booking, customer, items, then a bottom strip with the notes, the
+            payment and the bill. The dates sit right above the items, so a date that clashes with a booked piece shows
+            up where it was typed. */}
+        <fieldset disabled={busy} className="min-w-0">
           <legend className="sr-only">Rental checkout</legend>
 
-          <Panel title="Booking details">
-            <RentalSetup f={f} branchName={branchName} />
-          </Panel>
+          <div className="glass xl:-mb-24 xl:grid xl:h-[calc(100dvh-9.5rem)] xl:min-h-[42rem] xl:grid-cols-[minmax(0,1fr)_20rem] xl:grid-rows-[minmax(0,1fr)] 2xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="min-w-0 divide-y divide-border xl:flex xl:min-h-0 xl:flex-col">
+              <Band title="Booking">
+                <RentalSetup f={f} branchName={branchName} />
+              </Band>
 
-          <Panel title="Customer">
-            {editing ? (
-              <div className="text-sm">
-                <p className="font-semibold">{editing.customers.full_name}</p>
-                <p className="mt-1 text-muted-foreground">
-                  {editing.customers.phone}
-                </p>
-              </div>
-            ) : loadingCustomer ? (
-              <Skeleton className="h-16 w-full" />
-            ) : (
-              <CustomerPicker
-                showOptionalDetails
-                selected={customer}
-                onSelect={(selected) => {
-                  setCustomer(selected);
-                  set({ customerId: selected?.id ?? null });
-                }}
-                draft={d.customer}
-                onDraft={(draft) => set({ customer: draft })}
-                needsLicence={false}
-              />
-            )}
-          </Panel>
+              <Band title="Customer">
+                {editing ? (
+                  <div className="text-sm">
+                    <p className="font-semibold">{editing.customers.full_name}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {editing.customers.phone}
+                    </p>
+                  </div>
+                ) : loadingCustomer ? (
+                  <Skeleton className="h-16 w-full" />
+                ) : (
+                  <CustomerPicker
+                    onCreateNew={(typed) => setCreating(typed)}
+                    selected={customer}
+                    onSelect={(selected) => {
+                      setCustomer(selected);
+                      set({ customerId: selected?.id ?? null });
+                    }}
+                    draft={d.customer}
+                    onDraft={(draft) => set({ customer: draft })}
+                    needsLicence={false}
+                  />
+                )}
+              </Band>
 
-          <Panel
-            title="Items"
-            actions={
-              !editing ? (
-                <Link href="/catalog" className={ghostButtonClass}>
-                  <Plus className="size-4" aria-hidden="true" /> Add items
-                </Link>
-              ) : undefined
-            }
-          >
-            <CheckoutCart f={f} />
-          </Panel>
+              <Band
+                className="xl:flex xl:min-h-0 xl:flex-1 xl:flex-col"
+                title="Items"
+                actions={
+                  !editing ? (
+                    <Link href="/catalog" className={ghostButtonClass}>
+                      <Plus className="size-4" aria-hidden="true" /> Add items
+                    </Link>
+                  ) : undefined
+                }
+              >
+                <CheckoutCart f={f} />
+              </Band>
+            </div>
 
-          <Panel>
-            <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.35fr)_minmax(17rem,1fr)]">
-              <div className="order-3 min-w-0 lg:order-1">
-                <CheckoutNotes f={f} />
-              </div>
-              <div className="order-1 min-w-0 lg:order-2">
-                <h2 className="text-base font-semibold">Payment</h2>
-                <CheckoutPayment f={f} />
-              </div>
+            {/* the money: a rail down the right of the card that stays in view while the left side scrolls */}
+            <div className="min-h-0 min-w-0 border-t border-border bg-muted/20 xl:rounded-r-[inherit] xl:border-l xl:border-t-0">
               <aside
                 aria-labelledby="checkout-summary-title"
-                className="order-2 min-w-0 rounded-xl border border-border bg-muted/30 p-4 lg:order-3"
+                className="min-w-0 space-y-4 p-4 xl:h-full xl:overflow-y-auto"
               >
                 <CheckoutSummary f={f} />
-                {pending ? (
-                  <p role="status" className="mt-3 text-sm text-muted-foreground">
-                    {f.checkingStock
-                      ? "Checking availability…"
-                      : "Updating the price…"}
-                  </p>
-                ) : null}
-                {attempted && issue && !pending ? (
-                  <p
-                    role="alert"
-                    className="mt-3 rounded-md border border-rust/30 bg-rust/5 p-2.5 text-sm text-rust"
-                  >
-                    {issue}
-                  </p>
-                ) : null}
-                <button
-                  type="submit"
-                  disabled={busy || pending || loadingCustomer}
-                  className={cn(goldButtonClass, "mt-4 min-h-11 w-full")}
-                >
-                  {busy
-                    ? "Saving booking…"
-                    : editing
-                      ? "Save change"
-                      : "Confirm booking"}
-                </button>
-                {!editing && !busy ? (
+                <div className="border-t border-border pt-3">
+                  <h2 className="text-sm font-semibold">Payment</h2>
+                  <CheckoutPayment f={f} />
+                </div>
+                <CheckoutNotes f={f} />
+                <div className="space-y-2">
+                  {pending ? (
+                    <p role="status" className="text-sm text-muted-foreground">
+                      {f.checkingStock
+                        ? "Checking availability…"
+                        : "Updating the price…"}
+                    </p>
+                  ) : attempted && issue ? (
+                    <p
+                      role="alert"
+                      className="rounded-md border border-rust/30 bg-rust/5 p-2.5 text-sm text-rust"
+                    >
+                      {issue}
+                    </p>
+                  ) : stillToDo ? (
+                    // what is still missing, said before anyone presses Confirm (customer gaps only after a try)
+                    <p className="rounded-md border border-border bg-muted/40 p-2.5 text-sm text-muted-foreground">
+                      {stillToDo}
+                    </p>
+                  ) : null}
                   <button
-                    type="button"
-                    className={cn(dangerButtonClass, "mt-2 w-full")}
-                    onClick={() => f.setConfirmDiscard(true)}
+                    type="submit"
+                    disabled={busy || pending || loadingCustomer}
+                    className={cn(goldButtonClass, "hidden min-h-11 w-full xl:inline-flex")}
                   >
-                    Discard this cart
+                    {submitLabel}
                   </button>
-                ) : null}
+                  {!editing && !busy ? (
+                    <button
+                      type="button"
+                      className={cn(dangerButtonClass, "w-full")}
+                      onClick={() => f.setConfirmDiscard(true)}
+                    >
+                      Discard this cart
+                    </button>
+                  ) : null}
+                </div>
               </aside>
             </div>
-          </Panel>
+          </div>
+
+          {/* below xl the bill is at the end of the page, so Confirm stays at the bottom of the screen */}
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-lg backdrop-blur lg:left-64 xl:hidden">
+            {attempted && issue && !pending ? (
+              <p role="alert" className="mb-2 line-clamp-2 text-sm text-rust">
+                {issue}
+              </p>
+            ) : null}
+            <div className="flex items-center justify-between gap-3">
+              <p className="min-w-0 text-sm">
+                <span className="block text-xs text-muted-foreground">
+                  Bill amount
+                </span>
+                <span className="font-semibold tabular-nums text-gold">
+                  {f.quote ? rupees(f.total) : "—"}
+                </span>
+              </p>
+              <button
+                type="submit"
+                disabled={busy || pending || loadingCustomer}
+                className={cn(goldButtonClass, "min-h-11 shrink-0")}
+              >
+                {pending ? "Checking…" : submitLabel}
+              </button>
+            </div>
+          </div>
         </fieldset>
       </form>
+
+      <NewCustomerDialog
+        open={creating !== null}
+        prefill={creating ?? ""}
+        onClose={() => setCreating(null)}
+        onCreated={(created) => {
+          setCustomer(created);
+          set({ customerId: created.id });
+          setCreating(null);
+        }}
+      />
 
       <Modal
         open={f.confirmDiscard}
