@@ -16,7 +16,7 @@ export const passwordIsStrong = (pw: string) => PASSWORD_RULES.every((r) => r.ok
 
 // A password box with a show/hide eye, a Caps Lock warning and, for new passwords, the rules ticking off as you type.
 export function PasswordField({ id, label, value, onChange, autoComplete, placeholder = "••••••••", rules = false, autoFocus, icon = true }: {
-  id: string; label?: string; value: string; onChange: (v: string) => void; autoComplete: "current-password" | "new-password";
+  id: string; label?: string; value: string; onChange: (v: string) => void; autoComplete: "current-password" | "new-password" | "off";
   placeholder?: string; rules?: boolean; autoFocus?: boolean; icon?: boolean;
 }) {
   const [shown, setShown] = useState(false);

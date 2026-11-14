@@ -9,6 +9,7 @@ import { call } from "@/lib/shop/api";
 import { errorText } from "@/lib/shop/format";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
+import { MasterPassword } from "@/components/shop/MasterPassword";
 import {
   Field, Modal, PageHeader, Panel, StatusBadge, ghostButtonClass, goldButtonClass, inputClass, monoInputClass,
 } from "@/components/shop/ui";
@@ -158,7 +159,7 @@ function problem(row: Row, raw: string): string | null {
 }
 
 export default function SettingsPage() {
-  const { shop, branches, templates, isOwner, businessModule, refresh } = useShop();
+  const { shop, branches, templates, isOwner, isSupport, businessModule, refresh } = useShop();
   const [branchId, setBranchId] = useState("");
   const [q, setQ] = useState("");
   const [edit, setEdit] = useState<{ row: Row; value: string | boolean } | null>(null);
@@ -232,6 +233,7 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" subtitle="How the shop works. Pick a branch to give it its own values." />
+      {isSupport ? null : <div className="mb-4"><MasterPassword /></div>}
       <Panel>
         <div className="mb-4 flex flex-wrap items-end gap-3">
           <Field label="Settings for" className="min-w-56 flex-1 sm:flex-none">

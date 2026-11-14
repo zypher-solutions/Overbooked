@@ -15,6 +15,7 @@ import {
   Store,
   Gem,
   History,
+  MonitorSmartphone,
   Sheet,
   Tag,
   TrendingUp,
@@ -105,6 +106,7 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
       },
       { href: "/settings", label: "Settings", icon: Settings, show: c.isOwner },
       { href: "/admin/activity", label: "Activity log", icon: History, show: c.isOwner && !c.isSupport },
+      { href: "/admin/devices", label: "Devices", icon: MonitorSmartphone, show: c.isOwner && !c.isSupport },
     ],
   },
 ];
