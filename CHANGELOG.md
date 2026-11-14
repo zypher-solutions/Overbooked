@@ -1,6 +1,18 @@
 # Changelog
 
 ## 0.3.0 (unreleased): v2 rental engine
+- Login devices and the shop master password (migrations 46 and 47, 14 Nov 2026; APPLIED to the shared cloud project and checked
+  there in rolled-back transactions; pgTAP not yet run; tests: supabase/tests/devices; modelled on Rentopus's "Login User Device"):
+  - new Admin > Devices page (owner only, not Zypher support): every browser each person signed in from ("Windows Chrome,
+    desktop"), with first and last use; new devices are allowed; the owner can block one, and it is refused at sign-in and
+    signed out when the app opens or its tab comes back into view; the owner's current device cannot be blocked
+  - Settings > Master password: one per shop, owner only, stored only as a bcrypt hash nobody signed in can read; needed to block
+    or allow a device (other owner actions can use it later); changing it needs the current one; "Forgot it?" resets it with
+    the owner's sign-in password, 5 wrong tries lock the reset for 15 minutes
+  - activity log: a new device, blocking/allowing one, and setting, changing, resetting or locking the master password
+  - limits: the device key lives in the browser, so clearing site data makes a new (allowed) device; wrong master passwords
+    themselves are not rate-limited; an owner with no sign-in password cannot use the reset
+- Dialogs on phones no longer stretch their rows to fill the screen (the Save button was about 200px tall)
 - Cleaning & repairs (migration 41, 12 Nov 2026; APPLIED to the shared cloud project and checked there in rolled-back
   transactions; pgTAP not yet run; tests: supabase/tests/service_jobs; plan: docs/LAUNCH_PACK_1_PLAN.md part E):
   - new Inventory > Cleaning & repairs page (clothing shops): To do, Away, Ready, History; search and type filter; New job;
