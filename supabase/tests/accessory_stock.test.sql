@@ -3,8 +3,9 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(14);
+SELECT plan(15);
 
+\set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
 \set bridal_staff '''aaaaaaaa-0000-0000-0000-000000000013'''
 \set bridal_shop '''5a000000-0000-0000-0000-000000000001'''
 
@@ -43,7 +44,7 @@ SELECT lives_ok($$ SELECT pg_temp.book(70, 72, 2, '9000000091') $$, 'a booking t
 SELECT throws_like($$ SELECT pg_temp.book(71, 73, 2, '9000000092') $$, 'Only 1 QA Tie is free for these dates%',
   'an overlapping booking cannot take 2 more');
 SELECT lives_ok($$ SELECT pg_temp.book(71, 73, 1, '9000000093') $$, 'but it can take the last one');
-SELECT throws_like($$ SELECT pg_temp.book(70, 71, 1, '9000000094', true) $$, 'Only 0 QA Tie are free%', 'none is left on day 71');
+SELECT throws_like($$ SELECT pg_temp.book(71, 72, 1, '9000000094', true) $$, 'Only 0 QA Tie are free%', 'none is left on day 71');
 SELECT lives_ok($$ SELECT pg_temp.book(80, 81, 3, '9000000095') $$, 'later dates have all 3 again');
 SELECT is((SELECT free FROM public.add_on_free(pg_temp.ist(70, '10:00'), pg_temp.ist(72, '10:00'))
            WHERE add_on_id = (SELECT id FROM add_ons WHERE name = 'QA Tie')), 0, 'the checkout sees none free on days 70 to 72');
@@ -57,6 +58,10 @@ SELECT pg_temp.as_postgres();
 SELECT throws_like($$ UPDATE rentals SET end_at = pg_temp.ist(81, '10:00')
                       WHERE customer_id = (SELECT id FROM customers WHERE phone = '9000000091') $$,
   'Only 0 QA Tie%', 'stretching a booking into a day with no ties left is refused');
+-- an ordinary change of a booking's dates still saves (045: the check used to fail on every booking change)
+SELECT lives_ok($$ UPDATE rentals SET end_at = pg_temp.ist(81, '18:00')
+                   WHERE customer_id = (SELECT id FROM customers WHERE phone = '9000000095') $$,
+  'a booking whose ties stay within the count can be changed');
 
 -- an agreed price for an accessory
 SELECT pg_temp.act_as(:bridal_staff);
@@ -86,8 +91,8 @@ UPDATE add_ons SET quantity = NULL WHERE name = 'QA Tie';
 SELECT pg_temp.act_as(:bridal_staff);
 SELECT lives_ok($$ SELECT pg_temp.book(71, 72, 5, '9000000096', true) $$, 'with no count, any number can go');
 
--- linking it to a product is in the activity log
-SELECT pg_temp.as_postgres();
+-- linking it to a product is in the activity log (changes with no signed-in person are not logged, so as the owner)
+SELECT pg_temp.act_as(:bridal_owner);
 UPDATE add_ons SET product_ids = ARRAY[(SELECT product_id FROM product_variations WHERE id = 'e0000000-0000-0000-0000-000000000012')]
 WHERE name = 'QA Tie';
 SELECT ok(EXISTS (SELECT 1 FROM activity_log WHERE action = 'extra_changed' AND record_label = 'QA Tie' AND changes ? 'Suggested with'),
