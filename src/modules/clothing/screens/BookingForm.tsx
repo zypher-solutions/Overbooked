@@ -208,7 +208,7 @@ function RentalSetup({
           <span className="font-semibold text-foreground">
             {quote ? plural(quote.days, "day") : "…"}
           </span>{" "}
-          rental · {plural(cleaning ?? 0, "cleaning day")} · pieces free again{" "}
+          rental · {plural(cleaning ?? 0, "cleaning day")} · back in stock from{" "}
           <span className="font-semibold text-gold">
             {isoToDisplay(addDays(returns, (cleaning ?? 0) + 1))}
           </span>
