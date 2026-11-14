@@ -18,6 +18,7 @@ import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { StatusBadge, ghostButtonClass, goldButtonClass } from "./ui";
 import { createClient } from "@/lib/supabase/client";
+import { deviceAllowed } from "@/lib/overbooked/device";
 
 // a Zypher admin visiting this shop as support goes back to the console
 async function leaveSupport() {
@@ -51,6 +52,18 @@ export function ShopShell({ children }: { children: ReactNode }) {
     const to = mod.replace?.(pathname, canManage) ?? (otherModules.some((m) => m.screens.includes(pathname)) ? "/" : null);
     if (to) router.replace(to);
   }, [loading, mod, canManage, pathname, router]);
+  // Admin > Devices: record this device, and sign it out if the owner blocked it (checked on open and on coming back to the tab)
+  useEffect(() => {
+    if (!user) return;
+    const check = async () => {
+      if (document.visibilityState !== "visible" || (await deviceAllowed())) return;
+      await createClient().auth.signOut({ scope: "local" });
+      window.location.href = "/login?blocked=1";
+    };
+    void check();
+    document.addEventListener("visibilitychange", check);
+    return () => document.removeEventListener("visibilitychange", check);
+  }, [user]);
   const cart = useCart();
   const [open, setOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);

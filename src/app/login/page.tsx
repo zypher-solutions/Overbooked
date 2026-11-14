@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { emailError, normalizeEmail } from "@/lib/validate";
 import { inputClass, goldButtonClass } from "@/components/overbooked/primitives";
 import { PasswordField } from "@/components/overbooked/PasswordField";
+import { BLOCKED_MESSAGE, deviceAllowed } from "@/lib/overbooked/device";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -16,6 +17,10 @@ export default function LoginPage() {
   const [sending, setSending] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  // the shop app sends a blocked device here (ShopShell); shown on the page, as a toast fired on load is lost
+  const [blocked, setBlocked] = useState(false);
+  useEffect(() => { setBlocked(new URLSearchParams(window.location.search).has("blocked")); }, []);
 
   // the email's template points at /welcome with the token (docs/SETUP.md, "Password reset email")
   const sendReset = async () => {
@@ -40,6 +45,11 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) throw error;
+      if (!(await deviceAllowed())) {
+        await supabase.auth.signOut({ scope: "local" });
+        toast.error("Login failed", { description: BLOCKED_MESSAGE });
+        return;
+      }
       // the shop's activity log (owner only); a support login is logged after its two-step code instead
       await supabase.rpc("log_account_event", { p_kind: "signed_in" }).then(() => undefined, () => undefined);
 
@@ -81,6 +91,7 @@ export default function LoginPage() {
 
         <div className="glass p-6 sm:p-10 rounded-2xl shadow-glow-soft relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
           <h2 className="text-2xl font-semibold mb-6">Staff Login</h2>
+          {blocked ? <p role="alert" className="mb-5 rounded-lg border border-rust/40 bg-rust/10 px-4 py-3 text-sm">{BLOCKED_MESSAGE}</p> : null}
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
