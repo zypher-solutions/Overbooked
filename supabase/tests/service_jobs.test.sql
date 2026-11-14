@@ -57,8 +57,11 @@ SELECT lives_ok(format($f$ SELECT public.update_service_job(%L, 'done', '{"cost"
 SELECT pg_temp.as_postgres();
 SELECT is((SELECT category || ' ' || amount FROM expenses WHERE id = (SELECT expense_id FROM service_jobs WHERE id = (SELECT id FROM t_ids WHERE name = 'job'))),
   'Repairs 250.00', 'the cost is an expense');
-SELECT ok((SELECT id FROM t_ids WHERE name = 'piece') IN (SELECT unit_id FROM public.available_units(:mg_road, :gold_saree, pg_temp.day(2), pg_temp.day(3), 0)),
+-- asked as a signed-in staff member: as postgres with no sign-in, the availability functions see no shop at all
+SELECT pg_temp.act_as(:bridal_staff);
+SELECT ok((SELECT id FROM t_ids WHERE name = 'piece') IN (SELECT unit_id FROM public.find_available_units(:mg_road, :gold_saree, pg_temp.day(2), pg_temp.day(3), 0)),
   'a finished job holds nothing');
+SELECT pg_temp.as_postgres();
 SELECT is((SELECT count(*) FROM activity_log WHERE area = 'service' AND record_id = (SELECT id FROM t_ids WHERE name = 'job')), 1::bigint,
   'the job is one entry in the activity log (made, sent, back and done in one transaction here)');
 
@@ -106,19 +109,10 @@ SELECT pg_temp.as_postgres();
 SELECT ok((SELECT upper(period) <= now() FROM unit_reservations
            WHERE rental_id = (SELECT id FROM t_ids WHERE name = 'ret') AND unit_id = (SELECT id FROM t_ids WHERE name = 'ret_unit')),
   'finishing it ends the returned booking''s hold now');
+SELECT pg_temp.act_as(:bridal_staff);
 SELECT ok((SELECT id FROM t_ids WHERE name = 'ret_unit') IN
-           (SELECT unit_id FROM public.available_units(:mg_road, :gold_saree, now() + interval '1 minute', now() + interval '2 minutes', 0)),
+           (SELECT unit_id FROM public.find_available_units(:mg_road, :gold_saree, now() + interval '1 minute', now() + interval '2 minutes', 0)),
   'and the piece is offered for a booking from now');
--- TEMP diagnostics (to be removed): why a piece with no open job is not offered
-SELECT diag('DIAG unit: ' || (SELECT row(u.status, u.branch_id = :mg_road, u.variation_id = :gold_saree, public._unit_kept_late(u.id),
-  public._job_holds(u.id, now() + interval '1 minute', now() + interval '2 minutes' + v.turnaround), v.turnaround, now())::text
-  FROM units u JOIN product_variations v ON v.id = u.variation_id WHERE u.id = (SELECT id FROM t_ids WHERE name = 'ret_unit')));
-SELECT diag('DIAG res: ' || COALESCE((SELECT string_agg(row(ur.rental_id = (SELECT id FROM t_ids WHERE name = 'ret'), ur.state, ur.period::text)::text, ' | ')
-  FROM unit_reservations ur WHERE ur.unit_id = (SELECT id FROM t_ids WHERE name = 'ret_unit')), 'none'));
-SELECT diag('DIAG jobs: ' || COALESCE((SELECT string_agg(row(j.type, j.status, j.rental_id IS NOT NULL, j.due_on, j.created_at)::text, ' | ')
-  FROM service_jobs j WHERE j.unit_id = (SELECT id FROM t_ids WHERE name = 'ret_unit')), 'none'));
-SELECT diag('DIAG piece11: ' || COALESCE((SELECT string_agg(row(ur.state, ur.period::text)::text, ' | ')
-  FROM unit_reservations ur WHERE ur.unit_id = (SELECT id FROM t_ids WHERE name = 'piece')), 'none'));
 
 SELECT * FROM finish();
 ROLLBACK;
