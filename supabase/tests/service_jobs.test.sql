@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(17);
+SELECT plan(23);
 
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
 \set bridal_manager '''aaaaaaaa-0000-0000-0000-000000000012'''
@@ -87,6 +87,28 @@ SELECT public.complete_rental((SELECT id FROM t_ids WHERE name = 'ret'),
   jsonb_build_object('checks', jsonb_build_array(jsonb_build_object('unit_id', (SELECT id FROM t_ids WHERE name = 'ret_unit'), 'condition', 'good'))));
 SELECT is((SELECT type FROM service_jobs WHERE unit_id = (SELECT id FROM t_ids WHERE name = 'ret_unit') AND status = 'todo'), 'cleaning',
   'the return adds a cleaning job');
+INSERT INTO t_ids SELECT 'clean_job', id FROM service_jobs WHERE unit_id = (SELECT id FROM t_ids WHERE name = 'ret_unit') AND status = 'todo';
+
+-- ===== the cleaning job's dates move availability (048) =====
+-- moved later: the piece stays out until the new due date, and is free from it
+SELECT lives_ok(format($f$ SELECT public.update_service_job(%L, 'extend', jsonb_build_object('due_on', CURRENT_DATE + 6)) $f$,
+  (SELECT id FROM t_ids WHERE name = 'clean_job')), 'the cleaning is moved to a later date');
+SELECT pg_temp.as_postgres();
+SELECT ok(public._job_holds((SELECT id FROM t_ids WHERE name = 'ret_unit'), pg_temp.day(4), pg_temp.day(5)),
+  'a cleaning job moved later keeps the piece out past the booking''s cleaning days');
+SELECT ok(NOT public._job_holds((SELECT id FROM t_ids WHERE name = 'ret_unit'), pg_temp.day(6), pg_temp.day(7)),
+  'and frees it from its new due date (not for every future date)');
+-- finished early: the booking's hold on the piece ends now, so it can be booked straight away
+SELECT pg_temp.act_as(:bridal_staff);
+SELECT lives_ok(format($f$ SELECT public.update_service_job(%L, 'done') $f$, (SELECT id FROM t_ids WHERE name = 'clean_job')),
+  'the cleaning is finished early');
+SELECT pg_temp.as_postgres();
+SELECT ok((SELECT upper(period) <= now() FROM unit_reservations
+           WHERE rental_id = (SELECT id FROM t_ids WHERE name = 'ret') AND unit_id = (SELECT id FROM t_ids WHERE name = 'ret_unit')),
+  'finishing it ends the returned booking''s hold now');
+SELECT ok((SELECT id FROM t_ids WHERE name = 'ret_unit') IN
+           (SELECT unit_id FROM public.available_units(:mg_road, :gold_saree, now() + interval '1 minute', now() + interval '2 minutes', 0)),
+  'and the piece is offered for a booking from now');
 
 SELECT * FROM finish();
 ROLLBACK;
