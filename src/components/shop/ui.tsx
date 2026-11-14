@@ -27,20 +27,33 @@ export function PageHeader({
   title,
   subtitle,
   actions,
+  before,
+  compact = false,
 }: {
   title: string;
   subtitle?: ReactNode;
   actions?: ReactNode;
+  // something small beside the title (a back link), and a tighter gap under the header, for screens that must fit
+  before?: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="font-display text-[26px] font-semibold leading-tight text-foreground sm:text-3xl">
-          {title}
-        </h1>
-        {subtitle ? (
-          <div className="mt-1 text-sm text-muted-foreground">{subtitle}</div>
-        ) : null}
+    <div
+      className={cn(
+        "flex flex-wrap items-end justify-between gap-3",
+        compact ? "mb-3" : "mb-6",
+      )}
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+        {before}
+        <div className="min-w-0">
+          <h1 className="font-display text-[26px] font-semibold leading-tight text-foreground sm:text-3xl">
+            {title}
+          </h1>
+          {subtitle ? (
+            <div className="mt-1 text-sm text-muted-foreground">{subtitle}</div>
+          ) : null}
+        </div>
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
     </div>
