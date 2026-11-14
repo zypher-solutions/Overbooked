@@ -88,7 +88,7 @@ export function Field({
 }) {
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1.5 block text-xs font-semibold tracking-wide text-muted-foreground">
+      <span className="mb-1.5 block text-xs font-semibold tracking-wide text-foreground">
         {label}
       </span>
       {children}
@@ -102,12 +102,12 @@ export function Field({
 }
 
 export const inputClass =
-  "w-full rounded-xl border border-input bg-white px-3 py-2.5 sm:py-2 text-sm text-foreground outline-none transition-all duration-200 placeholder:text-muted-foreground/60 focus:border-neon focus:ring-2 focus:ring-ring disabled:opacity-60 read-only:text-muted-foreground";
+  "w-full rounded-xl border border-input bg-white px-3 py-2.5 sm:py-2 text-sm text-foreground outline-none transition-all duration-200 placeholder:text-muted-foreground/80 focus:border-neon focus:ring-2 focus:ring-ring disabled:opacity-60 read-only:text-muted-foreground";
 
 export const monoInputClass = cn(inputClass, "font-sans tabular-nums");
 
 export const labelClass =
-  "mb-1.5 block text-xs font-semibold tracking-wide text-muted-foreground";
+  "mb-1.5 block text-xs font-semibold tracking-wide text-foreground";
 
 export const goldButtonClass =
   "inline-flex items-center justify-center gap-2 rounded-full bg-[#101715] px-5 py-2.5 sm:py-2 text-sm font-semibold text-white transition-all duration-200 hover:bg-gold hover:shadow-lg disabled:opacity-50 disabled:hover:shadow-none";

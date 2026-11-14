@@ -10,7 +10,8 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
-import { errorText, fmtDate, num, rupees, todayLocal } from "@/lib/shop/format";
+import { METHOD_LABELS, errorText, fmtDate, num, rupees, todayLocal } from "@/lib/shop/format";
+import type { Method } from "@/lib/shop/types";
 import { Field, Modal, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass } from "@/components/shop/ui";
 
 // Money going out of the shop, so Finance can show profit. The owner and a branch manager add; only the owner
@@ -21,7 +22,8 @@ export const DEFAULT_EXPENSE_CATEGORIES = [
 ];
 const PAGE = 200;
 
-interface Expense { id: string; branch_id: string; spent_on: string; category: string; amount: number; note: string | null }
+// method and paid_to: how it was paid and to whom (migration 043), so the daily cashbook can take cash expenses out of the drawer
+interface Expense { id: string; branch_id: string; spent_on: string; category: string; amount: number; method: Method; paid_to: string | null; note: string | null }
 
 export function ExpensesPanel({ from, to, branch, onChanged }: { from: string; to: string; branch: string; onChanged: () => void }) {
   const { tz, isOwner, myBranchId, activeBranches, branches } = useShop();
@@ -35,7 +37,7 @@ export function ExpensesPanel({ from, to, branch, onChanged }: { from: string; t
   useEffect(() => {
     let live = true;
     (async () => {
-      let q = createClient().from("expenses").select("id, branch_id, spent_on, category, amount, note").lte("spent_on", to);
+      let q = createClient().from("expenses").select("id, branch_id, spent_on, category, amount, method, paid_to, note").lte("spent_on", to);
       if (from) q = q.gte("spent_on", from);
       if (branch) q = q.eq("branch_id", branch);
       const { data, error } = await q.order("spent_on", { ascending: false }).order("id").limit(PAGE + 1);
@@ -56,7 +58,7 @@ export function ExpensesPanel({ from, to, branch, onChanged }: { from: string; t
   const changed = () => { setVersion((v) => v + 1); onChanged(); };
 
   const exportCsv = () => {
-    const list = (rows ?? []).map((r) => ({ date: r.spent_on, branch: branchName(r.branch_id), category: r.category, amount: r.amount, note: r.note ?? "" }));
+    const list = (rows ?? []).map((r) => ({ date: r.spent_on, branch: branchName(r.branch_id), category: r.category, amount: r.amount, paid_by: METHOD_LABELS[r.method] ?? r.method, paid_to: r.paid_to ?? "", note: r.note ?? "" }));
     const blob = new Blob([Papa.unparse(list, { escapeFormulae: true })], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -82,10 +84,10 @@ export function ExpensesPanel({ from, to, branch, onChanged }: { from: string; t
         <p className="mt-3 text-sm text-muted-foreground">No expenses in these dates{branch ? ` for ${branchName(branch)}` : ""}. Add rent, salaries and other costs to see your profit.</p>
       ) : (
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[520px] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead><tr className="text-left text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               <th className="py-2 pr-3 font-medium">Date</th><th className="py-2 pr-3 font-medium">Category</th>
-              <th className="py-2 pr-3 font-medium">Branch</th><th className="py-2 pr-3 font-medium">Note</th>
+              <th className="py-2 pr-3 font-medium">Branch</th><th className="py-2 pr-3 font-medium">Paid by</th><th className="py-2 pr-3 font-medium">Paid to</th><th className="py-2 pr-3 font-medium">Note</th>
               <th className="py-2 pr-3 text-right font-medium">Amount</th>{isOwner ? <th className="py-2" /> : null}
             </tr></thead>
             <tbody>
@@ -94,6 +96,8 @@ export function ExpensesPanel({ from, to, branch, onChanged }: { from: string; t
                   <td className="py-2 pr-3 whitespace-nowrap">{fmtDate(r.spent_on)}</td>
                   <td className="py-2 pr-3">{r.category}</td>
                   <td className="py-2 pr-3">{branchName(r.branch_id)}</td>
+                  <td className="py-2 pr-3 whitespace-nowrap">{METHOD_LABELS[r.method] ?? r.method}</td>
+                  <td className="py-2 pr-3">{r.paid_to}</td>
                   <td className="py-2 pr-3 text-muted-foreground">{r.note}</td>
                   <td className="py-2 pr-3 text-right font-mono">{rupees(r.amount)}</td>
                   {isOwner ? (
@@ -105,7 +109,7 @@ export function ExpensesPanel({ from, to, branch, onChanged }: { from: string; t
                 </tr>
               ))}
               <tr className="border-t-2 border-border font-semibold">
-                <td className="py-2 pr-3" colSpan={4}>Total{more ? ` (latest ${PAGE} shown; narrow the dates for the rest)` : ""}</td>
+                <td className="py-2 pr-3" colSpan={6}>Total{more ? ` (latest ${PAGE} shown; narrow the dates for the rest)` : ""}</td>
                 <td className="py-2 pr-3 text-right font-mono">{rupees(total)}</td>{isOwner ? <td /> : null}
               </tr>
             </tbody>
@@ -133,6 +137,8 @@ function ExpenseDialog({ expense, categories, today, branchChoices, defaultBranc
   const [branchId, setBranchId] = useState(expense?.branch_id ?? defaultBranch);
   const [category, setCategory] = useState(expense?.category ?? "");
   const [amount, setAmount] = useState(expense ? String(expense.amount) : "");
+  const [method, setMethod] = useState<Method | "">(expense?.method ?? "");
+  const [paidTo, setPaidTo] = useState(expense?.paid_to ?? "");
   const [note, setNote] = useState(expense?.note ?? "");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -143,6 +149,8 @@ function ExpenseDialog({ expense, categories, today, branchChoices, defaultBranc
     amount: moneyError(amount, { required: true, positive: true, max: 10_000_000 }),
     branch: branchId ? null : "Choose a branch.",
     category: !category.trim() ? "Choose or type a category." : category.trim().length < 2 ? "The category is too short." : null,
+    method: method ? null : "Choose how it was paid.",
+    paidTo: textLimitError(paidTo, "paid to", 80),
     note: textLimitError(note, "note", 200),
     reason: expense ? reasonError(reason, "reason for the correction") : null,
   };
@@ -152,7 +160,7 @@ function ExpenseDialog({ expense, categories, today, branchChoices, defaultBranc
     if (bad) return toast.error(Object.values(errs).find(Boolean)!);
     setBusy(true);
     try {
-      const p = { branch_id: branchId, spent_on: date, category: category.trim(), amount: num(amount), note: note.trim() || null };
+      const p = { branch_id: branchId, spent_on: date, category: category.trim(), amount: num(amount), method, paid_to: paidTo.trim() || null, note: note.trim() || null };
       if (expense) await call("update_expense", { p_expense_id: expense.id, p, p_reason: reason.trim() });
       else await call("add_expense", { p });
       toast.success(expense ? "Expense corrected" : "Expense added");
@@ -185,6 +193,15 @@ function ExpenseDialog({ expense, categories, today, branchChoices, defaultBranc
         <input className={inputClass} list="expense-categories" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Shop rent" maxLength={60} />
         <datalist id="expense-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
       </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Paid by" error={tried ? errs.method ?? undefined : undefined}>
+          <select className={inputClass} value={method} onChange={(e) => setMethod(e.target.value as Method | "")}>
+            <option value="" disabled>Choose…</option>
+            {Object.entries(METHOD_LABELS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+        </Field>
+        <Field label="Paid to (optional)" error={errs.paidTo ?? undefined}><input className={inputClass} maxLength={90} value={paidTo} onChange={(e) => setPaidTo(e.target.value)} placeholder="e.g. Ravi Cleaners" /></Field>
+      </div>
       <Field label="Note (optional)" error={errs.note ?? undefined}><input className={inputClass} maxLength={220} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. October rent, MG Road" /></Field>
       {expense ? <Field label="Why are you correcting it?" error={tried || reason.trim() ? errs.reason ?? undefined : undefined}><input className={inputClass} maxLength={320} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. typed the wrong amount" /></Field> : null}
     </Modal>

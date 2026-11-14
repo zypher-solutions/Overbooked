@@ -577,7 +577,7 @@ function RentalView() {
               </Fact>
             ) : (
               <>
-                <Fact label="Maintenance buffer">
+                <Fact label="Cleaning days after return">
                   <span className="text-base font-semibold">
                     {cleaning == null
                       ? "Product defaults"

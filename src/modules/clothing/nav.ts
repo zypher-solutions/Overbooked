@@ -76,8 +76,9 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
         show: c.canManage,
       },
       {
-        href: "/catalog/earnings",
-        label: "Earnings by product",
+        // the Finance report (migration 043); /catalog/earnings still opens it
+        href: "/finance/products",
+        label: "Product performance",
         icon: TrendingUp,
         show: c.canManage,
       },

@@ -4,7 +4,9 @@ import { businessNameError, moneyError } from "@/lib/validate";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Pencil, Plus, QrCode, Search, Sheet, Tag, Trash2, Upload } from "lucide-react";
+import { Pencil, Plus, QrCode, Search, Sheet, Tag, Trash2, Upload, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -173,6 +175,7 @@ function Items() {
 
 function Extras() {
   const { shop, addOns, templates, categories, canManage, refresh, businessModule } = useShop();
+  const { products } = useCatalog();
   const clothing = businessModule === "clothing";
   const noun = clothing ? "accessory" : "extra";
   const [edit, setEdit] = useState<(Partial<AddOn> & { amountText: string; quantityText: string }) | null>(null);
@@ -189,7 +192,7 @@ function Extras() {
     const row = {
       name: (edit.name ?? "").trim().replace(/\s+/g, " "), basis: edit.basis ?? "per_rental", amount: num(edit.amountText), template_keys: edit.template_keys ?? [], is_active: edit.is_active ?? true,
       // the columns of migration 029 are only sent when used, so extras still save before it is applied
-      ...(clothing ? { category_ids: edit.category_ids ?? [], quantity: edit.quantityText.trim() ? Number(edit.quantityText) : null } : {}),
+      ...(clothing ? { category_ids: edit.category_ids ?? [], product_ids: edit.product_ids ?? [], quantity: edit.quantityText.trim() ? Number(edit.quantityText) : null } : {}),
     };
     const supabase = createClient();
     const { error } = edit.id ? await supabase.from("add_ons").update(row).eq("id", edit.id) : await supabase.from("add_ons").insert({ ...row, shop_id: shop.id });
@@ -199,11 +202,15 @@ function Extras() {
     setEdit(null);
     await refresh();
   };
-  const catNames = (ids: string[] | undefined) => (ids?.length ? ids.map((id) => categories.find((c) => c.id === id)?.name).filter(Boolean).join(", ") : "every category");
+  // what an accessory is suggested with: its categories and its products (neither = everything)
+  const catNames = (ids: string[] | undefined, productIds?: string[]) => {
+    const names = [...(ids ?? []).map((id) => categories.find((c) => c.id === id)?.name), ...(productIds ?? []).map((id) => products?.find((x) => x.id === id)?.name)].filter(Boolean);
+    return names.length ? names.join(", ") : "everything";
+  };
 
   return (
     <Panel title={clothing ? "Accessories offered with an outfit" : "Extras offered with a booking"} actions={canManage ? (
-      <button className={ghostButtonClass} onClick={() => setEdit({ basis: "per_rental", amountText: "", quantityText: "", template_keys: [], category_ids: [], is_active: true })}><Plus className="h-4 w-4" /> Add {noun}</button>
+      <button className={ghostButtonClass} onClick={() => setEdit({ basis: "per_rental", amountText: "", quantityText: "", template_keys: [], category_ids: [], product_ids: [], is_active: true })}><Plus className="h-4 w-4" /> Add {noun}</button>
     ) : null}>
       {addOns.length === 0 ? <Empty>{clothing ? "No accessories yet. Add safas, malas, chunnis and the like, and link them to the categories they go with." : "No extras yet."}</Empty> : (
         <ul className="divide-y divide-border">
@@ -212,7 +219,7 @@ function Extras() {
               <div>
                 <span className="font-medium">{a.name}</span> {!a.is_active ? <StatusBadge>Off</StatusBadge> : null}
                 <p className="text-xs text-muted-foreground">{Number(a.amount) > 0 ? `${rupees(a.amount)} ${BASIS_LABELS[a.basis]}` : "Free"}
-                  {clothing ? ` · with ${catNames(a.category_ids)}${a.quantity != null ? ` · ${a.quantity} in the shop` : ""}`
+                  {clothing ? ` · with ${catNames(a.category_ids, a.product_ids)}${a.quantity != null ? ` · ${a.quantity} in the shop` : ""}`
                     : a.template_keys.length ? ` · ${a.template_keys.map((k) => templates.find((t) => t.key === k)?.name ?? k).join(", ")}` : " · all types"}</p>
               </div>
               {canManage ? <button className={ghostButtonClass} onClick={() => setEdit({ ...a, amountText: Number(a.amount) ? String(a.amount) : "", quantityText: a.quantity != null ? String(a.quantity) : "" })}>Edit</button> : null}
@@ -233,7 +240,7 @@ function Extras() {
             </Field>
           </div>
           {clothing ? <>
-            <Field label="How many you have" hint="Optional. Shown to staff at booking.">
+            <Field label="How many you have" hint="Optional. Bookings cannot take more than this for the same dates. Leave blank if you have plenty.">
               <input className={monoInputClass} inputMode="numeric" maxLength={5} placeholder="Not counted" value={edit.quantityText} onChange={(e) => setEdit({ ...edit, quantityText: e.target.value })} />
             </Field>
             <fieldset>
@@ -247,8 +254,9 @@ function Extras() {
                   </label>
                 ))}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">None ticked: suggested with every outfit.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Or pick the exact products below. Nothing picked: suggested with every outfit. Any accessory can still be added at checkout.</p>
             </fieldset>
+            <ProductLinks value={edit.product_ids ?? []} products={products ?? []} onChange={(product_ids) => setEdit({ ...edit, product_ids })} />
           </> : templates.length > 1 ? (
             <Field label="Offered for">
               <div className="flex flex-wrap gap-3 text-sm">
@@ -358,5 +366,45 @@ function Categories({ addSignal }: { addSignal: number }) {
         </> : null}
       </Modal>
     </>
+  );
+}
+
+// the products an accessory is suggested with: picked chips, and a search to add more
+function ProductLinks({ value, products, onChange }: { value: string[]; products: Product[]; onChange: (ids: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const picked = value.map((id) => products.find((p) => p.id === id)).filter((p): p is Product => !!p);
+  return (
+    <div>
+      <p className="mb-1.5 block text-xs font-semibold tracking-wide text-foreground">Suggest it with these products</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {picked.map((p) => (
+          <span key={p.id} className="inline-flex min-h-8 items-center gap-1 rounded-full border border-gold/50 bg-gold/10 py-1 pl-3 pr-1 text-xs">
+            {p.name}
+            <button type="button" aria-label={`Stop suggesting with ${p.name}`} className="rounded-full p-1 hover:bg-black/10" onClick={() => onChange(value.filter((id) => id !== p.id))}>
+              <X className="h-3 w-3" aria-hidden="true" />
+            </button>
+          </span>
+        ))}
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button type="button" className={cn(ghostButtonClass, "min-h-8 px-3 text-xs")}><Plus className="h-3.5 w-3.5" /> Add product</button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-80 p-0">
+            <Command>
+              <CommandInput placeholder="Product name or SKU" />
+              <CommandList>
+                <CommandEmpty>No product matches.</CommandEmpty>
+                {products.filter((p) => p.is_active && !value.includes(p.id)).map((p) => (
+                  <CommandItem key={p.id} value={`${p.name} ${p.sku}`} onSelect={() => { onChange([...value, p.id]); setOpen(false); }}>
+                    <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                    <span className="font-mono text-xs text-muted-foreground">{p.sku}</span>
+                  </CommandItem>
+                ))}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
   );
 }
