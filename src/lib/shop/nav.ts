@@ -86,7 +86,7 @@ export const standardNav = (c: NavContext): NavGroup[] => [
   {
     title: "Administration",
     items: [
-      { href: "/staff", label: "Staff management", icon: Users, show: c.isOwner && !c.isSupport },
+      { href: "/staff", label: "Staff management", icon: Users, show: c.canManage && !c.isSupport }, // managers: password resets only
       {
         href: "/branches",
         label: "Branch management",

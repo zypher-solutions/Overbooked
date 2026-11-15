@@ -24,15 +24,49 @@ export async function siteOrigin() {
   return `${proto}://${host}`;
 }
 
-// Creates the account (handle_new_user puts it in the invite's shop) and returns the link to share.
-export async function createInviteLink(input: {
+type InviteInput = {
   shopId: string;
   email: string;
   fullName: string;
   role: ShopRole;
   branchId: string | null;
   invitedBy: string;
-}) {
+};
+
+// Creates the account (handle_new_user puts it in the invite's shop) and returns the link to share.
+export async function createInviteLink(input: InviteInput): Promise<string> {
+  return (await makeInvite(input, "link"))!;
+}
+
+// Same, but Supabase emails the invite to the person and nobody else sees the link,
+// so accepting it proves they own the address (used for shop owners).
+export async function emailInvite(input: InviteInput): Promise<void> {
+  await makeInvite(input, "email");
+}
+
+// A username login (src/lib/username.ts): input.email is the hidden address; the person gets a temporary password from
+// the owner and must choose their own at first sign-in (profiles.must_change_password, migration 049).
+export async function createUsernameLogin(input: InviteInput & { username: string }, password: string): Promise<void> {
+  await makeInvite(input, { username: input.username, password });
+}
+
+// A random 12-character password that passes every password rule (upper, lower, digit, symbol), without look-alikes.
+export function tempPassword() {
+  // unbiased random index (rejection sampling over Web Crypto)
+  const randomInt = (n: number) => {
+    const max = Math.floor(0x100000000 / n) * n;
+    const buf = new Uint32Array(1);
+    do crypto.getRandomValues(buf); while (buf[0] >= max);
+    return buf[0] % n;
+  };
+  const sets = ["ABCDEFGHJKLMNPQRSTUVWXYZ", "abcdefghijkmnpqrstuvwxyz", "23456789", "!@#$%*?"];
+  const pick = (chars: string) => chars[randomInt(chars.length)];
+  const out = [...sets.map(pick), ...Array.from({ length: 8 }, () => pick(sets.join("")))];
+  for (let i = out.length - 1; i > 0; i--) { const j = randomInt(i + 1); [out[i], out[j]] = [out[j], out[i]]; }
+  return out.join("");
+}
+
+async function makeInvite(input: InviteInput, how: "link" | "email" | { username: string; password: string }): Promise<string | null> {
   const admin = createAdminClient();
   const email = input.email.trim().toLowerCase();
 
@@ -50,17 +84,37 @@ export async function createInviteLink(input: {
       : "Could not create the invite: " + (inviteErr?.message ?? "unknown error"));
   }
 
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: "invite",
-    email,
-    options: { data: { full_name: input.fullName.trim() } },
-  });
-  if (error || !data?.properties?.hashed_token) {
+  const meta = { data: { full_name: input.fullName.trim() } };
+  // the invite email's template points at /welcome with the token (see docs/SETUP.md, "Real email")
+  let token: string | undefined;
+  let userId: string | undefined;
+  let error: { message: string } | null;
+  if (how === "email") {
+    ({ error } = await admin.auth.admin.inviteUserByEmail(email, { ...meta, redirectTo: `${await siteOrigin()}/welcome` }));
+  } else if (how === "link") {
+    const res = await admin.auth.admin.generateLink({ type: "invite", email, options: meta });
+    error = res.error;
+    token = res.data?.properties?.hashed_token;
+  } else {
+    const res = await admin.auth.admin.createUser({ email, password: how.password, email_confirm: true, user_metadata: meta.data });
+    error = res.error;
+    userId = res.data?.user?.id;
+  }
+  if (error || (how === "link" && !token) || (typeof how === "object" && !userId)) {
     await admin.from("staff_invites").delete().eq("id", invite.id);
+    const taken = typeof how === "object" ? "That username is already taken." : "This email already has an Overbooked account.";
     throw new Error(/registered|exists/i.test(error?.message ?? "")
-      ? "This email already has an Overbooked account."
-      : "Could not create the invite link: " + (error?.message ?? "unknown error"));
+      ? taken
+      : (how === "email" ? "Could not email the invite: " : "Could not create the login: ") + (error?.message ?? "unknown error"));
   }
 
-  return `${await siteOrigin()}/welcome?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=invite`;
+  if (typeof how === "object") {
+    const { error: upErr } = await admin.from("profiles").update({ username: how.username, must_change_password: true }).eq("id", userId!);
+    if (upErr) {
+      await admin.auth.admin.deleteUser(userId!);   // a login nobody can find by its username is worse than none
+      throw new Error(upErr.code === "23505" ? "That username is already taken." : "Could not save the username: " + upErr.message);
+    }
+    return null;
+  }
+  return how === "email" ? null : `${await siteOrigin()}/welcome?token_hash=${encodeURIComponent(token!)}&type=invite`;
 }

@@ -23,6 +23,8 @@ interface Profile {
   branch_id: string | null;
   is_active: boolean;
   shop_id: string | null;
+  username: string | null;              // a username login (migration 049), else null
+  must_change_password: boolean;        // given a temporary password: ShopShell sends them to choose their own
 }
 
 export interface Shop {

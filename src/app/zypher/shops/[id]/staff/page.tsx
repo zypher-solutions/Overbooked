@@ -19,7 +19,7 @@ const ROLES: Role[] = ["owner", "manager", "staff", "support"];
 
 interface Person {
   id: string; full_name: string; role: Role; branch_id: string | null; is_active: boolean;
-  email: string; last_sign_in_at: string | null; pending: boolean;
+  email: string | null; username?: string | null; last_sign_in_at: string | null; pending: boolean;
 }
 interface Branch { id: string; name: string; is_active: boolean }
 
@@ -64,8 +64,8 @@ export default function ShopStaff() {
     if (bad) return void toast.error(bad);
     setInviting(true);
     try {
-      const { link } = await inviteStaff({ shopId: id, email: normalizeEmail(invite.email), fullName: invite.fullName.trim().replace(/\s+/g, " "), role: invite.role, branchId: invite.branchId || null });
-      setShare({ name: invite.fullName, link });
+      const { emailedTo } = await inviteStaff({ shopId: id, email: normalizeEmail(invite.email), fullName: invite.fullName.trim().replace(/\s+/g, " "), role: invite.role, branchId: invite.branchId || null });
+      toast.success(`Invite emailed to ${emailedTo}. It works once, for one hour.`);
       setInvite({ email: "", fullName: "", role: "staff", branchId: "" });
       await load();
     } catch (err: any) {
@@ -80,7 +80,7 @@ export default function ShopStaff() {
     try {
       const { link, emailedTo } = await newInviteLink(id, p.id);
       if (link) setShare({ name: p.full_name, link });
-      else if (emailedTo) toast.success(`A password reset email was sent to ${emailedTo}.`);
+      else if (emailedTo) toast.success(`A sign-in email was sent to ${emailedTo}.`);
     } catch (err: any) {
       toast.error(err.message || "Could not create a new link");
     } finally {
@@ -122,10 +122,10 @@ export default function ShopStaff() {
             <option value="">{needsBranch ? "Branch" : "All branches"}</option>
             {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
-          <button type="submit" disabled={inviting} className={goldButtonClass}>{inviting ? "Creating..." : "Create invite link"}</button>
+          <button type="submit" disabled={inviting} className={goldButtonClass}>{inviting ? "Sending..." : "Email invite"}</button>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          You get a link to send on WhatsApp. It works once, for one hour; the person opens it and chooses a password.
+          We email them an invite. It works once, for one hour; only someone with that inbox can join.
           A Zypher support login is Zypher&apos;s own sign-in to this shop for fixing problems; it does not use up the plan&apos;s login limit.
           It works only while the shop&apos;s owner has switched on Zypher support access in their Account settings.
         </p>
@@ -148,7 +148,7 @@ export default function ShopStaff() {
                 <tr key={p.id}>
                   <td className="px-4 py-2.5">
                     <span className="block font-medium text-foreground">{p.full_name}</span>
-                    <span className="block text-xs text-muted-foreground">{p.email} · {p.pending ? "never signed in" : "last sign-in " + fmtWhen(p.last_sign_in_at)}</span>
+                    <span className="block text-xs text-muted-foreground">{p.username ?? p.email} · {p.pending ? "never signed in" : "last sign-in " + fmtWhen(p.last_sign_in_at)}</span>
                   </td>
                   <td className="px-4 py-2.5">
                     <select aria-label={"Role for " + p.full_name} className={inputClass + " w-auto min-w-[7.5rem] py-1 text-xs"} value={p.role} disabled={workingId === p.id || locked(p)}
@@ -176,7 +176,7 @@ export default function ShopStaff() {
                     {(locked(p) && p.role !== "owner") || !p.is_active ? null : <button type="button" disabled={workingId === p.id} onClick={() => void freshLink(p)} aria-label={"New login link for " + p.full_name}
                       title={p.pending ? "New invite link" : "New login link (forgotten password)"}
                       className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50">
-                      <Link2 className="h-3.5 w-3.5" /> {locked(p) ? "Email reset link" : p.pending ? "New invite link" : "Login link"}
+                      <Link2 className="h-3.5 w-3.5" /> {locked(p) || p.role === "owner" ? "Email reset link" : p.pending ? "New invite link" : "Login link"}
                     </button>}
                   </td>
                 </tr>

@@ -23,6 +23,24 @@ exactly like TRENDZ). Car development starts only when clothing is done properly
 - Windows 11. Use the Edit tool for exact edits; shell heredocs with backticks or `$$` get mangled.
 
 ## Where things stand
+- **Password recovery (15 Nov 2026, branch `feature/password-recovery`, not merged): steps 1 to 5 of 6 done.**
+  Plan: owners recover by email, employees through their owner or manager, the master password only by its owner.
+  1. Real email: Resend SMTP is set in the shared Supabase (dashboard, not code); green invite, reset and "password
+     changed" templates. Owner invites from Zypher are emailed, never shown (`emailInvite` in `src/lib/server/invites.ts`).
+  2. Setting or changing a password signs out every other device (`signOut({ scope: "others" })` in welcome and account).
+  3. Migration 049: employees log in with a username `name@shop-slug` (hidden `.invalid` email, `src/lib/username.ts`)
+     and a temporary password; the owner resets managers and staff, a manager resets staff of their own branch
+     (Staff page); `must_change_password` sends them to `/welcome?change=1`. Email invites carry a 6-digit code too.
+  4-5. Migration 050: the master password's reset with the sign-in password is gone; 8 one-time recovery codes
+     (shown once), 5 wrong master passwords or codes lock it for 15 minutes. Both migrations are applied to the
+     shared project and checked there with rolled-back blocks; `staff_reset.test.sql` and `devices.test.sql` not run (Docker).
+  - **Next, step 6:** Zypher support recovery for an owner who lost both the master password and the codes: owner asks
+    Zypher, email code to the owner + Zypher phones them, 48-hour wait with a "cancel" link in an alert email, then a
+    one-time reset. SMS codes later (needs a paid provider). Plan with the user before building.
+  - Loose ends: ZEEZ RENTAL has a master password but no recovery codes yet; test login `test1@zeez-rental` exists
+    (switch it off); migration 048 (`service_job_dates`) is recorded in `schema_migrations` under a timestamp, not
+    `20261101000048`, so `supabase db push` would re-run it. Also fixed: phone-width dialogs sat half off-screen
+    (`src/components/ui/dialog.tsx`).
 - `main` on GitHub (`zypher-solutions/Overbooked`) has everything, up to the module restructure (merge `2309b61`,
   3 Nov 2026). Nothing is deployed; staging and production do not exist yet.
 - **Module layout** (3 Nov): code for one kind of business lives in `src/modules/<name>`; `src/modules/registry.ts` picks

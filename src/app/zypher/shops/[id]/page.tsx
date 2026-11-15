@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   BillingBadge, FEATURE_LABELS, InviteOwnerDialog, METHOD_LABELS, PLANS, PageHeader, Panel, PaymentDialog,
-  ShareLinkDialog, fmtDay, fmtWhen, rupees, tableWrap, theadClass, type Plan, type Template,
+  fmtDay, fmtWhen, rupees, tableWrap, theadClass, type Plan, type Template,
 } from "@/components/zypher/kit";
 
 interface Detail {
@@ -42,7 +42,6 @@ export default function ShopDetail() {
   const [busy, setBusy] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [share, setShare] = useState<{ name: string; link: string } | null>(null);
   const [confirmPause, setConfirmPause] = useState(false);
   const [addType, setAddType] = useState<Template | null>(null);
   // since when the owner allows Zypher support (null = not allowed); undefined while loading
@@ -269,8 +268,7 @@ export default function ShopDetail() {
 
       <PaymentDialog shop={payOpen ? { id: s.id, name: s.name, monthly_fee: Number(s.monthly_fee), paid_until: s.paid_until } : null}
         onClose={() => setPayOpen(false)} onSaved={load} />
-      <InviteOwnerDialog shop={inviteOpen ? { id: s.id, name: s.name } : null} onClose={() => setInviteOpen(false)} onLink={setShare} />
-      <ShareLinkDialog share={share} onClose={() => setShare(null)} />
+      <InviteOwnerDialog shop={inviteOpen ? { id: s.id, name: s.name } : null} onClose={() => setInviteOpen(false)} />
 
       <AlertDialog open={confirmPause} onOpenChange={setConfirmPause}>
         <AlertDialogContent>

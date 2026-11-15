@@ -151,7 +151,9 @@ function PasswordDialog({ open, onClose }: { open: boolean; onClose: () => void 
         return;
       }
       await supabase.rpc("log_account_event", { p_kind: "password_changed" }).then(() => undefined, () => undefined);
-      toast.success("Password changed.");
+      // anyone else signed in with the old password is logged out (this device stays in)
+      await supabase.auth.signOut({ scope: "others" }).then(() => undefined, () => undefined);
+      toast.success("Password changed. Other devices were logged out.");
       setPassword("");
       setConfirmation("");
       onClose();

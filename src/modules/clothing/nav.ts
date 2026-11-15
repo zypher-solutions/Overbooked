@@ -95,7 +95,7 @@ export const clothingNav = (c: NavContext): NavGroup[] => [
   {
     title: "Admin",
     items: [
-      { href: "/staff", label: "Staff management", icon: Users, show: c.isOwner && !c.isSupport },
+      { href: "/staff", label: "Staff management", icon: Users, show: c.canManage && !c.isSupport }, // managers: password resets only
       { href: "/admin/attributes", label: "Attributes", icon: SlidersHorizontal, show: c.canManage },
       { href: "/admin/sku", label: "SKU", icon: Barcode, show: c.canManage },
       {
