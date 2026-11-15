@@ -136,7 +136,19 @@ must open `/welcome` with a token, so in **Authentication → Email Templates �
 `{{ .SiteURL }}/welcome?token_hash={{ .TokenHash }}&type=recovery`
 and set **Authentication → URL Configuration → Site URL** to the app's address (`http://localhost:3000` for
 development). Supabase's built-in mailer only sends a few emails an hour and only to the project team's addresses;
-before real shops use it, set up your own SMTP under **Authentication → SMTP Settings**.
+before real shops use it, set up your own SMTP (next section).
+
+### Real email (SMTP), once per project
+1. Make an account with an email sender (Resend recommended; Brevo also works) and add your domain there.
+   Put the DNS records it shows (SPF, DKIM, and a DMARC record) at your domain registrar and wait until it says verified.
+2. In the sender, create an SMTP key. Never commit it or put it in `.env` files; it lives only in Supabase.
+3. Supabase dashboard → **Authentication → SMTP Settings** → enable custom SMTP: sender `no-reply@<your domain>`,
+   name `Overbooked`, and the host, port, user and key the sender gives (Resend: `smtp.resend.com`, port `465`, user `resend`).
+4. **Authentication → Rate Limits**: raise "emails per hour" (the default is very low once custom SMTP is on).
+5. **Authentication → Email Templates → Invite user**: the Body is the whole email (HTML), not just the link. Its button
+   must point to `{{ .SiteURL }}/welcome?token_hash={{ .TokenHash }}&type=invite` (reset: same with `type=recovery`).
+   Check **Authentication → URL Configuration → Site URL** is the real app address, not localhost.
+6. Test: on the sign-in page use "Forgot your password?" with a real inbox you own; the email should arrive from your domain.
 
 ## Common problems
 | Symptom | Fix |

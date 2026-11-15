@@ -6,6 +6,7 @@ import { Mail, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { emailError, normalizeEmail } from "@/lib/validate";
+import { isUsername, loginEmail } from "@/lib/username";
 import { inputClass, goldButtonClass } from "@/components/overbooked/primitives";
 import { PasswordField } from "@/components/overbooked/PasswordField";
 import { BLOCKED_MESSAGE, deviceAllowed } from "@/lib/overbooked/device";
@@ -24,6 +25,8 @@ export default function LoginPage() {
 
   // the email's template points at /welcome with the token (docs/SETUP.md, "Password reset email")
   const sendReset = async () => {
+    // a username login has no inbox: its owner or manager resets it on Staff management
+    if (isUsername(email)) return void toast.info("Ask your shop owner or manager to reset your password.");
     const bad = emailError(email);
     if (bad) return void toast.error(bad);
     setSending(true);
@@ -37,13 +40,13 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password) {
-      toast.error("Please enter both email and password");
+      toast.error("Please enter your email or username, and your password");
       return;
     }
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      const { error } = await supabase.auth.signInWithPassword({ email: loginEmail(email), password });
       if (error) throw error;
       if (!(await deviceAllowed())) {
         await supabase.auth.signOut({ scope: "local" });
@@ -70,7 +73,7 @@ export default function LoginPage() {
     } catch (err) {
       console.error(err);
       // the same words for a wrong email and a wrong password, so the screen never says which accounts exist
-      const message = err instanceof Error && /rate|too many/i.test(err.message) ? "Too many tries. Wait a few minutes and try again." : "Check your email and password.";
+      const message = err instanceof Error && /rate|too many/i.test(err.message) ? "Too many tries. Wait a few minutes and try again." : "Check your email or username, and your password.";
       toast.error("Login failed", { description: message });
     } finally {
       setLoading(false);
@@ -95,12 +98,13 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
-              <label htmlFor="login-email" className="text-sm font-medium text-muted-foreground block">Email Address</label>
+              <label htmlFor="login-email" className="text-sm font-medium text-muted-foreground block">Email or username</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground/50" />
                 <input
                   id="login-email"
-                  type="email"
+                  type="text"
+                  inputMode="email"
                   autoComplete="username"
                   autoFocus
                   autoCapitalize="none"
@@ -108,7 +112,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className={inputClass + " pl-10 h-12"}
-                  placeholder="manager@overbooked.com"
+                  placeholder="you@email.com or ravi@your-shop"
                   required
                 />
               </div>
@@ -136,7 +140,7 @@ export default function LoginPage() {
             <button type="button" disabled={sending} onClick={() => void sendReset()} className="font-medium text-gold hover:underline disabled:opacity-50">
               {sending ? "Sending..." : "Forgot your password?"}
             </button>{" "}
-            Enter your email above and we send you a reset link. Staff can also ask their shop owner.
+            Enter your email above and we send you a reset link. Logging in with a username? Ask your shop owner or manager.
           </p>
         </div>
       </div>

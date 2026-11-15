@@ -52,6 +52,10 @@ export function ShopShell({ children }: { children: ReactNode }) {
     const to = mod.replace?.(pathname, canManage) ?? (otherModules.some((m) => m.screens.includes(pathname)) ? "/" : null);
     if (to) router.replace(to);
   }, [loading, mod, canManage, pathname, router]);
+  // someone signed in with a temporary password (new username login, or a reset) chooses their own before anything else
+  useEffect(() => {
+    if (profile?.must_change_password) router.replace("/welcome?change=1");
+  }, [profile?.must_change_password, router]);
   // Admin > Devices: record this device, and sign it out if the owner blocked it (checked on open and on coming back to the tab)
   useEffect(() => {
     if (!user) return;

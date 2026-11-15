@@ -42,7 +42,7 @@ const DialogContent = React.forwardRef<
         // phones: full-screen sheet that scrolls inside, respecting notches and the on-screen keyboard;
         // content-start stops the grid stretching its rows (and the footer buttons) to fill the screen
         sheet &&
-          "max-sm:content-start max-sm:left-0!max-sm:top-0! max-sm:translate-x-0! max-sm:translate-y-0! max-sm:h-dvh! max-sm:max-h-dvh! max-sm:w-full! max-sm:max-w-none! max-sm:overflow-y-auto! max-sm:rounded-none! max-sm:border-0! max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]",
+          "max-sm:content-start max-sm:left-0! max-sm:top-0! max-sm:translate-x-0! max-sm:translate-y-0! max-sm:h-dvh! max-sm:max-h-dvh! max-sm:w-full! max-sm:max-w-none! max-sm:overflow-y-auto! max-sm:rounded-none! max-sm:border-0! max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]",
         className,
       )}
       {...props}

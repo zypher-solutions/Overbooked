@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, ChevronLeft, ChevronRight, Copy } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { createShopWithOwner } from "@/app/actions/zypher";
@@ -34,7 +34,7 @@ export default function NewShop() {
   const [form, setForm] = useState(empty);
   const [touched, setTouched] = useState({ slug: false, prefix: false });
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ shopId: string; link: string | null; inviteError?: string } | null>(null);
+  const [done, setDone] = useState<{ shopId: string; emailedTo: string | null; inviteError?: string } | null>(null);
 
   useEffect(() => {
     void createClient().from("business_templates").select("*").order("sort").then(({ data, error }) => {
@@ -100,19 +100,12 @@ export default function NewShop() {
       <>
         <PageHeader title="Shop created" subtitle={form.name} />
         <Panel>
-          {done.link ? (
-            <>
-              <p className="text-sm text-foreground">
-                Send this link to <span className="font-medium">{form.ownerName}</span>. It works once and expires in one hour;
-                they set their own password and land in their shop.
-              </p>
-              <textarea readOnly value={done.link} rows={3} aria-label="Owner invite link"
-                className="mt-3 w-full rounded-md border border-border bg-background p-2 font-mono text-xs" />
-              <button className={cn(goldButtonClass, "mt-3")}
-                onClick={() => navigator.clipboard.writeText(done.link!).then(() => toast.success("Link copied"), () => toast.error("Could not copy"))}>
-                <Copy className="h-4 w-4" /> Copy link
-              </button>
-            </>
+          {done.emailedTo ? (
+            <p className="text-sm text-foreground">
+              An invite was emailed to <span className="font-medium">{form.ownerName}</span> at{" "}
+              <span className="font-medium">{done.emailedTo}</span>. It works once and expires in one hour;
+              they set their own password and land in their shop. If it expires, use Staff → Email reset link.
+            </p>
           ) : (
             <p className="text-sm text-rust">
               The shop was created, but the owner invite failed: {done.inviteError}. Use Invite owner on the shop page.
@@ -219,7 +212,7 @@ export default function NewShop() {
               <input className={inputClass} maxLength={40} value={form.branchName} onBlur={() => leave("branchName")} onChange={(e) => set({ branchName: e.target.value })} />
             </Field>
             <Field label="Owner name" error={err("ownerName")}><input className={inputClass} maxLength={60} value={form.ownerName} onBlur={() => leave("ownerName")} onChange={(e) => set({ ownerName: e.target.value })} /></Field>
-            <Field label="Owner email" hint="Their login; they get an invite link from you" error={err("ownerEmail")}>
+            <Field label="Owner email" hint="Their login; we email them the invite" error={err("ownerEmail")}>
               <input className={inputClass} inputMode="email" autoCapitalize="none" maxLength={254} value={form.ownerEmail}
                 onBlur={() => { leave("ownerEmail"); set({ ownerEmail: normalizeEmail(form.ownerEmail) }); }} onChange={(e) => set({ ownerEmail: e.target.value })} />
             </Field>

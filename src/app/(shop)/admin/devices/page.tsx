@@ -61,7 +61,10 @@ export default function DevicesPage() {
     if (!flip) return;
     setBusy(true);
     try {
-      await call("set_device_active", { p_id: flip.id, p_active: !flip.is_active, p_master: master });
+      // a wrong try is counted, so the database answers instead of raising (migration 050)
+      const result = await call<string>("set_device_active", { p_id: flip.id, p_active: !flip.is_active, p_master: master });
+      if (result === "locked") return void toast.error("Too many wrong tries. The master password is locked for 15 minutes.");
+      if (result === "wrong") return void toast.error("That is not the master password. 5 wrong tries lock it for 15 minutes.");
       toast.success(flip.is_active ? "Device blocked. It is signed out the next time it is used." : "Device allowed");
       setFlip(null);
       await load();

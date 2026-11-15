@@ -1,7 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createInviteLink, EMAIL_RE, getCaller, siteOrigin } from "@/lib/server/invites";
+import { emailInvite, EMAIL_RE, getCaller, siteOrigin } from "@/lib/server/invites";
 import { addressError, businessNameError, emailError, normalizeEmail, normalizePhone, personNameError, phoneError, prefixError, slugError } from "@/lib/validate";
 
 async function requireZypher() {
@@ -58,7 +58,7 @@ export async function createShopWithOwner(input: {
   }
 
   try {
-    const link = await createInviteLink({
+    await emailInvite({
       shopId: shopId as string,
       email: input.ownerEmail,
       fullName: input.ownerName,
@@ -67,9 +67,9 @@ export async function createShopWithOwner(input: {
       invitedBy: user.id,
     });
     await supabase.rpc("log_setup_event", { p_shop_id: shopId as string, p_action: "shop_created", p_detail: { name: input.name, plan: input.plan, owner_email: input.ownerEmail.trim().toLowerCase() } });
-    return { shopId: shopId as string, link };
+    return { shopId: shopId as string, emailedTo: input.ownerEmail as string | null };
   } catch (e: any) {
-    return { shopId: shopId as string, link: null, inviteError: e?.message ?? "Could not create the owner's invite." };
+    return { shopId: shopId as string, emailedTo: null, inviteError: e?.message ?? "Could not create the owner's invite." };
   }
 }
 
@@ -80,7 +80,7 @@ export async function inviteShopOwner(input: { shopId: string; ownerName: string
   // the plan's login limit is checked first, so Zypher sees a clear message instead of a database error
   const { error: limitErr } = await supabase.rpc("setup_check_invite", { p_shop_id: input.shopId, p_role: "owner", p_branch_id: null });
   if (limitErr) throw new Error(limitErr.message);
-  const link = await createInviteLink({
+  await emailInvite({
     shopId: input.shopId,
     email: input.ownerEmail,
     fullName: input.ownerName,
@@ -89,7 +89,7 @@ export async function inviteShopOwner(input: { shopId: string; ownerName: string
     invitedBy: user.id,
   });
   await supabase.rpc("log_setup_event", { p_shop_id: input.shopId, p_action: "invite_created", p_detail: { email: input.ownerEmail.trim().toLowerCase(), role: "owner" } });
-  return { link };
+  return { emailedTo: normalizeEmail(input.ownerEmail) };
 }
 
 // ---- Zypher's own team (super_admin logins) ----

@@ -559,11 +559,9 @@ export function PaymentDialog({
 export function InviteOwnerDialog({
   shop,
   onClose,
-  onLink,
 }: {
   shop: { id: string; name: string } | null;
   onClose: () => void;
-  onLink: (share: { name: string; link: string }) => void;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -575,13 +573,13 @@ export function InviteOwnerDialog({
     if (bad) return toast.error(bad);
     setBusy(true);
     try {
-      const { link } = await inviteShopOwner({
+      const { emailedTo } = await inviteShopOwner({
         shopId: shop.id,
-        ownerName: name.trim().replace(/s+/g, " "),
+        ownerName: name.trim().replace(/\s+/g, " "),
         ownerEmail: normalizeEmail(email),
       });
       onClose();
-      onLink({ name, link });
+      toast.success(`Invite emailed to ${emailedTo}. It works once, for one hour.`);
       setName("");
       setEmail("");
     } catch (e: any) {
@@ -602,7 +600,7 @@ export function InviteOwnerDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Invite an owner for {shop?.name}</AlertDialogTitle>
           <AlertDialogDescription>
-            You get a one-hour link to send them.
+            We email them a one-hour invite. Only they see the link, so check the email address.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="grid gap-3">
@@ -644,7 +642,7 @@ export function InviteOwnerDialog({
               void send();
             }}
           >
-            {busy ? "Creating..." : "Create invite link"}
+            {busy ? "Sending..." : "Email invite"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
