@@ -1,6 +1,16 @@
 # Changelog
 
 ## 0.3.0 (unreleased): v2 rental engine
+- Password recovery (migrations 49, 50 and 51, 15-16 Nov 2026; APPLIED to the shared cloud project and checked there in
+  rolled-back transactions; pgTAP not yet run; tests: supabase/tests/staff_reset, devices, master_reset):
+  - owner and staff email invites are emailed by Supabase (Resend SMTP), never shown as a link; invite emails carry a 6-digit
+    code for opening them on another device; setting or changing a password signs out every other device
+  - employees without email log in as `name@shop-web-name` with a temporary password; the owner resets managers and staff,
+    a manager resets staff of their branch; a reset signs the person out everywhere and they choose a new password next time
+  - master password: the reset with the sign-in password (47) is removed; 8 one-time recovery codes instead; 5 wrong
+    master passwords or codes lock it for 15 minutes; codes lost too: the owner asks Zypher after an emailed code, Zypher
+    confirms by phone, a 24-hour wait with an alert email and Cancel, then a new master password and new codes
+  - needs: Magic Link template with `{{ .Token }}`; `RESEND_API_KEY` and `EMAIL_FROM` on the server for the alert email
 - Login devices and the shop master password (migrations 46 and 47, 14 Nov 2026; APPLIED to the shared cloud project and checked
   there in rolled-back transactions; pgTAP not yet run; tests: supabase/tests/devices; modelled on Rentopus's "Login User Device"):
   - new Admin > Devices page (owner only, not Zypher support): every browser each person signed in from ("Windows Chrome,

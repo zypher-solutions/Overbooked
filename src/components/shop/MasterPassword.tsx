@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Copy, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { call } from "@/lib/shop/api";
-import { errorText } from "@/lib/shop/format";
+import { errorText, fmtDateTime } from "@/lib/shop/format";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/overbooked/AuthContext";
 import { PasswordField } from "@/components/overbooked/PasswordField";
 import { Modal, Panel, ghostButtonClass, goldButtonClass, inputClass } from "./ui";
 
@@ -12,20 +14,29 @@ import { Modal, Panel, ghostButtonClass, goldButtonClass, inputClass } from "./u
 // more owner-only actions will ask for it later. Changing it needs the current one. A forgotten one is reset only with a
 // recovery code (8 one-time codes shown when it is set), never with the sign-in password, so someone the owner lent
 // their sign-in to cannot take it over. 5 wrong tries lock it for 15 minutes.
-type Mode = "set" | "change" | "reset" | "codes";
+// Codes lost too (migration 051): the owner asks Zypher after typing a code emailed to them, Zypher phones to confirm,
+// then a 24-hour wait (emailed alert, banner with Cancel here) before the owner sets a new one ("complete").
+type Mode = "set" | "change" | "reset" | "codes" | "ask" | "complete";
 type Result = { result: "ok" | "wrong" | "locked"; codes?: string[]; left?: number };
+type Request = { requested_at: string; confirmed_at: string | null; ready_at: string | null; ready: boolean };
 
 const TITLES: Record<Mode, string> = {
   set: "Set master password", change: "Change master password", reset: "Forgot the master password", codes: "New recovery codes",
+  ask: "Ask Zypher to reset it", complete: "Set a new master password",
 };
 const DESCRIPTIONS: Record<Mode, string> = {
   set: "8 to 72 characters. Keep it to yourself: it is not your sign-in password, and only you should know it.",
   change: "8 to 72 characters. Changing it needs the current one.",
   reset: "Enter one of your recovery codes (each works once), then choose a new master password.",
   codes: "Enter the master password. You get 8 new codes and the old ones stop working.",
+  ask: "For when you lost the recovery codes too. We email you a code to prove it is you; then Zypher phones the shop to confirm, and after a 24-hour wait you set a new master password.",
+  complete: "Zypher's check and the 24-hour wait are done. Choose a new master password; you get 8 new recovery codes.",
 };
 
 export function MasterPassword() {
+  const { user } = useAuth();
+  const [request, setRequest] = useState<Request | null>(null);
+  const [codeSent, setCodeSent] = useState(false);
   const [has, setHas] = useState<boolean | null>(null);
   const [left, setLeft] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode | null>(null);
@@ -39,25 +50,67 @@ export function MasterPassword() {
     const h = await call<boolean>("has_master_password").catch(() => null);
     setHas(h);
     setLeft(h ? await call<number>("master_codes_left").catch(() => null) : null);
+    setRequest(h ? await call<Request | null>("master_reset_status").catch(() => null) : null);
   }, []);
   useEffect(() => { void load(); }, [load]);
 
-  const start = (m: Mode) => { setProof(""); setNext(""); setAgain(""); setMode(m); };
+  const start = (m: Mode) => { setProof(""); setNext(""); setAgain(""); setCodeSent(false); setMode(m); };
+
+  // "ask": the code goes to the owner's sign-in email; typing it gives this session an email-code sign-in, which the
+  // database checks before it takes the request
+  const sendCode = async () => {
+    if (!user?.email) return;
+    setBusy(true);
+    const { error } = await createClient().auth.signInWithOtp({ email: user.email, options: { shouldCreateUser: false } });
+    setBusy(false);
+    if (error) return void toast.error(/rate|seconds/i.test(error.message) ? "Wait a minute before asking for another code." : error.message);
+    setCodeSent(true);
+    toast.success(`Code sent to ${user.email}`);
+  };
+  const ask = async () => {
+    if (!user?.email) return;
+    if (!/^\d{6}$/.test(proof)) return void toast.error("Enter the 6-digit code from the email.");
+    setBusy(true);
+    try {
+      const { error } = await createClient().auth.verifyOtp({ email: user.email, token: proof, type: "email" });
+      if (error) return void toast.error("That code did not work. Codes work once, for one hour.");
+      await call("master_reset_request");
+      toast.success("Request sent. Zypher will phone the shop to confirm it is you.");
+      setMode(null);
+      await load();
+    } catch (e) {
+      toast.error(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const cancelRequest = async () => {
+    try {
+      await call("master_reset_cancel");
+      toast.success("Request cancelled. The master password stays as it was.");
+      await load();
+    } catch (e) {
+      toast.error(errorText(e));
+    }
+  };
+
   const save = async () => {
     if (!mode) return;
-    if (mode !== "set" && !proof) return void toast.error(mode === "reset" ? "Enter a recovery code." : "Enter the current master password.");
+    if (mode === "ask") return void ask();
+    if (mode !== "set" && mode !== "complete" && !proof) return void toast.error(mode === "reset" ? "Enter a recovery code." : "Enter the current master password.");
     if (mode !== "codes") {
       if (next.length < 8) return void toast.error("The master password is at least 8 characters.");
       if (next !== again) return void toast.error("The two new passwords are not the same.");
     }
     setBusy(true);
     try {
-      const r = mode === "reset" ? await call<Result>("reset_master_password_with_code", { p_code: proof, p_new: next })
+      const r = mode === "complete" ? { result: "ok" as const, ...(await call<{ codes: string[] }>("master_reset_complete", { p_new: next })) }
+        : mode === "reset" ? await call<Result>("reset_master_password_with_code", { p_code: proof, p_new: next })
         : mode === "codes" ? await call<Result>("new_master_recovery_codes", { p_master: proof })
         : await call<Result>("set_master_password", { p_new: next, p_current: mode === "change" ? proof : null });
       if (r.result === "locked") return void toast.error("Too many wrong tries. The master password is locked for 15 minutes.");
       if (r.result === "wrong") return void toast.error(mode === "reset" ? "That recovery code is not right, or it was used already." : "That is not the master password.");
-      toast.success(mode === "set" ? "Master password set" : mode === "codes" ? "New recovery codes made"
+      toast.success(mode === "set" || mode === "complete" ? "Master password set" : mode === "codes" ? "New recovery codes made"
         : mode === "reset" ? `Master password reset. ${r.left ?? 0} recovery codes left.` : "Master password changed");
       setMode(null);
       if (r.codes) setCodes(r.codes);
@@ -102,6 +155,20 @@ export function MasterPassword() {
           </button>
         </div>
       </div>
+      {request ? (
+        <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rust/40 bg-rust/10 px-4 py-3 text-sm">
+          <p>
+            {request.ready ? "The master password reset is unlocked. Set a new master password now."
+              : request.confirmed_at ? `A master password reset was requested and confirmed by Zypher. It unlocks on ${fmtDateTime(request.ready_at)}.`
+              : `You asked Zypher to reset the master password on ${fmtDateTime(request.requested_at)}. Zypher will phone the shop to confirm.`}
+            {request.ready ? "" : " Not you? Cancel it."}
+          </p>
+          <div className="flex gap-2">
+            {request.ready ? <button className={goldButtonClass} onClick={() => start("complete")}>Set new master password</button> : null}
+            <button className={ghostButtonClass} onClick={() => void cancelRequest()}>Cancel request</button>
+          </div>
+        </div>
+      ) : null}
       {has && left !== null && left <= 2 ? (
         <p role="alert" className="mt-3 rounded-lg border border-gold/40 bg-gold/5 px-4 py-3 text-sm">
           {left === 0 ? "You have no recovery codes. If you forget the master password you cannot reset it yourself." : `Only ${left} recovery code${left === 1 ? "" : "s"} left.`}
@@ -110,8 +177,20 @@ export function MasterPassword() {
       ) : null}
 
       <Modal open={!!mode} onClose={() => setMode(null)} title={mode ? TITLES[mode] : ""} description={mode ? DESCRIPTIONS[mode] : undefined}
-        footer={<button className={goldButtonClass} disabled={busy} onClick={() => void save()}>{busy ? "Saving..." : "Save"}</button>}>
+        footer={mode === "ask" && !codeSent ? null
+          : <button className={goldButtonClass} disabled={busy} onClick={() => void save()}>{busy ? "Saving..." : mode === "ask" ? "Send request" : "Save"}</button>}>
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+          {mode === "ask" ? (
+            codeSent ? (
+              <input value={proof} onChange={(e) => setProof(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric"
+                autoComplete="one-time-code" aria-label="6-digit code from the email" placeholder="6-digit code from the email"
+                className={inputClass + " text-center font-mono tracking-[0.4em]"} />
+            ) : (
+              <button type="button" className={goldButtonClass + " w-full"} disabled={busy} onClick={() => void sendCode()}>
+                {busy ? "Sending..." : `Email a code to ${user?.email ?? "me"}`}
+              </button>
+            )
+          ) : null}
           {mode === "change" || mode === "codes"
             ? <PasswordField id="master-current" label={mode === "codes" ? "Master password" : "Current master password"} value={proof} onChange={setProof} autoComplete="off" />
             : null}
@@ -119,7 +198,12 @@ export function MasterPassword() {
             <input value={proof} onChange={(e) => setProof(e.target.value.toUpperCase())} aria-label="Recovery code" placeholder="Recovery code, like K7QM-3XPD"
               autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={12} className={inputClass + " font-mono tracking-widest"} />
           ) : null}
-          {mode !== "codes" ? <>
+          {mode === "reset" && !request ? (
+            <button type="button" onClick={() => start("ask")} className="text-sm font-medium text-gold hover:underline">
+              Lost the recovery codes too? Ask Zypher
+            </button>
+          ) : null}
+          {mode !== "codes" && mode !== "ask" ? <>
             <PasswordField id="master-new" label="New master password" value={next} onChange={setNext} autoComplete="off" />
             <PasswordField id="master-again" label="New master password again" value={again} onChange={setAgain} autoComplete="off" />
           </> : null}

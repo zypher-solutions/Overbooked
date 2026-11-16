@@ -34,9 +34,13 @@ exactly like TRENDZ). Car development starts only when clothing is done properly
   4-5. Migration 050: the master password's reset with the sign-in password is gone; 8 one-time recovery codes
      (shown once), 5 wrong master passwords or codes lock it for 15 minutes. Both migrations are applied to the
      shared project and checked there with rolled-back blocks; `staff_reset.test.sql` and `devices.test.sql` not run (Docker).
-  - **Next, step 6:** Zypher support recovery for an owner who lost both the master password and the codes: owner asks
-    Zypher, email code to the owner + Zypher phones them, 48-hour wait with a "cancel" link in an alert email, then a
-    one-time reset. SMS codes later (needs a paid provider). Plan with the user before building.
+  6. Migration 051 (16 Nov): codes lost too. The owner asks from Settings after typing a code emailed to them (the
+     session's `amr` must show an email code), Zypher phones the shop and presses "Confirmed by phone" on its home page
+     (`MasterRequests`), the owner gets an alert email (`src/lib/server/email.ts`, Resend API) and a banner with Cancel,
+     and after **24 hours** sets a new master password with 8 new codes. Applied and checked on the shared project with
+     a rolled-back block; `master_reset.test.sql` not run (Docker). Not yet clicked through in the browser, and the
+     alert email needs `RESEND_API_KEY` and `EMAIL_FROM` in `.env.local` plus `{{ .Token }}` in the Magic Link template.
+     SMS codes later (needs a paid provider).
   - Loose ends: ZEEZ RENTAL has a master password but no recovery codes yet; test login `test1@zeez-rental` exists
     (switch it off); migration 048 (`service_job_dates`) is recorded in `schema_migrations` under a timestamp, not
     `20261101000048`, so `supabase db push` would re-run it. Also fixed: phone-width dialogs sat half off-screen
