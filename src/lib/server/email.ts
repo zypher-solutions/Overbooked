@@ -42,3 +42,16 @@ export async function sendMasterResetAlert(to: string, shop: string, readyAt: st
     `<strong>Wasn't you?</strong> Sign in and press <strong>Cancel</strong> under Settings → Master password before then: <a href="${esc(settingsUrl)}" style="color:#7a2e12;">${esc(settingsUrl)}</a>. Then call Zypher support.`,
   ));
 }
+
+// migration 053: the 6-digit code an owner types before asking Zypher to reset a lost master password
+export async function sendOwnerCode(to: string, code: string) {
+  await sendEmail(to, `${code} is your Overbooked code`, card(
+    "Your verification code",
+    [
+      "Type this code in Overbooked to confirm it's you:",
+      `<span style="font-size:30px;font-weight:700;letter-spacing:8px;color:#0f4743;font-family:'Courier New',monospace;">${esc(code)}</span>`,
+      "It works once and expires in 10 minutes.",
+    ],
+    "<strong>Didn't ask for this?</strong> Someone may be using your sign-in. Change your password and tell Zypher support.",
+  ));
+}

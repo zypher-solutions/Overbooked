@@ -10,7 +10,9 @@
   - master password: the reset with the sign-in password (47) is removed; 8 one-time recovery codes instead; 5 wrong
     master passwords or codes lock it for 15 minutes; codes lost too: the owner asks Zypher after an emailed code, Zypher
     confirms by phone, a 24-hour wait with an alert email and Cancel, then a new master password and new codes
-  - needs: Magic Link template with `{{ .Token }}`; `RESEND_API_KEY` and `EMAIL_FROM` on the server for the alert email
+  - migrations 52 and 53 (16 Nov): recovery codes are given once; "Forgot it?" checks the code before the new password;
+    the owner's "ask Zypher" code is emailed by the app, not Supabase's Magic Link email
+  - needs: `RESEND_API_KEY` and `EMAIL_FROM` on the server for the owner's code and Zypher's alert email
 - Login devices and the shop master password (migrations 46 and 47, 14 Nov 2026; APPLIED to the shared cloud project and checked
   there in rolled-back transactions; pgTAP not yet run; tests: supabase/tests/devices; modelled on Rentopus's "Login User Device"):
   - new Admin > Devices page (owner only, not Zypher support): every browser each person signed in from ("Windows Chrome,
