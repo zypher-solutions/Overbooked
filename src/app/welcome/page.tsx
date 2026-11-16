@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { emailError, normalizeEmail } from "@/lib/validate";
+import { CodeBoxes } from "@/components/overbooked/CodeBoxes";
 import { goldButtonClass, inputClass } from "@/components/overbooked/primitives";
 import { PasswordField, passwordIsStrong } from "@/components/overbooked/PasswordField";
 
@@ -133,8 +134,7 @@ function Welcome() {
               <p className="text-sm text-muted-foreground">Type the email the invite or reset was sent to, and the 6-digit code from that email.</p>
               <input type="email" value={codeEmail} onChange={(e) => setCodeEmail(e.target.value)} autoComplete="email" autoCapitalize="none"
                 aria-label="Email" placeholder="you@email.com" className={inputClass + " h-12"} />
-              <input value={emailCode} onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric"
-                autoComplete="one-time-code" aria-label="6-digit code from the email" placeholder="6-digit code" className={inputClass + " h-12 text-center font-mono tracking-[0.4em]"} />
+              <CodeBoxes value={emailCode} onChange={setEmailCode} label="6-digit code from the email" />
               <button type="submit" disabled={saving} className={goldButtonClass + " w-full h-12 text-base"}>
                 {saving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Continue"}
               </button>

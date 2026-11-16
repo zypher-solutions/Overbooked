@@ -5,8 +5,9 @@ import { Copy, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { call } from "@/lib/shop/api";
 import { errorText, fmtDateTime } from "@/lib/shop/format";
-import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/overbooked/AuthContext";
+import { emailOwnerCode } from "@/app/actions/master";
+import { CodeBoxes } from "@/components/overbooked/CodeBoxes";
 import { PasswordField } from "@/components/overbooked/PasswordField";
 import { Modal, Panel, ghostButtonClass, goldButtonClass, inputClass } from "./ui";
 
@@ -72,25 +73,26 @@ export function MasterPassword() {
     }
   };
 
-  // "ask": the code goes to the owner's sign-in email; typing it gives this session an email-code sign-in, which the
-  // database checks before it takes the request
+  // "ask": the app emails the owner a 6-digit code (migration 053); the database checks it before it takes the request
   const sendCode = async () => {
-    if (!user?.email) return;
     setBusy(true);
-    const { error } = await createClient().auth.signInWithOtp({ email: user.email, options: { shouldCreateUser: false } });
-    setBusy(false);
-    if (error) return void toast.error(/rate|seconds/i.test(error.message) ? "Wait a minute before asking for another code." : error.message);
-    setCodeSent(true);
-    toast.success(`Code sent to ${user.email}`);
+    try {
+      const { email } = await emailOwnerCode();
+      setCodeSent(true);
+      toast.success(`Code sent to ${email}`);
+    } catch (e) {
+      toast.error(errorText(e));
+    } finally {
+      setBusy(false);
+    }
   };
   const ask = async () => {
-    if (!user?.email) return;
     if (!/^\d{6}$/.test(proof)) return void toast.error("Enter the 6-digit code from the email.");
     setBusy(true);
     try {
-      const { error } = await createClient().auth.verifyOtp({ email: user.email, token: proof, type: "email" });
-      if (error) return void toast.error("That code did not work. Codes work once, for one hour.");
-      await call("master_reset_request");
+      const r = await call<string>("master_reset_request", { p_code: proof });
+      if (r === "wrong") return void toast.error("That code is not right.");
+      if (r === "expired") { setCodeSent(false); setProof(""); return void toast.error("That code expired or had too many wrong tries. Send a new one."); }
       toast.success("Request sent. Zypher will phone the shop to confirm it is you.");
       setMode(null);
       await load();
@@ -202,9 +204,10 @@ export function MasterPassword() {
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); void save(); }}>
           {mode === "ask" ? (
             codeSent ? (
-              <input value={proof} onChange={(e) => setProof(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric"
-                autoComplete="one-time-code" aria-label="6-digit code from the email" placeholder="6-digit code from the email"
-                className={inputClass + " text-center font-mono tracking-[0.4em]"} />
+              <div className="space-y-2">
+                <p className="text-center text-sm text-muted-foreground">Enter the 6-digit code we emailed to {user?.email}</p>
+                <CodeBoxes value={proof} onChange={setProof} label="6-digit code from the email" />
+              </div>
             ) : (
               <button type="button" className={goldButtonClass + " w-full"} disabled={busy} onClick={() => void sendCode()}>
                 {busy ? "Sending..." : `Email a code to ${user?.email ?? "me"}`}

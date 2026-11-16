@@ -1,9 +1,9 @@
--- Zypher support recovery of a lost master password (migration 051).
+-- Zypher support recovery of a lost master password (migrations 051, 053).
 -- Run: npx supabase db reset && npx supabase test db   (uses the seeded demo shops; everything is rolled back)
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(13);
+SELECT plan(14);
 
 \set zypher '''aaaaaaaa-0000-0000-0000-000000000001'''
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
@@ -21,13 +21,16 @@ GRANT EXECUTE ON FUNCTION pg_temp.act_as(uuid, text, text) TO authenticated;
 
 SELECT pg_temp.act_as(:bridal_owner);
 SELECT set_master_password('oldmaster1');
-SELECT throws_ok($$ SELECT master_reset_request() $$, NULL, 'Type the code we emailed you first', 'a password session cannot ask');
-SELECT pg_temp.act_as(:bridal_manager, 'otp');
-SELECT throws_ok($$ SELECT master_reset_request() $$, NULL, 'Only the shop owner can do this', 'a manager cannot ask');
+SELECT is(master_reset_request('123456'), 'expired', 'no emailed code yet (migration 053)');
+RESET role;
+SELECT set_owner_email_code(:bridal_owner, '123456');   -- what the app's server does before emailing it
+SELECT pg_temp.act_as(:bridal_manager);
+SELECT throws_ok($$ SELECT master_reset_request('123456') $$, NULL, 'Only the shop owner can do this', 'a manager cannot ask');
 
-SELECT pg_temp.act_as(:bridal_owner, 'otp');
-SELECT lives_ok($$ SELECT master_reset_request() $$, 'the owner asks after the emailed code');
-SELECT throws_ok($$ SELECT master_reset_request() $$, NULL, 'A request is already open', 'one open request at a time');
+SELECT pg_temp.act_as(:bridal_owner);
+SELECT is(master_reset_request('000000'), 'wrong', 'a wrong code is refused');
+SELECT is(master_reset_request('123456'), 'ok', 'the owner asks with the emailed code');
+SELECT throws_ok($$ SELECT master_reset_request('123456') $$, NULL, 'A request is already open', 'one open request at a time');
 SELECT throws_ok($$ SELECT master_reset_complete('newmaster1') $$, NULL, 'The reset is not unlocked yet', 'nothing before Zypher confirms');
 SELECT throws_ok($$ SELECT zypher_master_requests() $$, NULL, 'Only Zypher can do this', 'the owner cannot see Zypher''s list');
 

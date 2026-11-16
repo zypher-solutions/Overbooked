@@ -149,10 +149,9 @@ before real shops use it, set up your own SMTP (next section).
    must point to `{{ .SiteURL }}/welcome?token_hash={{ .TokenHash }}&type=invite` (reset: same with `type=recovery`).
    Check **Authentication → URL Configuration → Site URL** is the real app address, not localhost.
 6. Test: on the sign-in page use "Forgot your password?" with a real inbox you own; the email should arrive from your domain.
-7. **Magic Link** template: it must show the 6-digit code `{{ .Token }}` (the owner types it to ask Zypher for a master
-   password reset, migration 051). A link alone is not enough.
-8. The app's own alert email (master password reset confirmed by Zypher) uses Resend directly: add `RESEND_API_KEY` (a
-   second sending-only key) and `EMAIL_FROM` to `.env.local`, and later to the live server's environment.
+7. The app's own emails (the owner's 6-digit code to ask Zypher for a master password reset, and Zypher's alert when it
+   confirms; migrations 051, 053) use Resend directly, not Supabase's templates: add `RESEND_API_KEY` (a second
+   sending-only key) and `EMAIL_FROM` to `.env.local`, and later to the live server's environment.
 
 ## Common problems
 | Symptom | Fix |

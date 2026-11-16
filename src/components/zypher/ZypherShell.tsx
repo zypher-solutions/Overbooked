@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -17,8 +17,10 @@ import {
   ChevronDown,
   Settings2,
   UserRound,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/overbooked/AuthContext";
 import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
 import {
@@ -59,6 +61,12 @@ export function ZypherShell({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  // owners waiting for Zypher's phone check of a lost master password (migration 051): shown on every console page
+  const [waiting, setWaiting] = useState(0);
+  useEffect(() => {
+    void createClient().rpc("zypher_master_requests").then(({ data }) =>
+      setWaiting(((data ?? []) as { confirmed_at: string | null }[]).filter((r) => !r.confirmed_at).length));
+  }, [pathname]);
 
   const isActive = (item: (typeof NAV)[number]) =>
     item.exact
@@ -101,6 +109,11 @@ export function ZypherShell({ children }: { children: ReactNode }) {
                       className={cn("h-4 w-4", isActive(item) && "text-gold")}
                     />
                     {item.label}
+                    {item.href === "/zypher" && waiting ? (
+                      <span className="ml-auto rounded-full bg-rust px-2 py-0.5 text-xs font-semibold text-white" aria-label={`${waiting} waiting`}>
+                        {waiting}
+                      </span>
+                    ) : null}
                   </Link>
                 </li>
               ))}
@@ -190,7 +203,23 @@ export function ZypherShell({ children }: { children: ReactNode }) {
         {nav}
       </aside>
       <main className="min-w-0 px-4 pb-16 pt-[calc(4.5rem+env(safe-area-inset-top))] sm:px-6 lg:ml-64 lg:px-8 lg:pt-8">
-        <div className="mx-auto max-w-[1480px]">{children}</div>
+        <div className="mx-auto max-w-[1480px]">
+          {waiting ? (
+            <Link href="/zypher#resets" role="alert"
+              className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl bg-rust px-4 py-3 text-sm font-medium text-white shadow-md hover:opacity-95">
+              <span className="relative flex h-3 w-3" aria-hidden="true">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-white" />
+              </span>
+              <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+              <span className="flex-1">
+                {waiting === 1 ? "A shop owner is" : `${waiting} shop owners are`} waiting for a phone check to reset a lost master password.
+              </span>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-rust">Review now</span>
+            </Link>
+          ) : null}
+          {children}
+        </div>
       </main>
       <ConfirmDialog
         open={confirmSignOut}
