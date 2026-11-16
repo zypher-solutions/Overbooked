@@ -3,7 +3,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET search_path = public, extensions;
-SELECT plan(24);
+SELECT plan(28);
 
 \set bridal_owner '''aaaaaaaa-0000-0000-0000-000000000011'''
 \set bridal_staff '''aaaaaaaa-0000-0000-0000-000000000013'''
@@ -52,6 +52,11 @@ SELECT pg_temp.act_as(:bridal_owner);
 SELECT ok(EXISTS (SELECT 1 FROM activity_log WHERE action = 'device_blocked' AND important), 'blocking is in the activity log, marked important');
 
 -- ===== recovery codes =====
+SELECT throws_ok($$ SELECT public.new_master_recovery_codes('secret12') $$, NULL, 'Recovery codes are given only once',
+  'no second set of codes (migration 052)');
+SELECT is(public.check_master_recovery_code('AAAA-AAAA'), 'wrong', 'checking a made-up code says wrong');
+SELECT is(public.check_master_recovery_code(lower((SELECT c FROM codes LIMIT 1))), 'ok', 'checking a real code says ok');
+SELECT is(public.master_codes_left(), 8, '...without using it up');
 SELECT is(public.reset_master_password_with_code('AAAA-AAAA', 'secret56') ->> 'result', 'wrong', 'a made-up code does not reset');
 SELECT is(public.reset_master_password_with_code(lower((SELECT c FROM codes LIMIT 1)), 'secret56') ->> 'left', '7',
   'a real code resets it (any case), 7 codes left');
