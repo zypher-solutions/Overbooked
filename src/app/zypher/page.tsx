@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { MasterRequests } from "@/components/zypher/MasterRequests";
 import {
   SummaryCard,
   goldButtonClass,
@@ -112,6 +113,8 @@ export default function ZypherOverview() {
           }
         />
       </div>
+
+      <div className="mt-6"><MasterRequests /></div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Panel title="Payments to chase">

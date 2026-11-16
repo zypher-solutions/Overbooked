@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailInvite, EMAIL_RE, getCaller, siteOrigin } from "@/lib/server/invites";
+import { sendMasterResetAlert } from "@/lib/server/email";
 import { addressError, businessNameError, emailError, normalizeEmail, normalizePhone, personNameError, phoneError, prefixError, slugError } from "@/lib/validate";
 
 async function requireZypher() {
@@ -135,4 +136,20 @@ export async function setZypherMemberActive(userId: string, active: boolean) {
   const { error } = await createAdminClient().from("profiles").update({ is_active: active }).eq("id", userId);
   if (error) throw new Error(error.message);
   await supabase.rpc("log_setup_event", { p_shop_id: null, p_action: active ? "zypher_member_enabled" : "zypher_member_disabled", p_detail: { user_id: userId } });
+}
+
+// Zypher phoned the owner and confirmed a lost master password reset (migration 051): the 24-hour wait starts and the
+// owner is emailed, so a request made by someone else with the owner's sign-in gets noticed and cancelled.
+export async function confirmMasterReset(requestId: string): Promise<{ emailed: boolean; error?: string }> {
+  const { supabase } = await requireZypher();
+  const { data, error } = await supabase.rpc("zypher_master_confirm", { p_id: requestId });
+  if (error) throw new Error(error.message);
+  const r = data as { email: string; shop: string; ready_at: string };
+  try {
+    await sendMasterResetAlert(r.email, r.shop, r.ready_at, `${await siteOrigin()}/settings`);
+    return { emailed: true };
+  } catch (e) {
+    // the confirmation stands; Zypher is told so it can warn the owner by phone instead
+    return { emailed: false, error: e instanceof Error ? e.message : "Could not send the email." };
+  }
 }
