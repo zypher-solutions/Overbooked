@@ -56,7 +56,8 @@ SELECT pg_temp.act_as(:bridal_owner);
 SELECT lives_ok($$ SELECT public.update_my_shop('{"settings": {"discount_limit_staff": 10, "discount_limit_manager": 25, "cancel_paid_role": "owner_manager", "void_payment_role": "owner_manager"}}') $$,
   'the owner sets limits');
 SELECT pg_temp.act_as(:bridal_staff);
-SELECT throws_like($$ SELECT pg_temp.book(210, 'QA ctl big', 100000) $$, '%needs a manager or the owner%', 'staff cannot go over 10%');
+-- under the bill (2400) but over 10%; a discount above the bill hits "more than the total" first
+SELECT throws_like($$ SELECT pg_temp.book(210, 'QA ctl big', 1000) $$, '%needs a manager or the owner%', 'staff cannot go over 10%');
 INSERT INTO t_ids VALUES ('b', pg_temp.book(220, 'QA ctl b', 1));
 SELECT ok((SELECT discount FROM rentals WHERE id = (SELECT id FROM t_ids WHERE name = 'b')) = 1, 'a small discount is fine');
 SELECT throws_like(format($f$ SELECT public.cancel_rental(%L, 0, 'cash', 'QA') $f$, (SELECT id FROM t_ids WHERE name = 'b')),

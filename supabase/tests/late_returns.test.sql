@@ -66,10 +66,10 @@ SELECT is((SELECT (late_terms ->> 'percent')::numeric FROM rentals WHERE id = (S
   'with the default of 100% of the day rate');
 SELECT is(pg_temp.fee((SELECT id FROM t_ids WHERE name = 'old'), interval '2 days'), 2 * pg_temp.rate((SELECT id FROM t_ids WHERE name = 'old')),
   'a booking without late rules keeps the old formula (rate x days late)');
-SELECT like(pg_temp.note((SELECT id FROM t_ids WHERE name = 'old'), interval '2 days'), '2 day(s) late - %', 'and its old wording');
+SELECT alike(pg_temp.note((SELECT id FROM t_ids WHERE name = 'old'), interval '2 days'), '2 day(s) late - %', 'and its old wording');
 SELECT is(pg_temp.fee((SELECT id FROM t_ids WHERE name = 'new'), interval '2 days'), 2 * pg_temp.rate((SELECT id FROM t_ids WHERE name = 'new')),
   'the default rules charge exactly what the old formula charged');
-SELECT like(pg_temp.note((SELECT id FROM t_ids WHERE name = 'new'), interval '2 days'), '2 days late x ₹%', 'and show the working');
+SELECT alike(pg_temp.note((SELECT id FROM t_ids WHERE name = 'new'), interval '2 days'), '2 days late x ₹%', 'and show the working');
 SELECT is(pg_temp.fee((SELECT id FROM t_ids WHERE name = 'new'), interval '5 hours'), 0::numeric, 'back the same day: no late fee');
 SELECT is(pg_temp.fee((SELECT id FROM t_ids WHERE name = 'new'), interval '-1 hour'), 0::numeric, 'back early: no late fee');
 SELECT is(pg_temp.fee((SELECT id FROM t_ids WHERE name = 'new'), interval '2 days'),
