@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
 import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
+import { PhotoCropper } from "@/components/overbooked/PhotoCropper";
 import { useCatalog } from "@/lib/shop/useCatalog";
 import { businessNameError, moneyError, textLimitError } from "@/lib/validate";
 import { errorText, num, rupees } from "@/lib/shop/format";
@@ -70,6 +71,7 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
   const [step, setStep] = useState<Step>("basic");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({}); // existing pieces: `${variation}:${branch}`
   const [basic, setBasic] = useState<Basic>(() => ({
     category_id: product?.category_id ?? (wearCats.length === 1 ? wearCats[0].id : ""), name: product?.name ?? "", sku: product?.sku ?? "",
@@ -317,6 +319,17 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
     }
   };
 
+  // changing a saved product can be saved from any step; changed attributes first need their new variations checked
+  const saveChanges = () => {
+    if (!validBasic()) { setStep("basic"); return; }
+    if (attrsTouched && step !== "variations") {
+      buildRows();
+      toast.info("Check the prices and stock of the changed variations, then save.");
+      return;
+    }
+    void save();
+  };
+
   const remove = async () => {
     if (!product) return;
     setAsking(null);
@@ -420,8 +433,9 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
               <label className="flex aspect-square cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/30">
                 {basic.image_url ? <img src={basic.image_url} alt="" className="h-full w-full object-cover" />
                   : <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground"><ImagePlus className="h-6 w-6" />{uploading ? "Uploading..." : "Add photo"}</span>}
-                <input type="file" accept="image/*" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadImage(f); }} />
+                <input type="file" accept="image/*" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setCropFile(f); }} />
               </label>
+              <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onDone={(f) => { setCropFile(null); void uploadImage(f); }} />
               {basic.image_url ? <button type="button" className="mt-1 text-xs text-muted-foreground hover:underline" onClick={() => setBasic({ ...basic, image_url: "" })}>Remove photo</button> : null}
             </div>
           </div>
@@ -553,11 +567,19 @@ export function ProductWizard({ product, onSaved }: { product?: Product; onSaved
       <ConfirmDialog open={askClear} confirmLabel="Clear form" cancelLabel="Keep editing"
         message={"Clear this form?\n\nEverything typed for this product (details, photo, attributes, variations and stock) is removed. This cannot be undone."}
         onCancel={() => setAskClear(false)} onConfirm={() => { setAskClear(false); discard(); }} />
-      <div className="mt-4 flex justify-between">
+      <div className="mt-4 flex justify-between gap-2">
         {stepIndex > 0 ? <button className={ghostButtonClass} onClick={() => setStep(steps[stepIndex - 1][0])}>Back</button> : <span />}
-        <button className={goldButtonClass} disabled={busy} onClick={() => (step === "variations" ? void save() : step === "basic" ? goAttributes() : buildRows())}>
-          {busy ? "Saving..." : step === "variations" ? (product ? "Save changes" : "Save product") : step === "basic" ? "Next: Attributes" : "Next: Variations & Stock"}
-        </button>
+        {product ? (
+          // changing a saved product: Save changes on every step; Next only moves on
+          <div className="flex gap-2">
+            {step !== "variations" ? <button className={ghostButtonClass} onClick={() => (step === "basic" ? goAttributes() : buildRows())}>Next</button> : null}
+            <button className={goldButtonClass} disabled={busy} onClick={saveChanges}>{busy ? "Saving..." : "Save changes"}</button>
+          </div>
+        ) : (
+          <button className={goldButtonClass} disabled={busy} onClick={() => (step === "variations" ? void save() : step === "basic" ? goAttributes() : buildRows())}>
+            {busy ? "Saving..." : step === "variations" ? "Save product" : step === "basic" ? "Next: Attributes" : "Next: Variations & Stock"}
+          </button>
+        )}
       </div>
     </>
   );

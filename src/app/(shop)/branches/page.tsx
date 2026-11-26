@@ -11,11 +11,15 @@ import { useShop } from "@/lib/shop/ShopContext";
 import { call } from "@/lib/shop/api";
 import { errorText } from "@/lib/shop/format";
 import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
+import { PhotoCropper, type CropShape } from "@/components/overbooked/PhotoCropper";
 import { Switch } from "@/components/ui/switch";
 import {
   Empty, Field, Modal, PageHeader, Panel, ghostButtonClass, goldButtonClass, inputClass, monoInputClass, tableWrap, theadClass,
 } from "@/components/shop/ui";
 import { SubscriptionPanel } from "@/components/shop/Subscription";
+
+// the bill shows the logo at any shape; wide suits a name written out, square suits a badge
+const LOGO_SHAPES: CropShape[] = [{ label: "Wide", aspect: 2 }, { label: "Square", aspect: 1 }];
 
 // India's states and union territories, for the address of the shop and its branches
 const STATES = [
@@ -48,6 +52,7 @@ export default function BranchManagement() {
   });
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   // the logo printed on the bill: into the shop's folder of product_images (public links, owner/manager write only)
   const uploadLogo = async (file: File | undefined) => {
@@ -110,8 +115,10 @@ export default function BranchManagement() {
                 <label className={ghostButtonClass + " cursor-pointer"}>
                   {uploading ? "Uploading..." : f.logo_url ? "Change logo" : "Upload logo"}
                   <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={uploading}
-                    onChange={(e) => { void uploadLogo(e.target.files?.[0]); e.target.value = ""; }} />
+                    onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) setLogoFile(file); }} />
                 </label>
+                <PhotoCropper file={logoFile} title="Adjust logo" shapes={LOGO_SHAPES} fitWhole
+                  onCancel={() => setLogoFile(null)} onDone={(file) => { setLogoFile(null); void uploadLogo(file); }} />
                 {f.logo_url ? <button type="button" className={ghostButtonClass} onClick={() => setF({ ...f, logo_url: "" })}>Remove</button> : null}
               </div>
             </Field>

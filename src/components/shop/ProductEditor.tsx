@@ -13,6 +13,7 @@ import { RATE_LABELS, errorText, fmtInterval, intervalHours, num } from "@/lib/s
 import type { FieldDef, Product, SetItem, Template } from "@/lib/shop/types";
 import { useCatalog, variationLabel } from "@/lib/shop/useCatalog";
 import { ConfirmDialog } from "@/components/overbooked/ConfirmDialog";
+import { PhotoCropper } from "@/components/overbooked/PhotoCropper";
 import { Field, PageHeader, Panel, dangerButtonClass, ghostButtonClass, goldButtonClass, inputClass, monoInputClass } from "./ui";
 
 interface VarDraft {
@@ -78,6 +79,7 @@ export function ProductEditor({ product, onSaved, asSet = false }: { product?: P
   });
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
   useEffect(() => { if (product) setD(toDraft(product)); }, [product]);
 
   const template = templateOf(d.category_id);
@@ -189,8 +191,9 @@ export function ProductEditor({ product, onSaved, asSet = false }: { product?: P
               <label className={cn("flex aspect-square cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/30", readOnly && "cursor-default")}>
                 {d.image_url ? <img src={d.image_url} alt="" className="h-full w-full object-cover" />
                   : <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground"><ImagePlus className="h-6 w-6" />{uploading ? "Uploading..." : "Add photo"}</span>}
-                <input type="file" accept="image/*" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadImage(f); }} />
+                <input type="file" accept="image/*" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setCropFile(f); }} />
               </label>
+              <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onDone={(f) => { setCropFile(null); void uploadImage(f); }} />
               {d.image_url && !readOnly ? <button type="button" className="mt-1 text-xs text-muted-foreground hover:underline" onClick={() => set({ image_url: "" })}>Remove photo</button> : null}
             </div>
           </div>
